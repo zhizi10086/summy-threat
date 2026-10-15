@@ -21,15 +21,35 @@ Forge 1.20.1 的"属性与怪物机制改造"模组，承载三块内容：
 | 构建命令 | `gradlew build` |
 | 产物 | `build/libs/summy-threat-0.1.0.jar`（薄包）与 `summy-threat-0.1.0-all.jar`（含嵌套 MixinExtras）；可发布的是后者，构建结束后自动复制并重命名为 `../JAR/summy-threat-forge/summy-threat-0.1.0.jar` |
 
-## 本次实现：属性上限抬升
+## 已实现①：属性上限抬升
 
-原版把属性值夹在 `RangedAttribute` 自带的 min/max 上（1.20.1 实测：`generic.armor` = 0~30、`generic.max_health` = 0~1024），超出部分会被静默丢弃。本模组只抬**上限**、不动下限：
+原版把属性值夹在 `RangedAttribute` 自带的 min/max 上（1.20.1 实测：`generic.armor` = 0~30、
+`generic.armor_toughness` = 0~20、`generic.max_health` = 0~1024），超出部分会被静默丢弃。
+本模组只抬**上限**、不动下限：
 
 - 走 Mixin accessor 改写 `RangedAttribute#maxValue`（`src/main/java/com/summy/threat/mixin/RangedAttributeAccessor.java`）。不能改用反射：生产环境字段名是 SRG（`maxValue` 对应 `f_22308_`），按字面名反射在正式包里必然失效。
-- 只动 `generic.armor` 与 `generic.max_health` 两个属性；`generic.armor_toughness`(20)、`generic.attack_damage`(2048) 保持原样。
-- 改的是属性注册表里的**单例对象**，因此对玩家、原版怪、模组怪一视同仁 —— 后续"怪物属性强化"可以直接受益。
-- **只抬不压**：应用值取 `max(原版上限, 配置值)`，配置项的下界也钉在原版上限上；关闭总开关会把上限写回 30 / 1024（运行期可逆）。
+- 抬 `generic.armor`（默认 500）、`generic.armor_toughness`（默认 100）、`generic.max_health`（默认 100 万）三个属性；`generic.attack_damage`(2048) 等保持原样。
+- 改的是属性注册表里的**单例对象**，因此对玩家、原版怪、模组怪一视同仁。
+- **只抬不压**：应用值取 `max(原版上限, 配置值)`，配置项的下界也钉在原版上限上；关闭总开关会把三个上限写回 30 / 20 / 1024（运行期可逆）。
 - 生效时机由 `ModConfigEvent`（MOD 总线）统一驱动，一次覆盖"世界首次加载 / 客户端收到服务端同步 / 运行期重载"三种情形。
+
+## 已实现②：护甲减伤公式替换
+
+口径写在 `docs/护甲公式计算.txt`（唯一来源），实现在 `src/main/java/com/summy/threat/combat/ArmorDamageFormula.java`：
+
+```
+EA = A + (A×T)/15
+玩家侧：减伤 = clamp(EA/(EA+20), 0, 0.85)                     （不截断 EA）
+怪物侧：有效EA = min(EA, 100)；减伤 = clamp(0.90×√(有效EA/100), 0, 0.90)
+```
+
+- 挂点：`LivingEntity#getDamageAfterArmorAbsorb` 内对 `CombatRules.getDamageAfterAbsorb` 的**那一次调用**，用 MixinExtras 的 `@ModifyExpressionValue` 包住（`mixin/LivingEntityMixin.java`）。
+  - `hurtArmor`（护甲耐久）与 `DamageTypeTags.BYPASSES_ARMOR` 闸门都在 hook 之外，行为完全保持原版；`bypasses_armor` 类伤害（如狱火、圣光）根本不进公式。
+  - 不改 `CombatRules` 本体 —— 与其它改 CombatRules 的模组冲突面最小；后续的保护附魔、抗性、伤害吸收、无敌帧全部照原版。
+- 侧别判定：`Player` 及其子类走玩家曲线，其余生物（模组怪、动物、村民、盔甲座）走怪物曲线。
+- 输入取属性原始 double 值（`Attributes.ARMOR` / `ARMOR_TOUGHNESS`），不取 `getArmorValue()` 的取整结果。
+- 截断只作用于"减伤计算"：怪物护甲可以堆到 500（配合基于护甲的效果），减伤只认到 EA=100（90%）。
+- 总开关 `damage_reduction.enable_custom_armor_formula` 关闭后完全走原版公式。
 
 ## 配置
 
@@ -38,8 +58,16 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | 键 | 类型 | 默认 | 范围 |
 | --- | --- | --- | --- |
 | `attribute_caps.enable_attribute_cap_override` | boolean | `true` | 无 |
-| `attribute_caps.armor_max_value` | double | `100.0` | 30.0 ~ 1000000.0 |
-| `attribute_caps.max_health_max_value` | double | `100000.0` | 1024.0 ~ 10000000.0 |
+| `attribute_caps.armor_max_value` | double | `500.0` | 30.0 ~ 1000000.0 |
+| `attribute_caps.armor_toughness_max_value` | double | `100.0` | 20.0 ~ 1000000.0 |
+| `attribute_caps.max_health_max_value` | double | `1000000.0` | 1024.0 ~ 10000000.0 |
+| `damage_reduction.enable_custom_armor_formula` | boolean | `true` | 无 |
+| `damage_reduction.synergy_divisor` | double | `15.0` | 1.0 ~ 1000.0 |
+| `damage_reduction.player_k` | double | `20.0` | 0.0 ~ 10000.0 |
+| `damage_reduction.player_max` | double | `0.85` | 0.0 ~ 1.0 |
+| `damage_reduction.player_min` | double | `0.0` | 0.0 ~ 1.0 |
+| `damage_reduction.monster_max` | double | `0.90` | 0.0 ~ 1.0 |
+| `damage_reduction.monster_effect_cap` | double | `100.0` | 0.0 ~ 10000.0 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
 
@@ -70,7 +98,9 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 
 ## 后续路线图
 
-### ② 护甲减伤公式替换（等公式文本）
+### ② 护甲减伤公式替换（已实现，见上方"已实现②"）
+
+口径唯一来源是 `docs/护甲公式计算.txt`；改公式请先改它，再同步下面两个工具与模组实现。
 
 设计期工具（放在 `docs/` 下，不算产物、Gradle 不编译）：
 
@@ -82,10 +112,6 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
   支持单次计算、参考表、扫表、反解、CSV / PNG / SVG 输出，供脚本化或没有 Python 的环境使用。
 
 三者口径必须一致：**改公式先改 txt，再同步 py 与 java**。
-
-- 挂点：`LivingEntity#getDamageAfterArmorAbsorb` 内对 `CombatRules.getDamageAfterAbsorb` 的那次调用，用 MixinExtras 的 `@ModifyExpressionValue` 包住 —— `hurtArmor`（护甲耐久）与 `bypasses_armor` 闸门自动保留。
-- 顺序天然是"护甲 → 保护附魔 → 其它"，`getDamageAfterMagicAbsorb` 与 `hurt` 维持原样。
-- 注意：原版对"有效护甲"另有最多 20 点的夹取，换公式时若想突破 80% 天花板，必须在这层一并处理。
 
 ### ③ 怪物刷新与属性强化
 
@@ -108,7 +134,22 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 版本 / 许可 / 作者 | `0.1.0` / MIT / Summy |
 | 仓库 | <https://github.com/zhizi10086/summy-threat>（工作副本 `_github/summy-threat`，其中 `forge/` 对应本工程） |
 
-## 验证记录（本次）
+## 验证记录
+
+### 护甲公式落地后（2026-10-15，默认参数 C=15 / K=20 / 玩家 85% / 怪物 90% / 截断 100）
+
+| 项 | 结果 |
+| --- | --- |
+| `gradlew clean build` | 通过；`verifyMixinTargets` 输出"mixin 注入目标校验通过（2 个文件）"；refmap 出现 `LivingEntityMixin → CombatRules.getDamageAfterAbsorb(FFF)F = m_19272_(FFF)F` |
+| 启动抬升（新世界） | `generic.armor 30.0 -> 500.0`、`generic.armor_toughness 20.0 -> 100.0`、`generic.max_health 1024.0 -> 1000000.0`，零注入失败 |
+| 配置文件 | 新世界生成 `world2/serverconfig/summy_threat-server.toml`，含 `attribute_caps`（500 / 100 / 1000000）与 `damage_reduction`（15 / 20 / 0.85 / 0 / 0.90 / 100）两组默认值 |
+| 实机减伤（僵尸，`/damage` 用 `minecraft:mob_attack`） | A=100 → 打 50 掉 5.00（90.00%）；A=500 → 掉 5.00（90.00%，截断生效）；A=50 → 掉 18.18（63.64%）；A=100/T=20（EA=233）→ 掉 5.00（90.00%）；A=0 → 掉 10.00（0.00%） |
+| 总开关回退 | `enable_custom_armor_formula=false` 重启后，A=100 打 50 → 掉 10.00（原版公式的 80%），确认可逆 |
+| 跨实现比对 | Python ↔ Java 26 个点（20 正算 + 6 反解）全部一致；含 怪物 `60/10`→EA 100→90.00%、`80/4`→EA 101.33→90.00%（截断） |
+| 文档三方一致 | 规格 txt 的参考表 / Python `--selftest` / Java `--table` 三处逐行核对一致（新增"封顶 100/0 → 90.00%"行） |
+| 未做 | 玩家侧实机曲线：无头服务端没有玩家实体，需在单人世界人工核对一次（代码与怪物侧共用，仅分支不同） |
+
+### 定名 Summy Threat 之前（历史：默认值 100 / 100000 时期）
 
 2026-10-15 实测（Forge 47.4.10 / JDK 17，指令经 RCON 下发）：
 

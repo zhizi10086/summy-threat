@@ -2,5 +2,14 @@
   "summy_threat.configuration.attribute_caps": "Attribute Caps",
   "summy_threat.configuration.attribute_caps.enable_attribute_cap_override": "Raise Attribute Caps",
   "summy_threat.configuration.attribute_caps.armor_max_value": "Armor Cap (generic.armor)",
-  "summy_threat.configuration.attribute_caps.max_health_max_value": "Max Health Cap (generic.max_health)"
+  "summy_threat.configuration.attribute_caps.armor_toughness_max_value": "Armor Toughness Cap (generic.armor_toughness)",
+  "summy_threat.configuration.attribute_caps.max_health_max_value": "Max Health Cap (generic.max_health)",
+  "summy_threat.configuration.damage_reduction": "Armor Damage Reduction",
+  "summy_threat.configuration.damage_reduction.enable_custom_armor_formula": "Enable Custom Armor Formula",
+  "summy_threat.configuration.damage_reduction.synergy_divisor": "Synergy Divisor (C)",
+  "summy_threat.configuration.damage_reduction.player_k": "Player Curve K",
+  "summy_threat.configuration.damage_reduction.player_max": "Player Reduction Cap",
+  "summy_threat.configuration.damage_reduction.player_min": "Player Reduction Floor",
+  "summy_threat.configuration.damage_reduction.monster_max": "Monster Reduction Cap",
+  "summy_threat.configuration.damage_reduction.monster_effect_cap": "Monster Effective EA Cap"
 }

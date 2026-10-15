@@ -22,8 +22,8 @@ import java.util.Scanner;
  * <p>公式与 {@code docs/护甲公式计算.txt} 完全一致：
  * <pre>
  *   有效护甲 EA = A + (A × T) / 协同除数     （A=0 时 EA=0）
- *   玩家侧减伤  = EA==0 ? 0% : clamp(EA / (EA + K), 下限, 上限)
- *   怪物侧减伤  = min(上限, 上限 × √(EA / 护甲上限))
+ *   玩家侧减伤  = clamp(EA / (EA + K), 0, 上限)             —— 玩家侧不截断 EA
+ *   怪物侧减伤  = clamp(上限 × √(有效EA / 截断点), 0, 上限)，其中 有效EA = min(EA, 截断点)
  * </pre>
  *
  * <p>运行（JDK 17 及以上，无需编译）：
@@ -32,7 +32,7 @@ import java.util.Scanner;
  *   java ArmorCalc.java --a 20 --t 8                     单次计算（默认玩家侧）
  *   java ArmorCalc.java --side monster --a 40 --t 10 --damage 30
  *   java ArmorCalc.java --table                          参考表（原版套装 / 怪物层级 / EA 对照）
- *   java ArmorCalc.java --sweep --a-from 0 --a-to 40 --step 2 --t 8
+ *   java ArmorCalc.java --sweep --a-from 0 --a-to 100 --step 2 --t 8
  *   java ArmorCalc.java --solve --side player --t 8 --target 60    反解：要 60% 减伤需要多少 A
  *   java ArmorCalc.java --sweep --side monster --csv curve.csv
  *   java ArmorCalc.java --sweep --png curve.png          导出曲线图（PNG，双击即可看图；另有 --svg）
@@ -52,12 +52,12 @@ public final class ArmorCalc {
 	/** 玩家侧：减伤 = EA / (EA + K) */
 	private static double playerK = 20.0;
 	/** 玩家侧减伤下限（仅在 EA > 0 时生效） */
-	private static double playerMin = 0.05;
+	private static double playerMin = 0.0;
 	/** 玩家侧减伤上限 */
 	private static double playerMax = 0.85;
 	/** 怪物侧减伤上限 */
-	private static double monsterMax = 0.80;
-	/** 怪物侧 EA 上限：EA 达到此值时触及上限 */
+	private static double monsterMax = 0.90;
+	/** 怪物侧有效 EA 上限：EA 达到此值后不再参与减伤计算（属性本身不受限） */
 	private static double monsterCap = 100.0;
 
 	/** 一套护甲的参考点 */
@@ -87,7 +87,8 @@ public final class ArmorCalc {
 			new ArmorSet("TL 8-11", 10, 1),
 			new ArmorSet("TL 12-15", 16, 2),
 			new ArmorSet("TL 16-20", 24, 4),
-			new ArmorSet("首领", 40, 10));
+			new ArmorSet("首领", 40, 10),
+			new ArmorSet("封顶", 100, 0));
 
 	private ArmorCalc() {
 	}
@@ -101,7 +102,7 @@ public final class ArmorCalc {
 		return armor + (armor * toughness) / synergyDivisor;
 	}
 
-	/** 玩家侧：EA=0 时为 0，否则 clamp(EA/(EA+K), 下限, 上限) */
+	/** 玩家侧：clamp(EA/(EA+K), 下限, 上限)；默认下限 0，玩家侧不截断 EA */
 	private static double playerReduction(double effectiveArmor) {
 		if (effectiveArmor <= 0) {
 			return 0.0;
@@ -110,9 +111,11 @@ public final class ArmorCalc {
 		return Math.max(playerMin, Math.min(playerMax, raw));
 	}
 
-	/** 怪物侧：min(上限, 上限 × √(EA/护甲上限)) */
+	/** 怪物侧：先把 EA 截断到 有效EA上限，再 min(上限, 上限 × √(有效EA/上限)) */
 	private static double monsterReduction(double effectiveArmor) {
-		double raw = monsterMax * Math.sqrt(Math.max(effectiveArmor, 0.0) / monsterCap);
+		double cap = Math.max(monsterCap, 1.0);
+		double effective = Math.min(Math.max(effectiveArmor, 0.0), cap);
+		double raw = monsterMax * Math.sqrt(effective / cap);
 		return Math.min(raw, monsterMax);
 	}
 
@@ -173,10 +176,10 @@ public final class ArmorCalc {
 	private static void printFormula() {
 		System.out.printf(Locale.ROOT,
 				"公式：EA = A + (A×T)/%.0f（协同除数；A=0 时 EA=0）%n"
-						+ "      玩家侧减伤 = EA==0 ? 0%% : clamp(EA/(EA+%.0f), %.0f%%, %.0f%%)%n"
-						+ "      怪物侧减伤 = min(%.0f%%, %.0f%% × √(EA/%.0f))%n",
+						+ "      玩家侧减伤 = clamp(EA/(EA+%.0f), %.0f%%, %.0f%%)（不截断 EA）%n"
+						+ "      怪物侧减伤 = clamp(%.0f%% × √(有效EA/%.0f), 0, %.0f%%)，有效EA = min(EA, %.0f)%n",
 				synergyDivisor, playerK, playerMin * 100, playerMax * 100,
-				monsterMax * 100, monsterMax * 100, monsterCap);
+				monsterMax * 100, monsterCap, monsterMax * 100, monsterCap);
 	}
 
 	private static void printSingle(String side, double armor, double toughness, double damage) {
@@ -469,12 +472,13 @@ public final class ArmorCalc {
 
 				单次计算：   java ArmorCalc.java --a 20 --t 8 [--side player|monster] [--damage 30]
 				参考表：     java ArmorCalc.java --table
-				扫表：       java ArmorCalc.java --sweep [--side ...] [--t 8] [--a-from 0] [--a-to 40] [--step 2]
+				扫表：       java ArmorCalc.java --sweep [--side ...] [--t 8] [--a-from 0] [--a-to 100] [--step 2]
 				反解：       java ArmorCalc.java --solve [--side ...] [--t 8] --target 60
 				导出：       追加 --csv 文件名.csv / --png 文件名.png / --svg 文件名.svg（仅扫表时生效）
 
-				覆盖常量：   --synergy 20 --k 20 --player-min 5 --player-max 85 --monster-max 80 --monster-cap 100
+				覆盖常量：   --synergy 15 --k 20 --player-min 0 --player-max 85 --monster-max 90 --monster-cap 100
 				            （百分比参数写 60 或 0.6 都可）
+				输入范围：   与图形计算器一致——护甲 A 0~500、韧性 T 0~100
 				交互模式：   不带任何参数
 
 				终端中文乱码时：先执行 chcp 65001，或给 java 加 -Dstdout.encoding=UTF-8
@@ -497,7 +501,7 @@ public final class ArmorCalc {
 		double toughness = 0;
 		double damage = 0;
 		double from = 0;
-		double to = 40;
+		double to = 100;
 		double step = 2;
 		double target = Double.NaN;
 		String csvPath = null;

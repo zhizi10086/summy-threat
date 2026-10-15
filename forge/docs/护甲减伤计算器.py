@@ -5,9 +5,9 @@
 
 公式与参数说明见同目录的《护甲公式计算.txt》。本文件只做实现，两者口径必须一致：
 
-    有效护甲   EA = A + (A*T)/C          （A=0 时 EA=0；T 是护甲的放大系数）
-    玩家侧减伤 = EA==0 ? 0% : clamp(EA/(EA+K), 下限, 上限)
-    怪物侧减伤 = min(上限, 上限 * sqrt(EA/EA上限))
+    有效护甲   EA = A + (A*T)/C            （A=0 时 EA=0；T 是护甲的放大系数）
+    玩家侧减伤 = clamp(EA/(EA+K), 0, 上限)  （不截断 EA）
+    怪物侧减伤 = clamp(上限 * sqrt(有效EA/EA上限), 0, 上限)，其中 有效EA = min(EA, EA上限)
 
 用法：
     python 护甲减伤计算器.py              打开窗口
@@ -38,10 +38,10 @@ class Params:
 
     synergy: float = 15.0      # C：EA = A + (A*T)/C 的除数，越小韧性放大越强
     player_k: float = 20.0     # K：玩家侧 EA/(EA+K)
-    player_min: float = 0.05   # 玩家侧减伤下限（EA>0 时才生效）
+    player_min: float = 0.0    # 玩家侧减伤下限（默认 0，仅作负值保护）
     player_max: float = 0.85   # 玩家侧减伤上限
-    monster_max: float = 0.80  # 怪物侧减伤上限
-    monster_cap: float = 100.0  # 怪物侧 EA 上限（到顶即封顶）
+    monster_max: float = 0.90  # 怪物侧减伤上限
+    monster_cap: float = 100.0  # 怪物侧有效 EA 上限（到 100 即封顶）
 
 
 DEFAULT_PARAMS = Params()
@@ -53,15 +53,17 @@ def effective_armor(a, t, p):
 
 
 def player_reduction(ea, p):
-    """玩家侧减伤：EA=0 时为 0，否则 clamp(EA/(EA+K), 下限, 上限)。"""
+    """玩家侧减伤：clamp(EA/(EA+K), 下限, 上限)；默认下限 0，玩家侧不截断 EA。"""
     if ea <= 0:
         return 0.0
     return min(max(ea / (ea + p.player_k), p.player_min), p.player_max)
 
 
 def monster_reduction(ea, p):
-    """怪物侧减伤：min(上限, 上限 * sqrt(EA/EA上限))。"""
-    return min(p.monster_max * math.sqrt(max(ea, 0.0) / p.monster_cap), p.monster_max)
+    """怪物侧减伤：先把 EA 截断到 有效EA上限，再 min(上限, 上限 * sqrt(有效EA/上限))。"""
+    cap = max(p.monster_cap, 1.0)
+    effective = min(max(ea, 0.0), cap)
+    return min(p.monster_max * math.sqrt(effective / cap), p.monster_max)
 
 
 def reduction(side, ea, p):
@@ -134,6 +136,7 @@ DEFAULT_MONSTER_SETS = [
     Preset("TL 12-15", 16, 2),
     Preset("TL 16-20", 24, 4),
     Preset("首领", 40, 10),
+    Preset("封顶", 100, 0),
 ]
 
 
@@ -191,7 +194,9 @@ def build_figure(p, player_presets, monster_presets, current=None, side="player"
             color="#2E86AB", linewidth=2.4, label="玩家减伤")
     ax.axhline(p.player_max * 100, color="gray", linestyle="--", linewidth=1,
                label="上限 %.0f%%" % (p.player_max * 100))
-    ax.axhline(p.player_min * 100, color="gray", linestyle=":", linewidth=1,
+    if p.player_min > 0:
+        # 下限默认 0（只作负值保护），为 0 时不画这条线，免得读到误导信息
+        ax.axhline(p.player_min * 100, color="gray", linestyle=":", linewidth=1,
                label="下限 %.0f%%" % (p.player_min * 100))
     draw_presets(ax, player_presets, player_reduction, "#E63946", "#B02A37", show_player)
     ax.set_title("玩家侧（C=%.1f, K=%.0f）" % (p.synergy, p.player_k), fontsize=10)
@@ -259,7 +264,7 @@ def run_selftest(p, player_presets, monster_presets, out_png="armor_calc_selftes
     print("  怪物侧封顶 EA=%.2f" % p.monster_cap)
 
     print("\n[反解示例]（韧性按 8）")
-    for side, target in (("player", 0.60), ("player", 0.75), ("monster", 0.50), ("monster", 0.80)):
+    for side, target in (("player", 0.60), ("player", 0.75), ("monster", 0.50), ("monster", 0.90)):
         need = armor_needed(side, target, 8, p)
         label = "玩家" if side == "player" else "怪物"
         if need is None:
@@ -336,12 +341,12 @@ def run_gui():
     ttk.Radiobutton(line, text="怪物", value="monster", variable=side_var).pack(side="left", padx=(8, 0))
 
     line = row("护甲 A")
-    ttk.Scale(line, from_=0, to=120, variable=armor_var, orient="horizontal", length=130).pack(side="left")
-    ttk.Spinbox(line, from_=0, to=120, increment=1.0, textvariable=armor_var, width=7).pack(side="left", padx=(6, 0))
+    ttk.Scale(line, from_=0, to=500, variable=armor_var, orient="horizontal", length=130).pack(side="left")
+    ttk.Spinbox(line, from_=0, to=500, increment=1.0, textvariable=armor_var, width=7).pack(side="left", padx=(6, 0))
 
     line = row("韧性 T")
-    ttk.Scale(line, from_=0, to=40, variable=tough_var, orient="horizontal", length=130).pack(side="left")
-    ttk.Spinbox(line, from_=0, to=40, increment=1.0, textvariable=tough_var, width=7).pack(side="left", padx=(6, 0))
+    ttk.Scale(line, from_=0, to=100, variable=tough_var, orient="horizontal", length=130).pack(side="left")
+    ttk.Spinbox(line, from_=0, to=100, increment=1.0, textvariable=tough_var, width=7).pack(side="left", padx=(6, 0))
 
     line = row("原始伤害")
     ttk.Entry(line, textvariable=damage_var, width=10).pack(side="left")

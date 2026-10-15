@@ -2,5 +2,14 @@
   "summy_threat.configuration.attribute_caps": "属性上限",
   "summy_threat.configuration.attribute_caps.enable_attribute_cap_override": "抬升属性上限",
   "summy_threat.configuration.attribute_caps.armor_max_value": "护甲上限（generic.armor）",
-  "summy_threat.configuration.attribute_caps.max_health_max_value": "最大生命上限（generic.max_health）"
+  "summy_threat.configuration.attribute_caps.armor_toughness_max_value": "护甲韧性上限（generic.armor_toughness）",
+  "summy_threat.configuration.attribute_caps.max_health_max_value": "最大生命上限（generic.max_health）",
+  "summy_threat.configuration.damage_reduction": "护甲减伤公式",
+  "summy_threat.configuration.damage_reduction.enable_custom_armor_formula": "启用自定义护甲减伤",
+  "summy_threat.configuration.damage_reduction.synergy_divisor": "协同除数 C",
+  "summy_threat.configuration.damage_reduction.player_k": "玩家曲率 K",
+  "summy_threat.configuration.damage_reduction.player_max": "玩家减伤上限",
+  "summy_threat.configuration.damage_reduction.player_min": "玩家减伤下限",
+  "summy_threat.configuration.damage_reduction.monster_max": "怪物减伤上限",
+  "summy_threat.configuration.damage_reduction.monster_effect_cap": "怪物有效 EA 上限"
 }

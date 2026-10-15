@@ -11,8 +11,9 @@ import net.minecraftforge.fml.ModList;
 /**
  * 属性上限抬升。
  *
- * <p>只抬 {@code generic.armor} 与 {@code generic.max_health} 两个属性的 maxValue（min 不动）。
- * 改的是属性注册表里的单例对象，所以对玩家、原版怪与模组怪一视同仁。
+ * <p>抬 {@code generic.armor}、{@code generic.armor_toughness}、{@code generic.max_health}
+ * 三个属性的 maxValue（min 不动）。改的是属性注册表里的单例对象，所以对玩家、原版怪与模组怪
+ * 一视同仁。
  *
  * <p>必须走 Mixin accessor 而不是反射：生产环境字段名是 SRG（maxValue → f_22308_），
  * 按字面名反射在正式包里会失效。
@@ -20,6 +21,8 @@ import net.minecraftforge.fml.ModList;
 public final class AttributeCaps {
 	/** 原版 generic.armor 的上限（Attributes.ARMOR 声明为 RangedAttribute(0, 0, 30)） */
 	public static final double VANILLA_ARMOR_MAX = 30.0D;
+	/** 原版 generic.armor_toughness 的上限（RangedAttribute(0, 0, 20)） */
+	public static final double VANILLA_ARMOR_TOUGHNESS_MAX = 20.0D;
 	/** 原版 generic.max_health 的上限（Attributes.MAX_HEALTH 声明为 RangedAttribute(20, 0, 1024)） */
 	public static final double VANILLA_MAX_HEALTH_MAX = 1024.0D;
 
@@ -47,10 +50,14 @@ public final class AttributeCaps {
 		double armorTarget = enabled
 				? Math.max(VANILLA_ARMOR_MAX, Config.ARMOR_MAX_VALUE.get())
 				: VANILLA_ARMOR_MAX;
+		double toughnessTarget = enabled
+				? Math.max(VANILLA_ARMOR_TOUGHNESS_MAX, Config.ARMOR_TOUGHNESS_MAX_VALUE.get())
+				: VANILLA_ARMOR_TOUGHNESS_MAX;
 		double healthTarget = enabled
 				? Math.max(VANILLA_MAX_HEALTH_MAX, Config.MAX_HEALTH_MAX_VALUE.get())
 				: VANILLA_MAX_HEALTH_MAX;
 		setMaxValue(Attributes.ARMOR, "generic.armor", armorTarget);
+		setMaxValue(Attributes.ARMOR_TOUGHNESS, "generic.armor_toughness", toughnessTarget);
 		setMaxValue(Attributes.MAX_HEALTH, "generic.max_health", healthTarget);
 	}
 
