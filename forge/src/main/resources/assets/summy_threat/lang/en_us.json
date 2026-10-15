@@ -1,0 +1,6 @@
+{
+  "summy_threat.configuration.attribute_caps": "Attribute Caps",
+  "summy_threat.configuration.attribute_caps.enable_attribute_cap_override": "Raise Attribute Caps",
+  "summy_threat.configuration.attribute_caps.armor_max_value": "Armor Cap (generic.armor)",
+  "summy_threat.configuration.attribute_caps.max_health_max_value": "Max Health Cap (generic.max_health)"
+}

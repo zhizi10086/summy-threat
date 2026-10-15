@@ -1,0 +1,287 @@
+// Summy Threat —— Forge 1.20.1（47.4.10）
+// 本次只实现"属性上限抬升"：generic.armor 与 generic.max_health 的上限改由配置驱动。
+// 构建配方沿用 Summy Enchantment（原 Enchantment Reforged）的 Forge 版（同一套离线依赖、缓存策略与构建期自检）。
+buildscript {
+    repositories {
+        // 本地 Maven 仓库：内含 org.spongepowered:mixin:0.8.5（含注解处理器），
+        // 避免 MixinGradle 回源被墙的 Sponge 站导致构建卡死。
+        maven { url = uri("${projectDir}/libs-m2") }
+        // MixinGradle 只能从 CreeperHost 镜像取（repo.spongepowered.org 本机不可达）
+        maven { name = 'CreeperHost'; url = 'https://maven.creeperhost.net/' }
+        mavenCentral()
+        maven { name = 'MinecraftForge'; url = 'https://maven.minecraftforge.net/' }
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7.38'
+        // verifyMixinTargets 用 ASM 读 Minecraft jar，核对注入目标
+        classpath 'org.ow2.asm:asm:9.5'
+    }
+}
+
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+apply plugin: 'org.spongepowered.mixin'
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    maven { url = uri("${projectDir}/libs-m2") }
+    mavenCentral()
+    maven { name = 'CreeperHost'; url = 'https://maven.creeperhost.net/' }
+    maven { name = 'MinecraftForge'; url = 'https://maven.minecraftforge.net/' }
+    // 供 fg.deobf 解析 libs/ 里的第三方生产 jar（flatDir 是 ForgeGradle 要求的写法）
+    flatDir { dirs 'libs' }
+}
+
+// JarJar 只接受 Maven 范围格式（写裸版本 "0.5.5" 会报 invalid version specification），
+// 而范围版本默认每 24 小时就要去远程核对一次元数据——本机到 Maven Central 不稳，一超时就构建失败。
+// 这里把动态版本/变动模块的缓存时长拉到 365 天，解析完全走本地缓存。
+configurations.all {
+    resolutionStrategy {
+        cacheDynamicVersionsFor 365, 'days'
+        cacheChangingModulesFor 365, 'days'
+    }
+}
+
+minecraft {
+    // 官方（Mojang）映射：与 Forge 1.20.1 生态一致
+    mappings channel: 'official', version: project.minecraft_version
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'debug'
+            // dev 环境里依赖模组自带的 refmap 是 SRG 名，需要重映射成开发映射；
+            // 不配这两项时，任何"自己带 mixin 的依赖模组"（例如 AttributeFix）会在装载期抛 NoSuchFieldError。
+            // 生产环境是 SRG 运行，不需要这两项。
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
+        }
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'debug'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
+        }
+    }
+}
+
+// 上面两个运行参数指向 createSrgToMcp 的产物，先保证它已生成
+tasks.matching { it.name == 'runServer' || it.name == 'runClient' }.configureEach {
+    dependsOn 'createSrgToMcp'
+}
+
+// ===== 开发期专用：把第三方生产 jar 反转成 dev 映射，用于"互斥/兼容"冒烟 =====
+// 生产 jar 里是 SRG 名，dev 环境直接丢进 run/mods 会因硬引用（如 AttributeConfig 静态初始化里的
+// Attributes 字段）抛 NoSuchFieldError；fg.deobf 生成一份开发映射副本，只用于 runServer/runClient，
+// 不进产物、不影响 build。jar 不入库（见 .gitignore）。
+configurations {
+    attributeFixDev
+}
+
+dependencies {
+    attributeFixDev fg.deobf('attributefix-forge:attributefix-forge:21.0.5')
+}
+
+tasks.register('copyAttributeFixDevJar', Copy) {
+    from configurations.attributeFixDev
+    into layout.projectDirectory.dir('run/mods')
+}
+
+mixin {
+    // AP 生成 refmap：@Accessor 的字段名也要靠它从 maxValue 翻成生产环境的 SRG 名（f_22308_）
+    add sourceSets.main, 'summy-threat.refmap.json'
+    // 声明 mixin 配置：MixinGradle 会在 dev 运行参数里注册它们（否则 runServer 跑的是没有 mixin 的空壳），
+    // 同时写进 jar 的 MixinConfigs 清单。
+    config 'summy_threat.mixins.json'
+}
+
+// ForgeGradle 的 jarJar 默认关闭：显式打开，MixinExtras 才会作为嵌套 jar 打进产物
+jarJar {
+    enable()
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
+
+    // Mixin 注解处理器：Forge 自带运行期 Mixin，这里只要编译期；走本地 Maven 仓库（libs-m2）
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    annotationProcessor 'org.ow2.asm:asm:9.5'
+    annotationProcessor 'org.ow2.asm:asm-tree:9.5'
+    annotationProcessor 'org.ow2.asm:asm-commons:9.5'
+    annotationProcessor 'org.ow2.asm:asm-util:9.5'
+    annotationProcessor 'org.ow2.asm:asm-analysis:9.5'
+    // Mixin 注解处理器还要用 Gson（读配置/mapping 时会抛 NoClassDefFoundError: JsonParseException）
+    annotationProcessor 'com.google.code.gson:gson:2.10.1'
+    // Mixin AP 还依赖 Guava
+    annotationProcessor 'com.google.guava:guava:31.1-jre'
+
+    // MixinExtras：@WrapOperation / @ModifyExpressionValue 等注入器（jar-in-jar 打进产物，运行期必需）。
+    // 本次代码还没用到，但后续"护甲公式替换"要挂在 CombatRules 调用上，先按 Summy Enchantment 的配方接好。
+    // 用"精确范围" [0.5.5]：JarJar 要求 Maven 范围格式，精确范围同时把解析范围收窄到唯一版本。
+    compileOnly(annotationProcessor('io.github.llamalad7:mixinextras-common:0.5.5'))
+    implementation(jarJar(group: 'io.github.llamalad7', name: 'mixinextras-forge', version: '[0.5.5]'))
+}
+
+// 把 gradle.properties 的版本号写进 mods.toml
+processResources {
+    inputs.property 'version', project.mod_version
+    filesMatching('META-INF/mods.toml') {
+        expand('version': project.mod_version)
+    }
+    // MixinGradle 只把 refmap 塞进 jar；dev 运行时读的是 build/resources/main，
+    // 因此这里把编译期生成的 refmap 也复制进资源目录，否则 runServer/runClient 会报
+    // "The specified resource 'xxx.mixins.json' was invalid or could not be read"。
+    dependsOn 'compileJava'
+    from("${buildDir}/tmp/compileJava/summy-threat.refmap.json") {
+        into ''
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 17
+    it.options.encoding = 'UTF-8'
+}
+
+// ===== 构建期自检：mixin 注入目标校验 =====
+// 教训（来自 Summy Enchantment 的生产崩溃）：注解里写错包路径时，dev 环境会退化成"按名字 + 参数个数"的宽松匹配
+// 而静默通过，直到生产才炸。这里做两道检查，任何一处失败都直接中断 build：
+//   1) 注解里引用的每个 Minecraft 类都真实存在；
+//   2) 每个 method / @At target 字符串都能在 refmap 里找到映射（映射缺失 = 处理器解析不了）。
+tasks.register('verifyMixinTargets') {
+    group = 'verification'
+    description = '校验 mixin 注解里的 Minecraft 类名与 refmap 覆盖是否完整'
+    def mixinDir = file('src/main/java/com/summy/threat/mixin')
+    def refmapFile = file("${buildDir}/tmp/compileJava/summy-threat.refmap.json")
+    inputs.dir(mixinDir)
+    inputs.file(refmapFile)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        // 收集 dev 版 Minecraft jar 中的全部类名
+        def classNames = [] as Set
+        configurations.minecraft.files.each { f ->
+            if (f.name.endsWith('.jar')) {
+                def zip = new java.util.zip.ZipFile(f)
+                try {
+                    zip.entries().each { e ->
+                        if (e.name.endsWith('.class')) {
+                            classNames << e.name.substring(0, e.name.length() - '.class'.length())
+                        }
+                    }
+                } finally {
+                    zip.close()
+                }
+            }
+        }
+        if (classNames.isEmpty()) {
+            throw new GradleException('verifyMixinTargets: 读不到 Minecraft jar，无法校验')
+        }
+
+        def refmap = new groovy.json.JsonSlurper().parseText(refmapFile.text)
+        def mappings = refmap.mappings ?: [:]
+        def problems = []
+
+        mixinDir.eachFile { f ->
+            if (!f.name.endsWith('.java')) {
+                return
+            }
+            def cls = f.name.substring(0, f.name.length() - '.java'.length())
+            def text = f.text
+
+            // 1) 注解里引用的 Minecraft 类必须存在
+            def classRefs = (text =~ /L(net\/minecraft\/[^;]+);/).collect { it[1] } as Set
+            classRefs.each { c ->
+                if (!classNames.contains(c)) {
+                    problems << "$cls: 引用了不存在的 Minecraft 类 $c"
+                }
+            }
+
+            // 2) method / @At target 字符串必须能在 refmap 里查到映射
+            def keys = mappings["com/summy/threat/mixin/$cls"]?.keySet() ?: ([] as Set)
+            def used = (text =~ /(?:method|target)\s*=\s*"([^"]+)"/).collect { it[1] } as Set
+            used.each { s ->
+                if (s.startsWith('Lcom/') || s.startsWith('Lorg/')) {
+                    return
+                }
+                if (!keys.contains(s)) {
+                    problems << "$cls: 注解目标 '$s' 在 refmap 中没有映射（处理器解析不了，生产环境会注入失败）"
+                }
+            }
+        }
+
+        if (!problems.isEmpty()) {
+            throw new GradleException('verifyMixinTargets 失败：\n  - ' + problems.join('\n  - '))
+        }
+        logger.lifecycle("[Summy Threat] mixin 注入目标校验通过（${mixinDir.listFiles().length} 个文件）")
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'verifyMixinTargets'
+}
+
+jar {
+    // refmap 既在 resources 里（供 dev 运行），又被 MixinGradle 加进 jar，去重即可
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes([
+                'Specification-Title'   : project.archives_base_name,
+                'Specification-Vendor'  : 'Summy',
+                'Specification-Version' : '1',
+                'Implementation-Title'  : project.name,
+                'Implementation-Version': project.mod_version,
+                'Implementation-Vendor' : 'Summy'
+        ])
+        // 注意：配置文件名不带连字符（写成 xxx-mixins.json 会让 Mixin 读不到）
+        attributes 'MixinConfigs': 'summy_threat.mixins.json'
+    }
+    from('LICENSE') {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+}
+
+// 构建结束后把 reobf 后的 jar 复制到固定的发布目录（项目外的 ../JAR/summy-threat-forge）
+tasks.named('build') {
+    doLast {
+        def releaseDir = file('../JAR/summy-threat-forge')
+        releaseDir.mkdirs()
+        // 开启 JarJar 后，真正可发布的产物是 reobfJarJar（含嵌套的 MixinExtras）
+        def reobfTask = tasks.findByName('reobfJarJar') ?: tasks.named('reobfJar').get()
+        def jarFile = null
+        if (reobfTask.hasProperty('output')) {
+            def output = reobfTask.property('output')
+            if (output instanceof File) {
+                jarFile = output
+            }
+        }
+        if (jarFile == null) {
+            jarFile = (file('build/reobfJarJar').listFiles() ?: file('build/reobfJar').listFiles())
+                    ?.find { it.name.endsWith('.jar') }
+        }
+        if (jarFile == null || !jarFile.exists()) {
+            throw new GradleException('找不到 reobfJar 的输出 jar')
+        }
+        copy {
+            from jarFile
+            rename { "${project.archives_base_name}-${project.mod_version}.jar" }
+            into releaseDir
+        }
+    }
+}

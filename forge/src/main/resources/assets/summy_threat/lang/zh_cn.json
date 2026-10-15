@@ -1,0 +1,6 @@
+{
+  "summy_threat.configuration.attribute_caps": "属性上限",
+  "summy_threat.configuration.attribute_caps.enable_attribute_cap_override": "抬升属性上限",
+  "summy_threat.configuration.attribute_caps.armor_max_value": "护甲上限（generic.armor）",
+  "summy_threat.configuration.attribute_caps.max_health_max_value": "最大生命上限（generic.max_health）"
+}

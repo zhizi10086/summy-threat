@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.summy.threat.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "summy-threat.refmap.json",
+  "mixins": [
+    "RangedAttributeAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

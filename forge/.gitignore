@@ -1,0 +1,25 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+bin/
+*.class
+
+# 本地运行目录
+run/
+
+# 本地冒烟用的第三方生产 jar（配 fg.deobf 生成 dev 副本），不入库
+libs/*.jar
+
+# Python 缓存（docs/护甲减伤计算器.py 被导入时会生成 __pycache__）
+__pycache__/
+*.pyc
+
+# 设计期计算器直接写到当前目录的图（docs/护甲减伤计算器.py --selftest、旧版 txt 脚本）
+armor_calc_selftest.png
+armor_reduction_curves.png

@@ -1,0 +1,8 @@
+# 构建产物输出目录（forge/build.gradle 会把成品复制到这里）
+JAR/
+
+# 系统/编辑器临时文件
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp

@@ -1,0 +1,29 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "MIT"
+issueTrackerURL = "https://github.com/zhizi10086/summy-threat/issues"
+
+[[mods]]
+modId = "summy_threat"
+version = "${version}"
+displayName = "Summy Threat"
+authors = "Summy"
+description = '''
+属性与怪物机制改造（Forge 1.20.1）。
+当前版本：属性上限抬升——把 generic.armor 与 generic.max_health 的上限改由配置驱动，
+默认 100 / 100000，可关闭以回到原版上限；后续接入护甲减伤公式与怪物刷新/属性强化。
+'''
+
+[[dependencies.summy_threat]]
+    modId = "forge"
+    mandatory = true
+    versionRange = "[47,)"
+    ordering = "NONE"
+    side = "BOTH"
+
+[[dependencies.summy_threat]]
+    modId = "minecraft"
+    mandatory = true
+    versionRange = "[1.20.1,1.20.2)"
+    ordering = "NONE"
+    side = "BOTH"
