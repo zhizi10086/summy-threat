@@ -43,6 +43,9 @@ public class SummyThreat {
 		IEventBus modBus = context.getModEventBus();
 		// 物品注册（回响下界合金四件 + 卓越者精华）
 		ModItems.ITEMS.register(modBus);
+		// 创造页注入：BuildCreativeModeTabContentsEvent 是 **模组总线** 事件（IModBusEvent），
+		// 挂在 Forge 总线上不会被调用（第一版就踩了这个坑，物品注册成功但创造页里找不到）。
+		modBus.addListener(SummyThreat::onBuildCreativeTabContents);
 		// 配置的"首次加载 / 客户端收到服务端同步 / 运行期重载"都会触发 ModConfigEvent，
 		// 在这里统一应用上限：一处入口同时覆盖服务端与客户端。
 		modBus.addListener(SummyThreat::onConfigEvent);
@@ -81,15 +84,26 @@ public class SummyThreat {
 	}
 
 	/** 把本轮新物品放进对应原版创造页（护甲 → 战斗，精华 → 材料），方便测试期取用 */
-	@SubscribeEvent
 	public static void onBuildCreativeTabContents(BuildCreativeModeTabContentsEvent event) {
 		if (event.getTabKey() == CreativeModeTabs.COMBAT) {
 			event.accept(ModItems.ECHO_HELMET.get());
 			event.accept(ModItems.ECHO_CHESTPLATE.get());
 			event.accept(ModItems.ECHO_LEGGINGS.get());
 			event.accept(ModItems.ECHO_BOOTS.get());
+			if (!loggedCombatTab) {
+				loggedCombatTab = true;
+				LOGGER.info("[Summy Threat] 已向原版「战斗」创造页注入 4 件回响下界合金护甲");
+			}
 		} else if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
 			event.accept(ModItems.EXIMUS_ESSENCE.get());
+			if (!loggedIngredientsTab) {
+				loggedIngredientsTab = true;
+				LOGGER.info("[Summy Threat] 已向原版「材料」创造页注入卓越者精华");
+			}
 		}
 	}
+
+	/** 创造页注入只打一次日志（避免每次打开创造界面都刷屏） */
+	private static boolean loggedCombatTab;
+	private static boolean loggedIngredientsTab;
 }
