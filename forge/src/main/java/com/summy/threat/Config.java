@@ -40,7 +40,7 @@ public final class Config {
 	/** 怪物侧减伤上限 */
 	public static final ForgeConfigSpec.DoubleValue MONSTER_MAX;
 	/** 怪物侧参与减伤计算的有效 EA 上限（属性本身不受这个限制） */
-	public static final ForgeConfigSpec.DoubleValue MONSTER_EFFECT_CAP;
+	public static final ForgeConfigSpec.DoubleValue MONSTER_EFFECTIVE_EA_CAP;
 
 	public static final ForgeConfigSpec SPEC;
 
@@ -87,9 +87,9 @@ public final class Config {
 		MONSTER_MAX = builder
 				.comment("怪物侧减伤上限")
 				.defineInRange("monster_max", 0.90D, 0.0D, 1.0D);
-		MONSTER_EFFECT_CAP = builder
+		MONSTER_EFFECTIVE_EA_CAP = builder
 				.comment("怪物侧参与减伤计算的有效 EA 上限（怪物实际护甲可以更高，用于配合基于护甲的效果）")
-				.defineInRange("monster_effect_cap", 100.0D, 0.0D, 10_000.0D);
+				.defineInRange("monster_effective_ea_cap", 100.0D, 0.0D, 10_000.0D);
 		builder.pop();
 
 		SPEC = builder.build();

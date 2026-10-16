@@ -38,7 +38,7 @@
   玩家上限           85%    玩家侧天花板（EA = 113.33 即到顶）       damage_reduction.player_max
   玩家下限            0%    默认 0，仅作负值保护                     damage_reduction.player_min
   怪物上限           90%    怪物侧天花板                             damage_reduction.monster_max
-  怪物有效 EA 截断    100    EA 到此值后不再参与减伤计算              damage_reduction.monster_effect_cap
+  怪物有效 EA 截断    100    EA 到此值后不再参与减伤计算              damage_reduction.monster_effective_ea_cap
   （总开关）          开    关闭后完全走原版护甲减伤                  damage_reduction.enable_custom_armor_formula
 
   输入范围（计算器）：护甲 A 0~500、韧性 T 0~100。

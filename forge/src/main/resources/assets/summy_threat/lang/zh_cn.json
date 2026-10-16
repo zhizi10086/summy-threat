@@ -11,5 +11,5 @@
   "summy_threat.configuration.damage_reduction.player_max": "玩家减伤上限",
   "summy_threat.configuration.damage_reduction.player_min": "玩家减伤下限",
   "summy_threat.configuration.damage_reduction.monster_max": "怪物减伤上限",
-  "summy_threat.configuration.damage_reduction.monster_effect_cap": "怪物有效 EA 上限"
+  "summy_threat.configuration.damage_reduction.monster_effective_ea_cap": "怪物有效 EA 上限"
 }

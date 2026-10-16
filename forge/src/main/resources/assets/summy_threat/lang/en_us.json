@@ -11,5 +11,5 @@
   "summy_threat.configuration.damage_reduction.player_max": "Player Reduction Cap",
   "summy_threat.configuration.damage_reduction.player_min": "Player Reduction Floor",
   "summy_threat.configuration.damage_reduction.monster_max": "Monster Reduction Cap",
-  "summy_threat.configuration.damage_reduction.monster_effect_cap": "Monster Effective EA Cap"
+  "summy_threat.configuration.damage_reduction.monster_effective_ea_cap": "Monster Effective EA Cap"
 }

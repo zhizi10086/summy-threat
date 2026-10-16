@@ -67,7 +67,7 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `damage_reduction.player_max` | double | `0.85` | 0.0 ~ 1.0 |
 | `damage_reduction.player_min` | double | `0.0` | 0.0 ~ 1.0 |
 | `damage_reduction.monster_max` | double | `0.90` | 0.0 ~ 1.0 |
-| `damage_reduction.monster_effect_cap` | double | `100.0` | 0.0 ~ 10000.0 |
+| `damage_reduction.monster_effective_ea_cap` | double | `100.0` | 0.0 ~ 10000.0 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
 

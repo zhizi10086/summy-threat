@@ -29,7 +29,7 @@ public final class ArmorDamageFormula {
 	private static final double FALLBACK_PLAYER_MIN = 0.0D;
 	private static final double FALLBACK_PLAYER_MAX = 0.85D;
 	private static final double FALLBACK_MONSTER_MAX = 0.90D;
-	private static final double FALLBACK_MONSTER_EFFECT_CAP = 100.0D;
+	private static final double FALLBACK_MONSTER_EFFECTIVE_EA_CAP = 100.0D;
 
 	private ArmorDamageFormula() {
 	}
@@ -71,7 +71,7 @@ public final class ArmorDamageFormula {
 		}
 		return monsterReduction(ea,
 				cfg(Config.MONSTER_MAX, FALLBACK_MONSTER_MAX),
-				cfg(Config.MONSTER_EFFECT_CAP, FALLBACK_MONSTER_EFFECT_CAP));
+				cfg(Config.MONSTER_EFFECTIVE_EA_CAP, FALLBACK_MONSTER_EFFECTIVE_EA_CAP));
 	}
 
 	/** 用实体自身的属性值算最终伤害：amount * (1 - 减伤) */
