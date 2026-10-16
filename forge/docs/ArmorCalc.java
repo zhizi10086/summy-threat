@@ -80,15 +80,17 @@ public final class ArmorCalc {
 			new ArmorSet("钻石", 20, 8),
 			new ArmorSet("下界合金", 20, 12));
 
-	/** 怪物侧参考点：按 TL（威胁层级）填写 */
+	/** 怪物侧参考点：取内部《敌方护甲-TL表.md》的代表档（TL 0/4/8/12/16/20 + 三个特殊单位） */
 	private static final List<ArmorSet> MONSTER_SETS = List.of(
-			new ArmorSet("TL 0-3", 0, 0),
-			new ArmorSet("TL 4-7", 5, 0),
-			new ArmorSet("TL 8-11", 10, 1),
-			new ArmorSet("TL 12-15", 16, 2),
-			new ArmorSet("TL 16-20", 24, 4),
-			new ArmorSet("首领", 40, 10),
-			new ArmorSet("封顶", 100, 0));
+			new ArmorSet("TL 0", 0, 0),
+			new ArmorSet("TL 4", 3, 1),
+			new ArmorSet("TL 8", 8, 5),
+			new ArmorSet("TL 12", 16, 12),
+			new ArmorSet("TL 16", 25, 20),
+			new ArmorSet("TL 20", 38, 28),
+			new ArmorSet("区域首领", 60, 40),
+			new ArmorSet("Boss", 100, 50),
+			new ArmorSet("超级Boss", 200, 80));
 
 	private ArmorCalc() {
 	}

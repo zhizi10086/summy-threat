@@ -128,15 +128,17 @@ DEFAULT_PLAYER_SETS = [
     Preset("下界合金", 20, 12),
 ]
 
-# 怪物按威胁层级（TL）填的预设点位，可在界面里改
+# 怪物预设：取内部《敌方护甲-TL表.md》的代表档（TL 0/4/8/12/16/20 + 三个特殊单位），可在界面里改
 DEFAULT_MONSTER_SETS = [
-    Preset("TL 0-3", 0, 0),
-    Preset("TL 4-7", 5, 0),
-    Preset("TL 8-11", 10, 1),
-    Preset("TL 12-15", 16, 2),
-    Preset("TL 16-20", 24, 4),
-    Preset("首领", 40, 10),
-    Preset("封顶", 100, 0),
+    Preset("TL 0", 0, 0),
+    Preset("TL 4", 3, 1),
+    Preset("TL 8", 8, 5),
+    Preset("TL 12", 16, 12),
+    Preset("TL 16", 25, 20),
+    Preset("TL 20", 38, 28),
+    Preset("区域首领", 60, 40),
+    Preset("Boss", 100, 50),
+    Preset("超级Boss", 200, 80),
 ]
 
 
@@ -172,21 +174,24 @@ def build_figure(p, player_presets, monster_presets, current=None, side="player"
     axes = [fig.add_subplot(1, 2, 1), fig.add_subplot(1, 2, 2)]
     ea_axis = np.linspace(0, sweep, 400)
 
-    def draw_presets(ax, presets, reduction_fn, dot_color, text_color, group_on):
+    def draw_presets(ax, presets, reduction_fn, dot_color, text_color, group_on, x_cap=None):
         if not (show_points and group_on):
             return
         for idx, preset in enumerate(presets):
             if not preset.enabled:
                 continue
             ea = effective_armor(preset.armor, preset.toughness, p)
-            if ea > sweep * 1.2:
+            # 怪物侧超出截断点的预设（区域首领/Boss/超级Boss）按"有效EA"口径钳到封顶点，
+            # 否则它们会落在图外看不见；钳后正好压在上限线上，语义也一致
+            x = min(ea, x_cap) if x_cap else ea
+            if x > sweep * 1.2:
                 continue
             red = reduction_fn(ea, p) * 100
-            ax.scatter([ea], [red], color=dot_color, s=40, zorder=5)
+            ax.scatter([x], [red], color=dot_color, s=40, zorder=5)
             if show_labels:
-                # 交错偏移，尽量别让相邻标签叠在一起
-                offset = (6, 6) if idx % 2 == 0 else (6, -14)
-                ax.annotate("%s %.1f%%" % (preset.name, red), xy=(ea, red), xytext=offset,
+                # 三档错位：护甲相近的点（例如都被钳到封顶线的特殊单位）也能分开
+                offset = ((6, 6), (6, -14), (6, 22))[idx % 3]
+                ax.annotate("%s %.1f%%" % (preset.name, red), xy=(x, red), xytext=offset,
                             textcoords="offset points", fontsize=7.5, color=text_color)
 
     ax = axes[0]
@@ -209,7 +214,8 @@ def build_figure(p, player_presets, monster_presets, current=None, side="player"
                label="上限 %.0f%%" % (p.monster_max * 100))
     ax.axvline(p.monster_cap, color="gray", linestyle=":", linewidth=1,
                label="EA 上限 %.0f" % p.monster_cap)
-    draw_presets(ax, monster_presets, monster_reduction, "#F18F01", "#A5661B", show_monster)
+    draw_presets(ax, monster_presets, monster_reduction, "#F18F01", "#A5661B", show_monster,
+                 x_cap=p.monster_cap)
     ax.set_title("怪物侧（%.0f%% x sqrt(EA/%.0f)）" % (p.monster_max * 100, p.monster_cap), fontsize=10)
     _decorate(ax, ea_axis[-1])
 
