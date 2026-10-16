@@ -2,9 +2,11 @@
 
 Forge 1.20.1 的"属性与怪物机制改造"模组，承载三块内容：
 
-1. **属性上限抬升**（本次已实现）
-2. 护甲减伤公式替换（后续，等公式文本定稿）
-3. 怪物刷新逻辑与怪物属性强化（后续）
+1. **属性上限抬升**（已实现）
+2. **护甲减伤公式替换**（已实现）
+3. **基础数值表**：怪物侧 TL 缩放（护甲 / 生命 / 攻击）、区域首领与 Boss 倍率、生态分档、
+   玩家护甲重填、测量命令（已实现，2026-10-16）；**刷新规则、PCF/CDF、技能池（卓越者 / TL / 领袖 / Boss 能力）、
+   破甲削甲仍未实装**
 
 这套方案原本挂在 Summy Enchantment（原 Enchantment Reforged）上，现独立成模组；**Summy Enchantment 与 Summy Reliquary 的代码不动。**
 
@@ -51,6 +53,42 @@ EA = A + (A×T)/15
 - 截断只作用于"减伤计算"：怪物护甲可以堆到 500（配合基于护甲的效果），减伤只认到 EA=100（90%）。
 - 总开关 `damage_reduction.enable_custom_armor_formula` 关闭后完全走原版公式。
 
+## 已实现③：基础数值表 + 生态分档 + 测量命令
+
+口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.6 的 §4~§8。本轮**只实装数值**：
+技能池（卓越者 / TL / 领袖 / Boss 能力）、PCF/CDF、刷新规则、破甲削甲均未实装。
+
+**TL 驱动（临时）**：正式 TL 由后续 PCF/CDF 计算；本轮用服务器级"全局 TL"——
+`/summythreat tl <0-20>`（`off` 关闭；**默认关闭**，配置键 `scaling_debug.global_tl` 可预设）。
+开启后**新刷的敌对生物**（`Enemy` 接口的怪 + 末影龙）会按该 TL 数值化。
+
+| 项 | 取值 |
+| --- | --- |
+| 护甲 / 韧性 | 怪物护甲表（TL0 = 0/0 … TL20 = 38/28）；卓越者再 +15 / +10；区域首领 60/40、Boss 100/50 |
+| 生命 | M(TL)（1.0 → 34.6）× E(TL)（1.20 → 2.20，卓越者）× 首领 / Boss 固定倍率 |
+| 攻击 | A(TL)（1.0 → 21.0）× 卓越者 1.25；区域首领 12 / 4 / 8；Boss 1.5 / 4.0 / 3.0 |
+| 移速 / 经验 | 卓越者 +5%；经验 ×2（`LivingExperienceDropEvent`） |
+
+**生态分档（§5.0）**：检测 `summy_enchantment` / `summy_reliquary` / `summy_reliquary_apocrypha`
+（SRA 强制依赖 SR，共 6 档）；两维系数 `r_hp`（生命 / 护甲）与 `r_atk`（攻击 / 特殊伤害）：
+`none` 短路；`sr` 0.35/0.35、`se` 0.55/0.55、`sr_apocrypha` 0.55/**0.35**、`se_sr` 0.75/0.75、`full` 1.00/1.00。
+缩放公式 `v' = 1 + (v − 1) × r`；怪物护甲先把 EA 截断到 100，再压 `有效EA' = 1 + (有效EA − 1) × r_hp`
+（`r_hp = 1` 时与原来的减伤完全等价，设计期计算器的对照不受影响）。
+
+**玩家护甲重填（§3.1）**：`ItemAttributeModifierEvent` 把皮革 / 锁链 / 黄金 / 铁 / 钻石 / 下界合金（基础）
+四件的护甲与韧性改成设计值（如铁 3/6/4/2、钻石 5/9/7/4）；「升级后」因升级途径未定暂缺。
+
+**测量命令**（OP 2 级，配合实机校准）：
+
+```
+/summythreat tier [mode]        查看 / 强制档位（auto / none / sr / se / sr_apocrypha / se_sr / full）
+/summythreat tl [0-20|off]      查看 / 设置全局 TL
+/summythreat spawn <实体ID> <tl> [eximus|leader] [pcf]     定点召唤一只已数值化的怪
+/summythreat stats [玩家]       查看计量：有效 DPS / 击杀耗时 / 无视护甲占比 / 承伤 / 致死次数
+```
+
+每次击杀被数值化的怪会在服务端日志输出一行摘要（含有效 DPS 与无视护甲占比），便于 RCON 脚本抓取。
+
 ## 配置
 
 Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给客户端，双端口径天然一致：
@@ -68,6 +106,21 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `damage_reduction.player_min` | double | `0.0` | 0.0 ~ 1.0 |
 | `damage_reduction.monster_max` | double | `0.90` | 0.0 ~ 1.0 |
 | `damage_reduction.monster_effective_ea_cap` | double | `100.0` | 0.0 ~ 10000.0 |
+| `player_armor.enabled` | boolean | `true` | 无 |
+| `health_multiplier_per_tl.tl0` ~ `tl20` | double | v2.6 表（`1.0` → `34.6`） | 0.0 ~ 10000.0 |
+| `attack_multiplier_per_tl.tl0` ~ `tl20` | double | v2.6 表（`1.0` → `21.0`） | 0.0 ~ 10000.0 |
+| `eximus_health_multiplier_per_tl.tl0` ~ `tl20` | double | v2.6 表（`1.20` → `2.20`） | 0.0 ~ 10000.0 |
+| `eximus.armor_bonus` / `toughness_bonus` | double | `15.0` / `10.0` | 0.0 ~ 10000.0 |
+| `eximus.damage_multiplier` / `speed_bonus` / `xp_multiplier` | double | `1.25` / `0.05` / `2.0` | 见配置文件 |
+| `regional_boss_health.leader_zombie` / `piglin_brute` / `elder_guardian` | double | `150` / `60` / `38` | 1.0 ~ 10000.0 |
+| `regional_boss_health.*_attack` | double | `12.0` / `4.0` / `8.0` | 0.0 ~ 10000.0 |
+| `regional_boss_health.pcf_base_factor` / `pcf_scale_divisor` | double | `0.3` / `28.0` | 见配置文件 |
+| `boss_health.warden` / `ender_dragon` / `wither` | double | `20` / `50` / `33` | 1.0 ~ 10000.0 |
+| `boss_health.warden_melee_attack` / `ender_dragon_attack` / `wither_attack` | double | `1.5` / `4.0` / `3.0` | 0.0 ~ 1000.0 |
+| `boss_health.default_effective_dps` | double | `100.0` | 1.0 ~ 100000.0 |
+| `environment_tier.mode` | enum | `auto` | auto / none / sr / se / sr_apocrypha / se_sr / full |
+| `environment_tier.hp_scale_*` / `atk_scale_*` | double | `0.35` / `0.55` / `0.55`(**攻击 0.35**) / `0.75` / `1.00` | 0.0 ~ 1.0 |
+| `scaling_debug.global_tl` | int | `-1`（关闭接管） | -1 ~ 20 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
 
@@ -113,7 +166,7 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 
 三者口径必须一致：**改公式先改 txt，再同步 py 与 java**。
 
-### ③ 怪物刷新与属性强化
+### ③ 怪物刷新与属性强化（数值部分已实现，刷新链路与技能池待做）
 
 - 刷新链路（Forge 官方事件）：`LevelEvent.PotentialSpawns`（候选怪与权重）→ `SpawnPlacementRegisterEvent` / `MobSpawnEvent.SpawnPlacementCheck`（刷新规则）→ `MobSpawnEvent.PositionCheck`（落点）→ `MobSpawnEvent.FinalizeSpawn`（初始化时加属性/标记）→ `EntityJoinLevelEvent`（兜底）。
 - 属性：所有生物默认就带 `MAX_HEALTH` / `ATTACK_DAMAGE` / `ARMOR` / `ARMOR_TOUGHNESS`，可直接挂修饰符；注意永久修饰符会随 NBT 存档，重复施加会叠加，需要"只挂一次"的标记。
@@ -135,6 +188,22 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 仓库 | <https://github.com/zhizi10086/summy-threat>（工作副本 `_github/summy-threat`，其中 `forge/` 对应本工程） |
 
 ## 验证记录
+
+### 基础数值表落地后（2026-10-16，Forge 47.4.10 / JDK 17，指令经 RCON 下发）
+
+| 项 | 结果 |
+| --- | --- |
+| `gradlew clean build` | 通过；`verifyMixinTargets` 输出"[Summy Threat] mixin 注入目标校验通过（2 个文件）" |
+| 生态档位检测 | 装入 SR 1.8.5（dev 映射）+ Curios 后起服：日志 `[Summy Threat] 生态档位：SR（r_hp=0.35，r_atk=0.35）；全局 TL 关闭（可用 /summythreat tl <0-20> 开启）` |
+| TL 驱动 | `/summythreat tl 20` → `全局 TL 已设为 20；新刷的敌对生物将按此 TL 数值化` |
+| 数值化实测（`run/calc/rcon_scaling_test.py`，**18 项全绿**） | sr 档 TL20 僵尸：255.2 血 / 护甲 38 / 韧性 28 / 攻击 24 / 减伤 53.7%；full 档：普通 692 血·63 攻击·90% 减伤；卓越者 1522.4 血·53 甲·38 韧·78.75 攻击；区域首领（PCF20）3042.9 血·60 甲·40 韧·36 攻击；监守者 10000 血·100 甲·50 韧·45 攻击 |
+| 减伤回归（r_hp = 1） | 既有 `rcon_damage_test.py` 全绿（A=100→90%、A=500→90%、A=50→63.64%、A=100/T=20→90%、A=0→0%）——确认档位压缩在 r=1 时与原实现完全等价 |
+| 攻击口径注记 | 僵尸 `ATTACK_DAMAGE` 属性基值是 **3.0**；文档 §7 / §8 的"基础攻击 4.5"是**困难难度**口径（原版在命中时再 ×1.5），硬难度实际命中伤害 = 3.0 × 1.5 × A(TL) |
+| 配置文件 | `world2/serverconfig/summy_threat-server.toml` 生成全部新块（`player_armor` / 三张 tl 表 / `eximus` / `regional_boss_health` / `boss_health` / `environment_tier` / `scaling_debug`），取值与 v2.6 一致（tl20 = 34.6 / 21.0 / 2.2，warden = 20，mode = AUTO） |
+| 文档脚本 | `verify_scaling` / `verify_handover` / `verify_pcf_cdf` / `verify_config_keys` / `verify_player_armor` 五个脚本全绿 |
+| 未做（需客户端） | 玩家护甲重填实机核对：无头服务端没有玩家；需在单人世界穿全套铁，`armor` 应为 **15**（3/6/4/2） |
+| 未做（需真人） | 计量命令实机验证：打 TL 怪后 `/summythreat stats` 应输出有效 DPS / 击杀耗时 / 无视护甲占比；服务端日志同步出现一行击杀摘要 |
+| 未包含 | 技能池（卓越者 / TL / 领袖 / Boss 能力）、PCF/CDF、刷新规则与 5% 卓越者概率、破甲/削甲、超级Boss |
 
 ### 护甲公式落地后（2026-10-15，默认参数 C=15 / K=20 / 玩家 85% / 怪物 90% / 截断 100）
 

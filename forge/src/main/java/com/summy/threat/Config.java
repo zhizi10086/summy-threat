@@ -5,11 +5,17 @@ import net.minecraftforge.common.ForgeConfigSpec;
 /**
  * 模组配置（Forge 原生 SERVER 档）。
  *
- * <p>两组内容：
+ * <p>内容分组：
  * <ul>
  *     <li>{@code attribute_caps}：把被硬编码封顶的属性上限抬起来；下界刻意钉在原版上限上，
  *         配合 {@code AttributeCaps} 里的 {@code Math.max} 形成"只抬不压"的双保险。</li>
  *     <li>{@code damage_reduction}：自定义护甲减伤公式的常量（口径见 docs/护甲公式计算.txt）。</li>
+ *     <li>{@code player_armor}：玩家护甲重填总开关（逐件数值在 PlayerArmorRefill 里以常量保存）。</li>
+ *     <li>数值表（v2.6）：{@code health_multiplier_per_tl} / {@code attack_multiplier_per_tl} /
+ *         {@code eximus_health_multiplier_per_tl} / {@code eximus} / {@code regional_boss_health} /
+ *         {@code boss_health}——口径见内部《Summy Threat — 核心数值系统交接文档》§5~§8。</li>
+ *     <li>{@code environment_tier}：生态分档（两维系数 r_hp / r_atk，见交接文档 §5.0）。</li>
+ *     <li>{@code scaling_debug}：调试用——全局 TL（-1 = 关闭接管，默认值在内存里，重启复位）。</li>
  * </ul>
  *
  * <p>SERVER 档写在存档的 {@code serverconfig/summy_threat-server.toml}，Forge 会把服务端的值
@@ -41,6 +47,81 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue MONSTER_MAX;
 	/** 怪物侧参与减伤计算的有效 EA 上限（属性本身不受这个限制） */
 	public static final ForgeConfigSpec.DoubleValue MONSTER_EFFECTIVE_EA_CAP;
+
+	// ================= 玩家护甲重填 =================
+	/** 是否按交接文档 §3.1 的逐件表重写原版护甲件（皮革 ~ 下界合金基础） */
+	public static final ForgeConfigSpec.BooleanValue ENABLE_PLAYER_ARMOR_REFILL;
+
+	// ================= 数值表（v2.6，索引 = TL） =================
+	/** 生命倍率 M(TL) */
+	public static final ForgeConfigSpec.DoubleValue[] HEALTH_MULTIPLIER_PER_TL = new ForgeConfigSpec.DoubleValue[21];
+	/** 攻击倍率 A(TL) */
+	public static final ForgeConfigSpec.DoubleValue[] ATTACK_MULTIPLIER_PER_TL = new ForgeConfigSpec.DoubleValue[21];
+	/** 卓越者额外生命倍率 E(TL) */
+	public static final ForgeConfigSpec.DoubleValue[] EXIMUS_HEALTH_MULTIPLIER_PER_TL = new ForgeConfigSpec.DoubleValue[21];
+
+	/** 卓越者：护甲加成（加法） */
+	public static final ForgeConfigSpec.DoubleValue EXIMUS_ARMOR_BONUS;
+	/** 卓越者：韧性加成（加法） */
+	public static final ForgeConfigSpec.DoubleValue EXIMUS_TOUGHNESS_BONUS;
+	/** 卓越者：攻击倍率 */
+	public static final ForgeConfigSpec.DoubleValue EXIMUS_DAMAGE_MULTIPLIER;
+	/** 卓越者：移速加成（比例） */
+	public static final ForgeConfigSpec.DoubleValue EXIMUS_SPEED_BONUS;
+	/** 卓越者：经验倍率 */
+	public static final ForgeConfigSpec.DoubleValue EXIMUS_XP_MULTIPLIER;
+
+	/** 区域首领：领袖僵尸生命固定倍率 */
+	public static final ForgeConfigSpec.DoubleValue LEADER_ZOMBIE_MULTIPLIER;
+	/** 区域首领：猪灵蛮兵生命固定倍率 */
+	public static final ForgeConfigSpec.DoubleValue LEADER_PIGLIN_BRUTE_MULTIPLIER;
+	/** 区域首领：远古守卫者生命固定倍率 */
+	public static final ForgeConfigSpec.DoubleValue LEADER_ELDER_GUARDIAN_MULTIPLIER;
+	/** 区域首领：领袖僵尸攻击倍率 */
+	public static final ForgeConfigSpec.DoubleValue LEADER_ZOMBIE_ATTACK;
+	/** 区域首领：猪灵蛮兵攻击倍率 */
+	public static final ForgeConfigSpec.DoubleValue LEADER_PIGLIN_BRUTE_ATTACK;
+	/** 区域首领：远古守卫者攻击倍率 */
+	public static final ForgeConfigSpec.DoubleValue LEADER_ELDER_GUARDIAN_ATTACK;
+	/** 区域首领 PCF 缩放：基数 */
+	public static final ForgeConfigSpec.DoubleValue LEADER_PCF_BASE_FACTOR;
+	/** 区域首领 PCF 缩放：除数 */
+	public static final ForgeConfigSpec.DoubleValue LEADER_PCF_SCALE_DIVISOR;
+
+	/** Boss：监守者生命固定倍率 */
+	public static final ForgeConfigSpec.DoubleValue BOSS_WARDEN_MULTIPLIER;
+	/** Boss：末影龙生命固定倍率 */
+	public static final ForgeConfigSpec.DoubleValue BOSS_ENDER_DRAGON_MULTIPLIER;
+	/** Boss：凋灵生命固定倍率 */
+	public static final ForgeConfigSpec.DoubleValue BOSS_WITHER_MULTIPLIER;
+	/** Boss：监守者攻击倍率 */
+	public static final ForgeConfigSpec.DoubleValue BOSS_WARDEN_ATTACK;
+	/** Boss：末影龙攻击倍率 */
+	public static final ForgeConfigSpec.DoubleValue BOSS_ENDER_DRAGON_ATTACK;
+	/** Boss：凋灵攻击倍率 */
+	public static final ForgeConfigSpec.DoubleValue BOSS_WITHER_ATTACK;
+	/** Mod Boss 反推用的默认有效 DPS（后续 Mod Boss 支持落地后启用） */
+	public static final ForgeConfigSpec.DoubleValue DEFAULT_EFFECTIVE_DPS;
+
+	/** 生态档位模式 */
+	public enum TierMode { AUTO, NONE, SR, SE, SR_APOCRYPHA, SE_SR, FULL }
+
+	/** 生态档位：auto = 自动检测三件套，其余为强制档 */
+	public static final ForgeConfigSpec.EnumValue<TierMode> ENVIRONMENT_TIER_MODE;
+	/** 档位系数（r_hp / r_atk） */
+	public static final ForgeConfigSpec.DoubleValue HP_SCALE_SR;
+	public static final ForgeConfigSpec.DoubleValue ATK_SCALE_SR;
+	public static final ForgeConfigSpec.DoubleValue HP_SCALE_SE;
+	public static final ForgeConfigSpec.DoubleValue ATK_SCALE_SE;
+	public static final ForgeConfigSpec.DoubleValue HP_SCALE_SR_APOCRYPHA;
+	public static final ForgeConfigSpec.DoubleValue ATK_SCALE_SR_APOCRYPHA;
+	public static final ForgeConfigSpec.DoubleValue HP_SCALE_SE_SR;
+	public static final ForgeConfigSpec.DoubleValue ATK_SCALE_SE_SR;
+	public static final ForgeConfigSpec.DoubleValue HP_SCALE_FULL;
+	public static final ForgeConfigSpec.DoubleValue ATK_SCALE_FULL;
+
+	/** 调试：全局 TL（-1 = 不接管；0~20 = 接管并指定 TL）——运行期也可用 /summythreat tl 改 */
+	public static final ForgeConfigSpec.IntValue SCALING_GLOBAL_TL;
 
 	public static final ForgeConfigSpec SPEC;
 
@@ -90,6 +171,118 @@ public final class Config {
 		MONSTER_EFFECTIVE_EA_CAP = builder
 				.comment("怪物侧参与减伤计算的有效 EA 上限（怪物实际护甲可以更高，用于配合基于护甲的效果）")
 				.defineInRange("monster_effective_ea_cap", 100.0D, 0.0D, 10_000.0D);
+		builder.pop();
+
+		builder.comment(
+				"玩家护甲重填：按交接文档 §3.1 的逐件表重写原版护甲件（皮革 / 锁链 / 黄金 / 铁 / 钻石 / 下界合金基础）；",
+				"「下界合金（升级后）」因升级途径未定（待补 A1），暂缺。")
+				.push("player_armor");
+		ENABLE_PLAYER_ARMOR_REFILL = builder
+				.comment("是否启用玩家护甲重填")
+				.define("enabled", true);
+		builder.pop();
+
+		double[] mTable = {1.0, 1.2, 1.5, 1.9, 2.4, 3.1, 3.8, 4.7, 5.6, 6.8, 7.9, 9.3, 10.9, 12.7, 14.8,
+				17.1, 19.9, 22.9, 26.3, 30.2, 34.6};
+		double[] aTable = {1.0, 1.0, 1.1, 1.2, 1.4, 1.6, 1.8, 2.1, 2.4, 2.8, 3.2, 3.8, 4.7, 5.8, 7.0,
+				8.5, 10.4, 12.5, 15.0, 18.0, 21.0};
+		double[] eTable = {1.20, 1.21, 1.22, 1.24, 1.26, 1.30, 1.33, 1.36, 1.40, 1.45, 1.50, 1.55, 1.60,
+				1.65, 1.70, 1.75, 1.85, 1.95, 2.05, 2.12, 2.20};
+
+		builder.comment("普通单位生命倍率 M(TL)（v2.6；TL0 锚定原版，不受档位系数影响）")
+				.push("health_multiplier_per_tl");
+		for (int i = 0; i < 21; i++) {
+			HEALTH_MULTIPLIER_PER_TL[i] = builder.defineInRange("tl" + i, mTable[i], 0.0D, 10_000.0D);
+		}
+		builder.pop();
+
+		builder.comment("普通单位攻击倍率 A(TL)（v2.6；只缩放基础攻击力）")
+				.push("attack_multiplier_per_tl");
+		for (int i = 0; i < 21; i++) {
+			ATTACK_MULTIPLIER_PER_TL[i] = builder.defineInRange("tl" + i, aTable[i], 0.0D, 10_000.0D);
+		}
+		builder.pop();
+
+		builder.comment("卓越者额外生命倍率 E(TL)（v2.6，查表制）")
+				.push("eximus_health_multiplier_per_tl");
+		for (int i = 0; i < 21; i++) {
+			EXIMUS_HEALTH_MULTIPLIER_PER_TL[i] = builder.defineInRange("tl" + i, eTable[i], 0.0D, 10_000.0D);
+		}
+		builder.pop();
+
+		builder.comment("卓越者的数值强化（本轮不含能力池）")
+				.push("eximus");
+		EXIMUS_ARMOR_BONUS = builder
+				.comment("护甲加成（加法）")
+				.defineInRange("armor_bonus", 15.0D, 0.0D, 10_000.0D);
+		EXIMUS_TOUGHNESS_BONUS = builder
+				.comment("韧性加成（加法）")
+				.defineInRange("toughness_bonus", 10.0D, 0.0D, 10_000.0D);
+		EXIMUS_DAMAGE_MULTIPLIER = builder
+				.comment("攻击倍率")
+				.defineInRange("damage_multiplier", 1.25D, 0.0D, 1000.0D);
+		EXIMUS_SPEED_BONUS = builder
+				.comment("移速加成（比例，0.05 = +5%）")
+				.defineInRange("speed_bonus", 0.05D, -1.0D, 10.0D);
+		EXIMUS_XP_MULTIPLIER = builder
+				.comment("经验倍率")
+				.defineInRange("xp_multiplier", 2.0D, 0.0D, 1000.0D);
+		builder.pop();
+
+		builder.comment("区域首领（领袖）：生命 = 基础生命 × 固定倍率 × (基数 + PCF / 除数)")
+				.push("regional_boss_health");
+		LEADER_ZOMBIE_MULTIPLIER = builder.defineInRange("leader_zombie", 150.0D, 1.0D, 10_000.0D);
+		LEADER_PIGLIN_BRUTE_MULTIPLIER = builder.defineInRange("piglin_brute", 60.0D, 1.0D, 10_000.0D);
+		LEADER_ELDER_GUARDIAN_MULTIPLIER = builder.defineInRange("elder_guardian", 38.0D, 1.0D, 10_000.0D);
+		LEADER_ZOMBIE_ATTACK = builder.defineInRange("leader_zombie_attack", 12.0D, 0.0D, 10_000.0D);
+		LEADER_PIGLIN_BRUTE_ATTACK = builder.defineInRange("piglin_brute_attack", 4.0D, 0.0D, 10_000.0D);
+		LEADER_ELDER_GUARDIAN_ATTACK = builder.defineInRange("elder_guardian_attack", 8.0D, 0.0D, 10_000.0D);
+		LEADER_PCF_BASE_FACTOR = builder
+				.comment("PCF 缩放的基数（默认 0.3）")
+				.defineInRange("pcf_base_factor", 0.3D, 0.0D, 10.0D);
+		LEADER_PCF_SCALE_DIVISOR = builder
+				.comment("PCF 缩放的除数（默认 28）")
+				.defineInRange("pcf_scale_divisor", 28.0D, 1.0D, 1000.0D);
+		builder.pop();
+
+		builder.comment("原版 Boss：生命 = 基础生命 × 固定倍率（不随 PCF 缩放）")
+				.push("boss_health");
+		BOSS_WARDEN_MULTIPLIER = builder.defineInRange("warden", 20.0D, 1.0D, 10_000.0D);
+		BOSS_ENDER_DRAGON_MULTIPLIER = builder.defineInRange("ender_dragon", 50.0D, 1.0D, 10_000.0D);
+		BOSS_WITHER_MULTIPLIER = builder.defineInRange("wither", 33.0D, 1.0D, 10_000.0D);
+		BOSS_WARDEN_ATTACK = builder.defineInRange("warden_melee_attack", 1.5D, 0.0D, 1000.0D);
+		BOSS_ENDER_DRAGON_ATTACK = builder.defineInRange("ender_dragon_attack", 4.0D, 0.0D, 1000.0D);
+		BOSS_WITHER_ATTACK = builder.defineInRange("wither_attack", 3.0D, 0.0D, 1000.0D);
+		DEFAULT_EFFECTIVE_DPS = builder
+				.comment("Mod Boss 反推公式用的默认有效 DPS（v2.6 校准常数；Mod Boss 支持落地后启用）")
+				.defineInRange("default_effective_dps", 100.0D, 1.0D, 100_000.0D);
+		builder.pop();
+
+		builder.comment(
+				"生态分档（交接文档 §5.0）：auto 检测 summy_enchantment / summy_reliquary / summy_reliquary_apocrypha，",
+				"SRA 强制依赖 SR，故共 6 档；none 档怪物侧整体短路（不接管、不缩放）。",
+				"r_hp 管怪物生命 / 护甲，r_atk 管怪物攻击与特殊伤害；缩放公式 v' = 1 + (v − 1) × r。")
+				.push("environment_tier");
+		ENVIRONMENT_TIER_MODE = builder
+				.comment("档位模式：auto = 自动检测；其余为强制档（供整合包 / 测试覆盖）")
+				.defineEnum("mode", TierMode.AUTO);
+		HP_SCALE_SR = builder.defineInRange("hp_scale_sr", 0.35D, 0.0D, 1.0D);
+		ATK_SCALE_SR = builder.defineInRange("atk_scale_sr", 0.35D, 0.0D, 1.0D);
+		HP_SCALE_SE = builder.defineInRange("hp_scale_se", 0.55D, 0.0D, 1.0D);
+		ATK_SCALE_SE = builder.defineInRange("atk_scale_se", 0.55D, 0.0D, 1.0D);
+		HP_SCALE_SR_APOCRYPHA = builder.defineInRange("hp_scale_sr_apocrypha", 0.55D, 0.0D, 1.0D);
+		ATK_SCALE_SR_APOCRYPHA = builder.defineInRange("atk_scale_sr_apocrypha", 0.35D, 0.0D, 1.0D);
+		HP_SCALE_SE_SR = builder.defineInRange("hp_scale_se_sr", 0.75D, 0.0D, 1.0D);
+		ATK_SCALE_SE_SR = builder.defineInRange("atk_scale_se_sr", 0.75D, 0.0D, 1.0D);
+		HP_SCALE_FULL = builder.defineInRange("hp_scale_full", 1.00D, 0.0D, 1.0D);
+		ATK_SCALE_FULL = builder.defineInRange("atk_scale_full", 1.00D, 0.0D, 1.0D);
+		builder.pop();
+
+		builder.comment("调试：全局 TL（-1 = 不接管；0~20 = 接管并指定 TL）。运行期用 /summythreat tl 修改，重启复位。")
+				.push("scaling_debug");
+		SCALING_GLOBAL_TL = builder
+				.comment("启动时的默认全局 TL；-1 表示关闭怪物侧接管")
+				.defineInRange("global_tl", -1, -1, 20);
 		builder.pop();
 
 		SPEC = builder.build();

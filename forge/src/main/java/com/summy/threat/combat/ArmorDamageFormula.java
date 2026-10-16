@@ -1,6 +1,7 @@
 package com.summy.threat.combat;
 
 import com.summy.threat.Config;
+import com.summy.threat.scaling.ScalingState;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -14,6 +15,7 @@ import net.minecraftforge.common.ForgeConfigSpec;
  *   有效护甲 EA = A + (A*T)/C            （A=护甲值、T=韧性、C=协同除数）
  *   玩家侧减伤  = clamp(EA/(EA+K), 下限, 上限)          —— 玩家侧不截断 EA
  *   怪物侧减伤  = clamp(上限 * sqrt(有效EA/截断点), 0, 上限)，其中 有效EA = min(EA, 截断点)
+ *   档位压缩    = 有效EA' = 1 + (有效EA − 1) × r_hp     （§5.0 生态分档；r_hp=1 时与上面完全等价）
  * </pre>
  *
  * <p>默认值与规格一致：C=15、K=20、玩家上限 85%、玩家下限 0%、怪物上限 90%、怪物 EA 截断 100。
@@ -55,6 +57,19 @@ public final class ArmorDamageFormula {
 		return clamp(raw, 0.0D, max);
 	}
 
+	/**
+	 * 生态档位压缩（交接文档 §5.0）：{@code 有效EA' = 1 + (有效EA − 1) × r_hp}。
+	 *
+	 * <p>有效 EA 为 0 时保持 0——保证"TL 0 锚定原版"这条不变式（低 TL 怪不会被凭空加上减伤）。
+	 */
+	public static double compressEffectiveArmor(double effectiveArmor, double cap, double rHp) {
+		double ea = Math.min(positive(effectiveArmor), Math.max(cap, 1.0D));
+		if (ea <= 0.0D) {
+			return 0.0D;
+		}
+		return Math.max(0.0D, 1.0D + (ea - 1.0D) * clamp(rHp, 0.0D, 1.0D));
+	}
+
 	/** 总开关：配置未加载时按启用处理（受伤流程发生在配置加载之后，这里只是兜底） */
 	public static boolean enabled() {
 		return !Config.SPEC.isLoaded() || Config.ENABLE_CUSTOM_ARMOR_FORMULA.get();
@@ -69,9 +84,11 @@ public final class ArmorDamageFormula {
 					cfg(Config.PLAYER_MIN, FALLBACK_PLAYER_MIN),
 					cfg(Config.PLAYER_MAX, FALLBACK_PLAYER_MAX));
 		}
-		return monsterReduction(ea,
+		double cap = cfg(Config.MONSTER_EFFECTIVE_EA_CAP, FALLBACK_MONSTER_EFFECTIVE_EA_CAP);
+		double compressed = compressEffectiveArmor(ea, cap, ScalingState.rHp());
+		return monsterReduction(compressed,
 				cfg(Config.MONSTER_MAX, FALLBACK_MONSTER_MAX),
-				cfg(Config.MONSTER_EFFECTIVE_EA_CAP, FALLBACK_MONSTER_EFFECTIVE_EA_CAP));
+				cap);
 	}
 
 	/** 用实体自身的属性值算最终伤害：amount * (1 - 减伤) */
