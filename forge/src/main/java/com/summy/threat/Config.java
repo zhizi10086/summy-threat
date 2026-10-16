@@ -102,6 +102,8 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue BOSS_WITHER_ATTACK;
 	/** Mod Boss 反推用的默认有效 DPS（后续 Mod Boss 支持落地后启用） */
 	public static final ForgeConfigSpec.DoubleValue DEFAULT_EFFECTIVE_DPS;
+	/** Mod Boss 反推用的默认目标 TTK（秒；后续 Mod Boss 支持落地后启用） */
+	public static final ForgeConfigSpec.DoubleValue DEFAULT_TARGET_TTK;
 
 	/** 生态档位模式 */
 	public enum TierMode { AUTO, NONE, SR, SE, SR_APOCRYPHA, SE_SR, FULL }
@@ -182,8 +184,8 @@ public final class Config {
 				.define("enabled", true);
 		builder.pop();
 
-		double[] mTable = {1.0, 1.2, 1.5, 1.9, 2.4, 3.1, 3.8, 4.7, 5.6, 6.8, 7.9, 9.3, 10.9, 12.7, 14.8,
-				17.1, 19.9, 22.9, 26.3, 30.2, 34.6};
+		double[] mTable = {1.0, 1.3, 1.6, 2.3, 2.9, 3.9, 4.9, 6.2, 7.4, 9.1, 10.7, 12.6, 14.8, 17.4, 20.3,
+				23.5, 27.4, 31.6, 36.4, 41.9, 48.0};
 		double[] aTable = {1.0, 1.0, 1.1, 1.2, 1.4, 1.6, 1.8, 2.1, 2.4, 2.8, 3.2, 3.8, 4.7, 5.8, 7.0,
 				8.5, 10.4, 12.5, 15.0, 18.0, 21.0};
 		double[] eTable = {1.20, 1.21, 1.22, 1.24, 1.26, 1.30, 1.33, 1.36, 1.40, 1.45, 1.50, 1.55, 1.60,
@@ -231,9 +233,9 @@ public final class Config {
 
 		builder.comment("区域首领（领袖）：生命 = 基础生命 × 固定倍率 × (基数 + PCF / 除数)")
 				.push("regional_boss_health");
-		LEADER_ZOMBIE_MULTIPLIER = builder.defineInRange("leader_zombie", 150.0D, 1.0D, 10_000.0D);
-		LEADER_PIGLIN_BRUTE_MULTIPLIER = builder.defineInRange("piglin_brute", 60.0D, 1.0D, 10_000.0D);
-		LEADER_ELDER_GUARDIAN_MULTIPLIER = builder.defineInRange("elder_guardian", 38.0D, 1.0D, 10_000.0D);
+		LEADER_ZOMBIE_MULTIPLIER = builder.defineInRange("leader_zombie", 1050.0D, 1.0D, 100_000.0D);
+		LEADER_PIGLIN_BRUTE_MULTIPLIER = builder.defineInRange("piglin_brute", 420.0D, 1.0D, 100_000.0D);
+		LEADER_ELDER_GUARDIAN_MULTIPLIER = builder.defineInRange("elder_guardian", 263.0D, 1.0D, 100_000.0D);
 		LEADER_ZOMBIE_ATTACK = builder.defineInRange("leader_zombie_attack", 12.0D, 0.0D, 10_000.0D);
 		LEADER_PIGLIN_BRUTE_ATTACK = builder.defineInRange("piglin_brute_attack", 4.0D, 0.0D, 10_000.0D);
 		LEADER_ELDER_GUARDIAN_ATTACK = builder.defineInRange("elder_guardian_attack", 8.0D, 0.0D, 10_000.0D);
@@ -247,15 +249,18 @@ public final class Config {
 
 		builder.comment("原版 Boss：生命 = 基础生命 × 固定倍率（不随 PCF 缩放）")
 				.push("boss_health");
-		BOSS_WARDEN_MULTIPLIER = builder.defineInRange("warden", 20.0D, 1.0D, 10_000.0D);
-		BOSS_ENDER_DRAGON_MULTIPLIER = builder.defineInRange("ender_dragon", 50.0D, 1.0D, 10_000.0D);
-		BOSS_WITHER_MULTIPLIER = builder.defineInRange("wither", 33.0D, 1.0D, 10_000.0D);
+		BOSS_WARDEN_MULTIPLIER = builder.defineInRange("warden", 70.0D, 1.0D, 100_000.0D);
+		BOSS_ENDER_DRAGON_MULTIPLIER = builder.defineInRange("ender_dragon", 175.0D, 1.0D, 100_000.0D);
+		BOSS_WITHER_MULTIPLIER = builder.defineInRange("wither", 117.0D, 1.0D, 100_000.0D);
 		BOSS_WARDEN_ATTACK = builder.defineInRange("warden_melee_attack", 1.5D, 0.0D, 1000.0D);
 		BOSS_ENDER_DRAGON_ATTACK = builder.defineInRange("ender_dragon_attack", 4.0D, 0.0D, 1000.0D);
 		BOSS_WITHER_ATTACK = builder.defineInRange("wither_attack", 3.0D, 0.0D, 1000.0D);
 		DEFAULT_EFFECTIVE_DPS = builder
-				.comment("Mod Boss 反推公式用的默认有效 DPS（v2.6 校准常数；Mod Boss 支持落地后启用）")
-				.defineInRange("default_effective_dps", 100.0D, 1.0D, 100_000.0D);
+				.comment("Mod Boss 反推公式用的默认有效 DPS（v2.7 校准常数：Boss 档实测 ≈700；Mod Boss 支持落地后启用）")
+				.defineInRange("default_effective_dps", 700.0D, 1.0D, 1_000_000.0D);
+		DEFAULT_TARGET_TTK = builder
+				.comment("Mod Boss 反推公式用的默认目标 TTK（秒；v2.7 定为 50）")
+				.defineInRange("default_target_ttk", 50.0D, 1.0D, 10_000.0D);
 		builder.pop();
 
 		builder.comment(

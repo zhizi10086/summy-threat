@@ -226,6 +226,20 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 计量溢出封顶 | 玩家→TL 怪 的累计伤害改为 `min(事件伤害, 目标当前生命)`（已用 Forge 补丁确认 `LivingDamageEvent` 触发时"吸收已结算、生命未扣减"），总伤害 / 有效 DPS / 无视护甲占比三处同口径，避免斩杀类溢出把 A12 实测值抬高（22:33 那条 1418.42 明显含溢出，需修复后重测） |
 | 回归 | `rcon_damage_test.py` 与 `rcon_scaling_test.py` 再次全绿 |
 
+### 按实测二次重标定（2026-10-16，v2.7）
+
+| 项 | 结果 |
+| --- | --- |
+| 实测依据（你的客户端两批样本） | 僵尸 n=14 中位有效 DPS **139.7**、P25 109.8；监守者 n=2 **699 / 787**；**无视护甲占比 76~96%**（印证 90% 物理减伤下的通道依赖） |
+| 普通怪 | M(TL) 整表改为 `1 + (源表 − 1) × 3.22`；TL20 20×692 → **960** 血（@140 DPS ≈ 6.9 秒） |
+| 区域首领 | 统一名义血池 3,000 → **21,000**（倍率 1050 / 420 / 263；PCF 20 档 ≈21,300；目标 30 秒） |
+| Boss | 统一血池 10,000 → **35,000**（倍率 70 / 175 / 117；目标 **50 秒**）；Mod Boss 反推默认 TTK 50 秒 / 有效 DPS 700 ⇒ `35,000 / 基础生命` |
+| 六档对照 | 假设 DPS 同比放大为 56 / 84 / 84 / 112 / 140（首领·Boss 280 / 420 / 420 / 560 / 700）；各档 TL20 普通怪 TTK 6.2~6.9 秒、监守者 44.9~50.0 秒 |
+| 无头复验 | `rcon_scaling_test.py`（18 项：sr 档 349 血 / 53.7%、full 档 960 / 2112 / 21,300 / 35,000 全对）、`rcon_armor_check.py`（22 项）、`rcon_damage_test.py`（减伤 5 例）全绿 |
+| 文档脚本 | `verify_scaling` / `verify_handover` / `verify_pcf_cdf` / `verify_config_keys` / `verify_player_armor` 五个脚本全绿 |
+| 部署 | `_st-test\deploy.ps1 -ResetWorldConfig`：替换 jar **并删除存档内旧的 `serverconfig/summy_threat-server.toml`**（Forge 只补缺键不覆盖已有键，不删就永远是旧数值） |
+| 待你复测 | TL20 僵尸应约 **7 秒**（原 4 秒）、监守者应约 **50 秒**（原 13 秒）；顺手补一条"被 TL20 怪打"的数据供 A11/攻击表使用 |
+
 ### 你的实例部署方式（`_st-test/deploy.ps1`）
 
 `powershell -File _st-test\deploy.ps1`（或 `-SkipBuild` 只部署）会构建并把 `JAR/summy-threat-forge/summy-threat-0.1.0.jar`
