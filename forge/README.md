@@ -205,6 +205,22 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 未做（需真人） | 计量命令实机验证：打 TL 怪后 `/summythreat stats` 应输出有效 DPS / 击杀耗时 / 无视护甲占比；服务端日志同步出现一行击杀摘要 |
 | 未包含 | 技能池（卓越者 / TL / 领袖 / Boss 能力）、PCF/CDF、刷新规则与 5% 卓越者概率、破甲/削甲、超级Boss |
 
+### 玩家护甲重填的 UUID 撞车修复（2026-10-16，客户端实测暴露）
+
+| 项 | 结果 |
+| --- | --- |
+| 现象（你的实测） | 全套铁只显示 **6**（≈单件值）：四件护甲件共用了同一个修饰符 UUID，原版装备变更"按 UUID 先移除再加回"会互相顶掉，最终只剩一件生效 |
+| 根因确认 | 原版 `ArmorItem` 用 `ARMOR_MODIFIER_UUID_PER_TYPE`——**按部位各一个 UUID**，正是为了规避这一点；本模组改为 护甲/韧性 × 四个部位 = 8 个稳定 UUID，命名带部位（`summy_threat:armor_refill/helmet` 等） |
+| 无头复验（`run/calc/rcon_armor_check.py`，**10 项全绿**） | 给僵尸 **NBT 生成时带装备**（`/item replace` 在该场景不触发装备变更结算，实测踩过）：空装备 2/0；1~4 件铁逐件累加 **4 / 8 / 14 / 17**（韧性 1 / 3 / 6 / 8）——即 3+6+4+2 四件全部生效；老 bug 下全套只会是 **8** |
+| 新增验收命令 | `/summythreat armor [玩家]`：打印 重填开关 / 护甲 / 韧性 / EA / 玩家侧减伤 + 四件装备逐件的护甲贡献，供客户端穿脱对照 |
+| 回归 | 同一次起服内复跑 `rcon_damage_test.py`（减伤公式）与 `rcon_scaling_test.py`（18 项数值）全绿 |
+
+### 你的实例部署方式（`_st-test/deploy.ps1`）
+
+`powershell -File _st-test\deploy.ps1`（或 `-SkipBuild` 只部署）会构建并把 `JAR/summy-threat-forge/summy-threat-0.1.0.jar`
+（= 含嵌套 MixinExtras 的 `-all` 产物）复制进 `E:\MC\PCL2快照版\.minecraft\versions\1.20.1-Forge_47.4.23-test\mods\`，
+只清理 `summy-threat-*.jar` 旧文件，不动实例里的其它模组。
+
 ### 护甲公式落地后（2026-10-15，默认参数 C=15 / K=20 / 玩家 85% / 怪物 90% / 截断 100）
 
 | 项 | 结果 |

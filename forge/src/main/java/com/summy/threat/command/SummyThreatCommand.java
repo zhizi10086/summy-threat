@@ -5,12 +5,17 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.summy.threat.Config;
+import com.summy.threat.combat.ArmorDamageFormula;
 import com.summy.threat.scaling.CombatMeter;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.Component;
@@ -67,11 +72,11 @@ public final class SummyThreatCommand {
 				.then(Commands.literal("stats")
 						.executes(ctx -> showStats(ctx, ctx.getSource().getPlayer()))
 						.then(Commands.argument("player", EntityArgument.player())
-								.executes(ctx -> showStats(ctx, self(EntityArgument.getPlayer(ctx, "player")))))));
-	}
-
-	private static ServerPlayer self(ServerPlayer player) {
-		return player;
+								.executes(ctx -> showStats(ctx, EntityArgument.getPlayer(ctx, "player")))))
+				.then(Commands.literal("armor")
+						.executes(ctx -> showArmor(ctx, ctx.getSource().getPlayer()))
+						.then(Commands.argument("player", EntityArgument.player())
+								.executes(ctx -> showArmor(ctx, EntityArgument.getPlayer(ctx, "player"))))));
 	}
 
 	private static int showTier(CommandContext<CommandSourceStack> ctx) {
@@ -196,6 +201,42 @@ public final class SummyThreatCommand {
 				s.lastKillSeconds < 0 ? "—" : CombatMeter.pct(s.lastKillBypassShare),
 				windowDps < 0 ? "—" : CombatMeter.fmt(windowDps),
 				CombatMeter.fmt(s.takenMax), CombatMeter.fmt(avgTaken), s.takenCount, s.deaths)), false);
+		return 1;
+	}
+
+	/** 玩家护甲重填的验收命令：打印 护甲 / 韧性 / EA / 减伤，以及四件装备逐件的护甲贡献 */
+	private static int showArmor(CommandContext<CommandSourceStack> ctx, ServerPlayer player) {
+		if (player == null) {
+			ctx.getSource().sendFailure(Component.literal("该命令需要指定玩家（控制台请用 /summythreat armor <玩家>）"));
+			return 0;
+		}
+		double armor = player.getAttributeValue(Attributes.ARMOR);
+		double toughness = player.getAttributeValue(Attributes.ARMOR_TOUGHNESS);
+		double ea = ArmorDamageFormula.effectiveArmor(armor, toughness, Config.SYNERGY_DIVISOR.get());
+		double dr = ArmorDamageFormula.playerReduction(ea, Config.PLAYER_K.get(),
+				Config.PLAYER_MIN.get(), Config.PLAYER_MAX.get());
+
+		EquipmentSlot[] slots = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+		String[] names = {"头盔", "胸甲", "护腿", "靴子"};
+		StringBuilder pieces = new StringBuilder();
+		for (int i = 0; i < slots.length; i++) {
+			ItemStack stack = player.getItemBySlot(slots[i]);
+			double value = 0.0D;
+			for (AttributeModifier modifier : stack.getAttributeModifiers(slots[i]).get(Attributes.ARMOR)) {
+				value += modifier.getAmount();
+			}
+			pieces.append("%n  %s %s → 护甲 %s".formatted(names[i],
+					stack.isEmpty() ? "（空）" : stack.getHoverName().getString(),
+					CombatMeter.fmt(value)));
+		}
+
+		ctx.getSource().sendSuccess(() -> Component.literal("""
+				[Summy Threat] 玩家护甲（%s）｜重填开关 %s
+				  护甲 %s / 韧性 %s → EA %s → 玩家侧减伤 %s%s""".formatted(
+				player.getGameProfile().getName(),
+				Config.ENABLE_PLAYER_ARMOR_REFILL.get() ? "开" : "关",
+				CombatMeter.fmt(armor), CombatMeter.fmt(toughness), CombatMeter.fmt(ea),
+				CombatMeter.pct(dr), pieces.toString())), false);
 		return 1;
 	}
 }
