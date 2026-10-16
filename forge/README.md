@@ -215,6 +215,17 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 新增验收命令 | `/summythreat armor [玩家]`：打印 重填开关 / 护甲 / 韧性 / EA / 玩家侧减伤 + 四件装备逐件的护甲贡献，供客户端穿脱对照 |
 | 回归 | 同一次起服内复跑 `rcon_damage_test.py`（减伤公式）与 `rcon_scaling_test.py`（18 项数值）全绿 |
 
+### 护甲栏位过滤 + 计量溢出封顶（2026-10-16，客户端截图暴露）
+
+| 项 | 结果 |
+| --- | --- |
+| 现象（你的截图） | 铁靴子提示把 "+2 护甲 / +1 韧性" 在**主手 / 副手 / 脚上 / 腿上 / 身上 / 头上**六个栏位各列了一遍 |
+| 根因 | `ItemAttributeModifierEvent` 按 **(物品, 栏位)** 逐次触发，原版 `ArmorItem#getDefaultAttributeModifiers` 只在自己那个栏位返回修正符；本模组此前无条件注入 → 提示全列，而且**手持/错位栏位会真的加护甲**（拿在手里的铁胸甲白给 6 点） |
+| 修复 | 事件入口加 `event.getSlotType() != armor.getType().getSlot()` 判定：只在该件自己的栏位注入，其它栏位既不删也不加 |
+| 无头复验（`rcon_armor_check.py` 扩到 **22 项全绿**） | 栏位三组对照：靴子放**脚上** 2+2=**4**、韧性 1 ✓；靴子放**胸口**（错位）**不给**（2 / 0）✓；**主手**持铁胸甲**不给**（2 / 0）✓。累加：铁 17 / 8、钻石 27 / 5、下界合金（基础）28 / 12 |
+| 计量溢出封顶 | 玩家→TL 怪 的累计伤害改为 `min(事件伤害, 目标当前生命)`（已用 Forge 补丁确认 `LivingDamageEvent` 触发时"吸收已结算、生命未扣减"），总伤害 / 有效 DPS / 无视护甲占比三处同口径，避免斩杀类溢出把 A12 实测值抬高（22:33 那条 1418.42 明显含溢出，需修复后重测） |
+| 回归 | `rcon_damage_test.py` 与 `rcon_scaling_test.py` 再次全绿 |
+
 ### 你的实例部署方式（`_st-test/deploy.ps1`）
 
 `powershell -File _st-test\deploy.ps1`（或 `-SkipBuild` 只部署）会构建并把 `JAR/summy-threat-forge/summy-threat-0.1.0.jar`

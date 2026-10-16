@@ -80,15 +80,18 @@ public final class CombatMeter {
 			if (target.firstTick < 0L) {
 				target.firstTick = now;
 			}
-			target.dealt += amount;
+			// 溢出封顶：LivingDamageEvent 触发时"吸收已结算、生命尚未扣减"，所以按目标当前生命封顶，
+			// 即"最多只计到打死为止"——否则斩杀类超量伤害会把有效 DPS 抬高。
+			double counted = Math.min(amount, Math.max(0.0D, victim.getHealth()));
+			target.dealt += counted;
 			if (bypass) {
-				target.bypass += amount;
+				target.bypass += counted;
 			}
 			Stats s = stats(player);
 			if (s.windowStartTick < 0L) {
 				s.windowStartTick = now;
 			}
-			s.windowDealt += amount;
+			s.windowDealt += counted;
 			return;
 		}
 

@@ -22,6 +22,10 @@ import java.util.UUID;
  * <p><b>UUID 必须按部位各一个</b>（原版 {@code ArmorItem} 用 {@code ARMOR_MODIFIER_UUID_PER_TYPE} 就是这个道理）：
  * 原版的装备变更逻辑是"按 UUID 先移除、再加回"，若四件共用同一个 UUID，后穿上的会顶掉先穿上的，
  * 最终只剩一件生效（实测症状：全套铁只显示 6）。这里为 护甲 / 韧性 × 四个部位 各发一个稳定 UUID。
+ *
+ * <p><b>还要按栏位过滤</b>：{@code ItemAttributeModifierEvent} 是按 (物品, 栏位) 逐次触发的，
+ * 原版 {@code ArmorItem#getDefaultAttributeModifiers} 只在自己那个栏位返回修正符。若不判栏位，
+ * 提示会把六个栏位都列一遍，而且**手持护甲件也会真的加护甲**（主手/副手栏位参与属性结算）。
  */
 public final class PlayerArmorRefill {
 	/** 护甲修饰符 UUID：索引 = 部位（0 头盔 / 1 胸甲 / 2 护腿 / 3 靴子） */
@@ -62,6 +66,11 @@ public final class PlayerArmorRefill {
 		}
 		ItemStack stack = event.getItemStack();
 		if (!(stack.getItem() instanceof ArmorItem armor)) {
+			return;
+		}
+		// 只在该件自己的栏位注入（与原版 ArmorItem 的语义一致）：其它栏位既不删也不加，
+		// 否则提示会六个栏位全列，手持/错位装备还会白拿属性。
+		if (event.getSlotType() != armor.getType().getSlot()) {
 			return;
 		}
 		int material = materialIndex(armor.getMaterial());
