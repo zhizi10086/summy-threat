@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:smithing_transform",
+  "template": {
+    "item": "minecraft:echo_shard"
+  },
+  "base": {
+    "item": "minecraft:netherite_boots"
+  },
+  "addition": {
+    "item": "summy_threat:eximus_essence"
+  },
+  "result": {
+    "item": "summy_threat:echo_netherite_boots"
+  },
+  "show_notification": false
+}

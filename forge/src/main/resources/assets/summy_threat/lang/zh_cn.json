@@ -53,5 +53,10 @@
   "summy_threat.configuration.environment_tier.hp_scale_full": "三件套：生命系数",
   "summy_threat.configuration.environment_tier.atk_scale_full": "三件套：攻击系数",
   "summy_threat.configuration.scaling_debug": "调试",
-  "summy_threat.configuration.scaling_debug.global_tl": "全局 TL（-1 = 关闭接管）"
+  "summy_threat.configuration.scaling_debug.global_tl": "全局 TL（-1 = 关闭接管）",
+  "item.summy_threat.echo_netherite_helmet": "回响下界合金头盔",
+  "item.summy_threat.echo_netherite_chestplate": "回响下界合金胸甲",
+  "item.summy_threat.echo_netherite_leggings": "回响下界合金护腿",
+  "item.summy_threat.echo_netherite_boots": "回响下界合金靴子",
+  "item.summy_threat.eximus_essence": "卓越者精华"
 }

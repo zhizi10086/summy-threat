@@ -16,7 +16,7 @@ import java.util.UUID;
  * 玩家护甲重填（交接文档 §3.1）：把原版六套护甲件的护甲 / 韧性改成设计值。
  *
  * <p>逐件表来源《玩家护甲-逐件数值.txt》（首轮核验通过）；列序为 头盔 / 胸甲 / 护腿 / 靴子。
- * 「下界合金（升级后）」因升级途径未定（待补 A1）暂缺，因此下界合金按"基础"档处理。
+ * 「下界合金（升级后）」= **回响下界合金**（本模组物品，锻造台升级获得），逐件 6/11/8/5 与 4/6/5/3。
  * 只改这两项属性，不触碰其它修饰符。
  *
  * <p><b>UUID 必须按部位各一个</b>（原版 {@code ArmorItem} 用 {@code ARMOR_MODIFIER_UUID_PER_TYPE} 就是这个道理）：
@@ -46,7 +46,7 @@ public final class PlayerArmorRefill {
 	/** 部位名（用于修饰符命名与命令输出） */
 	private static final String[] SLOT_NAMES = {"helmet", "chestplate", "leggings", "boots"};
 
-	/** 逐件表 [材质][槽位] = {护甲, 韧性}；材质顺序：皮革 / 锁链 / 黄金 / 铁 / 钻石 / 下界合金（基础） */
+	/** 逐件表 [材质][槽位] = {护甲, 韧性}；材质顺序：皮革 / 锁链 / 黄金 / 铁 / 钻石 / 下界合金（基础）/ 回响下界合金 */
 	private static final double[][][] TABLE = {
 			{{1, 1}, {3, 3}, {2, 1}, {1, 1}},      // 皮革
 			{{2, 2}, {4, 3}, {3, 2}, {1, 1}},      // 锁链
@@ -54,6 +54,7 @@ public final class PlayerArmorRefill {
 			{{3, 2}, {6, 3}, {4, 2}, {2, 1}},      // 铁
 			{{5, 1}, {9, 2}, {7, 1}, {4, 1}},      // 钻石
 			{{5, 3}, {10, 4}, {7, 3}, {4, 2}},     // 下界合金（基础）
+			{{6, 4}, {11, 6}, {8, 5}, {5, 3}},     // 回响下界合金（升级后，本模组物品）
 	};
 
 	private PlayerArmorRefill() {
@@ -111,6 +112,9 @@ public final class PlayerArmorRefill {
 		}
 		if (material == ArmorMaterials.NETHERITE) {
 			return 5;
+		}
+		if (material == com.summy.threat.item.ModItems.ECHO_NETHERITE) {
+			return 6;
 		}
 		return -1;
 	}

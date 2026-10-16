@@ -3,10 +3,13 @@ package com.summy.threat;
 import com.summy.threat.armor.PlayerArmorRefill;
 import com.summy.threat.attribute.AttributeCaps;
 import com.summy.threat.command.SummyThreatCommand;
+import com.summy.threat.item.ModItems;
 import com.summy.threat.scaling.CombatMeter;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
@@ -38,6 +41,8 @@ public class SummyThreat {
 		context.registerConfig(ModConfig.Type.SERVER, Config.SPEC);
 
 		IEventBus modBus = context.getModEventBus();
+		// 物品注册（回响下界合金四件 + 卓越者精华）
+		ModItems.ITEMS.register(modBus);
 		// 配置的"首次加载 / 客户端收到服务端同步 / 运行期重载"都会触发 ModConfigEvent，
 		// 在这里统一应用上限：一处入口同时覆盖服务端与客户端。
 		modBus.addListener(SummyThreat::onConfigEvent);
@@ -72,6 +77,19 @@ public class SummyThreat {
 			LOGGER.info("[Summy Threat] 生态档位：{}（r_hp={}，r_atk={}）；全局 TL {}", tier,
 					ScalingState.rHp(), ScalingState.rAtk(),
 					ScalingState.globalTl() < 0 ? "关闭（可用 /summythreat tl <0-20> 开启）" : ScalingState.globalTl());
+		}
+	}
+
+	/** 把本轮新物品放进对应原版创造页（护甲 → 战斗，精华 → 材料），方便测试期取用 */
+	@SubscribeEvent
+	public static void onBuildCreativeTabContents(BuildCreativeModeTabContentsEvent event) {
+		if (event.getTabKey() == CreativeModeTabs.COMBAT) {
+			event.accept(ModItems.ECHO_HELMET.get());
+			event.accept(ModItems.ECHO_CHESTPLATE.get());
+			event.accept(ModItems.ECHO_LEGGINGS.get());
+			event.accept(ModItems.ECHO_BOOTS.get());
+		} else if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
+			event.accept(ModItems.EXIMUS_ESSENCE.get());
 		}
 	}
 }

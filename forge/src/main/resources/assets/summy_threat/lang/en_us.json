@@ -53,5 +53,10 @@
   "summy_threat.configuration.environment_tier.hp_scale_full": "Full trio: HP scale",
   "summy_threat.configuration.environment_tier.atk_scale_full": "Full trio: Attack scale",
   "summy_threat.configuration.scaling_debug": "Debug",
-  "summy_threat.configuration.scaling_debug.global_tl": "Global TL (-1 = off)"
+  "summy_threat.configuration.scaling_debug.global_tl": "Global TL (-1 = off)",
+  "item.summy_threat.echo_netherite_helmet": "Echo Netherite Helmet",
+  "item.summy_threat.echo_netherite_chestplate": "Echo Netherite Chestplate",
+  "item.summy_threat.echo_netherite_leggings": "Echo Netherite Leggings",
+  "item.summy_threat.echo_netherite_boots": "Echo Netherite Boots",
+  "item.summy_threat.eximus_essence": "Eximus Essence"
 }
