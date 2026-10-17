@@ -30,8 +30,13 @@ public enum EntityAbilityTooltip implements IEntityComponentProvider {
 		if ("normal".equals(kind)) {
 			tooltip.add(Component.translatable("summy_threat.jade.status_normal", tl));
 		} else {
-			tooltip.add(Component.translatable("summy_threat.jade.status", tl,
-					Component.translatable("summy_threat.jade.kind." + kind)));
+			Component type = Component.translatable("summy_threat.jade.kind." + kind);
+			String archetype = data.getString(EntityAbilityDataProvider.KEY_ARCHETYPE);
+			if (!archetype.isEmpty()) {
+				type = type.copy().append("·")
+						.append(Component.translatable("summy_threat.jade.archetype." + archetype));
+			}
+			tooltip.add(Component.translatable("summy_threat.jade.status", tl, type));
 		}
 		if (data.contains(EntityAbilityDataProvider.KEY_SHIELD)) {
 			tooltip.add(Component.translatable("summy_threat.jade.eximus_shield",

@@ -158,6 +158,11 @@ public final class ScalingState {
 		return scale(Config.ATTACK_MULTIPLIER_PER_TL[clampTl(tl)].get(), rAtk());
 	}
 
+	/** 未叠加 r_atk 的原始 A(TL) 表值，供原型技能按文档公式单独计算。 */
+	public static double rawAttackMultiplier(int tl) {
+		return Config.ATTACK_MULTIPLIER_PER_TL[clampTl(tl)].get();
+	}
+
 	public static double eximusMultiplier(int tl) {
 		return scale(Config.EXIMUS_HEALTH_MULTIPLIER_PER_TL[clampTl(tl)].get(), rHp());
 	}

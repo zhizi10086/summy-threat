@@ -3,6 +3,7 @@ package com.summy.threat.eximus;
 import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.ability.AbilityEffects;
+import com.summy.threat.armor.EchoArmorEffects;
 import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -13,10 +14,13 @@ import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.living.MobEffectEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.eventbus.api.Event;
@@ -47,6 +51,12 @@ public final class EximusShield {
 
 	/** 玩家 → 卓越者的护盾吸收量（由 CombatMeter 一次性消费）。 */
 	private static final Map<UUID, Float> ABSORBED = new HashMap<>();
+	/** 破盾后的真无敌截止 gameTime：0.5 秒 = 10 tick。 */
+	private static final Map<UUID, Long> GUARD_UNTIL = new HashMap<>();
+	private static final int BREAK_GUARD_TICKS = 10;
+	private static final UUID ID_KNOCKBACK_RESISTANCE =
+			UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000201");
+	private static final String SHIELD_MODIFIER_NAME = "summy_threat:eximus_shield";
 
 	private EximusShield() {
 	}
@@ -106,6 +116,7 @@ public final class EximusShield {
 	 */
 	public static void refresh(LivingEntity entity, int tl, boolean eximus) {
 		CompoundTag data = entity.getPersistentData();
+		GUARD_UNTIL.remove(entity.getUUID());
 		if (!eximus) {
 			clear(entity);
 			return;
@@ -132,8 +143,10 @@ public final class EximusShield {
 		data.remove(TAG_LEGACY_SHIELD);
 		data.remove(TAG_LEGACY_SHIELD_MAX);
 		if (current > 0.0D) {
+			applyShieldModifiers(entity);
 			applySnapshot(entity);
 		} else {
+			removeShieldModifiers(entity);
 			clearSnapshot(entity);
 		}
 	}
@@ -144,8 +157,44 @@ public final class EximusShield {
 		data.remove(TAG_SHIELD_MAX);
 		data.remove(TAG_LEGACY_SHIELD);
 		data.remove(TAG_LEGACY_SHIELD_MAX);
+		removeShieldModifiers(entity);
 		clearSnapshot(entity);
 		ABSORBED.remove(entity.getUUID());
+		GUARD_UNTIL.remove(entity.getUUID());
+	}
+
+	/** 护盾破碎后的 0.5 秒真无敌；不依赖护盾剩余值，护盾已归零仍会生效。 */
+	public static boolean isGuarded(LivingEntity entity) {
+		if (entity == null) {
+			return false;
+		}
+		Long until = GUARD_UNTIL.get(entity.getUUID());
+		if (until == null) {
+			return false;
+		}
+		long now = entity.level().getGameTime();
+		if (now >= until) {
+			GUARD_UNTIL.remove(entity.getUUID());
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * 破盾保护：在所有伤害进入护甲/附魔/吸收之前整击取消。
+	 * 与 SR「魂心破碎 / 免死」同一写法；只取消走 LivingHurtEvent 的伤害。
+	 */
+	@SubscribeEvent(priority = EventPriority.HIGHEST)
+	public static void onLivingHurt(LivingHurtEvent event) {
+		if (event.getEntity().level().isClientSide()) {
+			return;
+		}
+		if (isGuarded(event.getEntity())) {
+			event.setAmount(0.0F);
+			event.setCanceled(true);
+			// 清掉原版受击帧，保证 0.5 秒窗口结束后能立刻重新受伤，不被这次取消的命中额外延长。
+			event.getEntity().invulnerableTime = 0;
+		}
 	}
 
 	private static void clearNegativeEffects(LivingEntity entity) {
@@ -153,6 +202,25 @@ public final class EximusShield {
 			if (!effect.getEffect().isBeneficial()) {
 				entity.removeEffect(effect.getEffect());
 			}
+		}
+	}
+
+	/** 护盾存在期间：100% 击退抗性（加法 +1.0，原版上限 1.0）。 */
+	private static void applyShieldModifiers(LivingEntity entity) {
+		AttributeInstance resistance = entity.getAttribute(Attributes.KNOCKBACK_RESISTANCE);
+		if (resistance == null) {
+			return;
+		}
+		resistance.removeModifier(ID_KNOCKBACK_RESISTANCE);
+		resistance.addTransientModifier(new AttributeModifier(ID_KNOCKBACK_RESISTANCE,
+				SHIELD_MODIFIER_NAME + "/knockback_resistance", 1.0D,
+				AttributeModifier.Operation.ADDITION));
+	}
+
+	private static void removeShieldModifiers(LivingEntity entity) {
+		AttributeInstance resistance = entity.getAttribute(Attributes.KNOCKBACK_RESISTANCE);
+		if (resistance != null) {
+			resistance.removeModifier(ID_KNOCKBACK_RESISTANCE);
 		}
 	}
 
@@ -174,7 +242,8 @@ public final class EximusShield {
 		}
 	}
 
-	@SubscribeEvent(priority = EventPriority.HIGHEST)
+	// 放在 LOWEST：先让坚韧/冰盾/守护等减伤与转移结算；同优先级的 CombatMeter 随后读取吸收量。
+	@SubscribeEvent(priority = EventPriority.LOWEST)
 	public static void onLivingDamage(LivingDamageEvent event) {
 		LivingEntity victim = event.getEntity();
 		if (!isActive(victim)) {
@@ -188,17 +257,28 @@ public final class EximusShield {
 		if (current <= 0.0D || amount <= 0.0F) {
 			return;
 		}
-		double absorbed = Math.min(current, amount);
+		double shieldDamage = amount;
+		if (event.getSource().getEntity() instanceof Player player) {
+			// 护腿只加速护盾消耗；溢出生命的伤害仍按原始 amount 计算。
+			shieldDamage *= EchoArmorEffects.shieldDamageMultiplier(player);
+		}
+		double absorbed = Math.min(current, shieldDamage);
 		double left = current - absorbed;
+		double healthDamage = Math.max(0.0D, amount - Math.min(current, amount));
 		victim.getPersistentData().putDouble(TAG_SHIELD, left);
-		event.setAmount((float) (amount - absorbed));
+		event.setAmount((float) healthDamage);
 		if (event.getSource().getEntity() instanceof Player) {
 			ABSORBED.merge(victim.getUUID(), (float) absorbed, Float::sum);
 		}
 		if (left <= 0.0D) {
+			// 破盾当击的溢出伤害清零，并开启 0.5 秒真无敌；后续命中在 onLivingHurt 整击取消。
+			GUARD_UNTIL.put(victim.getUUID(), victim.level().getGameTime() + BREAK_GUARD_TICKS);
+			event.setAmount(0.0F);
+			victim.invulnerableTime = 0;
+			removeShieldModifiers(victim);
 			breakFx(victim);
 			clearSnapshot(victim);
-			SummyThreat.LOGGER.info("[Summy Threat] 卓越护盾破碎：{}", victim.getName().getString());
+			SummyThreat.LOGGER.info("[Summy Threat] 卓越护盾破碎：{}（0.5 秒真无敌）", victim.getName().getString());
 		}
 	}
 
@@ -223,13 +303,16 @@ public final class EximusShield {
 	@SubscribeEvent
 	public static void onLivingDeath(LivingDeathEvent event) {
 		LivingEntity entity = event.getEntity();
+		removeShieldModifiers(entity);
 		clearSnapshot(entity);
 		ABSORBED.remove(entity.getUUID());
+		GUARD_UNTIL.remove(entity.getUUID());
 	}
 
 	@SubscribeEvent
 	public static void onServerAboutToStart(ServerAboutToStartEvent event) {
 		ABSORBED.clear();
+		GUARD_UNTIL.clear();
 	}
 
 	/** CombatMeter 读取本次命中被护盾吸收的量（一次性）。 */

@@ -395,6 +395,9 @@ public final class AbilityEffects {
 			return;
 		}
 		extraDepth++;
+		// 记录主命中留下的受击帧：若追加段被其它模组在 Attack 层取消，
+		// hurt() 不会写回新帧；结算后取较大值，避免目标被后续每 tick 连击。
+		int previousInvulnerableTime = target.invulnerableTime;
 		try {
 			Vec3 velocity = suppressKnockback ? target.getDeltaMovement() : null;
 			target.invulnerableTime = 0;
@@ -404,6 +407,7 @@ public final class AbilityEffects {
 				target.hurtMarked = true;
 			}
 		} finally {
+			target.invulnerableTime = Math.max(target.invulnerableTime, previousInvulnerableTime);
 			extraDepth--;
 		}
 	}

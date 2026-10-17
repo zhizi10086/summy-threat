@@ -4,6 +4,7 @@ import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityTexts;
+import com.summy.threat.eximus.EximusArchetype;
 import com.summy.threat.eximus.EximusShield;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -50,6 +51,8 @@ public final class MonsterScaler {
 	public static final String TAG_SESSION = "summy_threat:session";
 	/** 能力名列表（能力系统落地后写入；Jade 提示框读取显示） */
 	public static final String TAG_ABILITIES = "summy_threat:abilities";
+	/** 卓越者专属原型 id（flame / frost / poison / storm / shock / guardian / vampire / magnet）。 */
+	public static final String TAG_ARCHETYPE = "summy_threat:archetype";
 
 	/** 默认 PCF：正式 PCF 系统落地前，区域首领用 20 档 */
 	public static final double DEFAULT_PCF = 20.0D;
@@ -204,6 +207,14 @@ public final class MonsterScaler {
 		data.putBoolean(TAG_SCALED, true);
 		data.putInt(TAG_TL, tl);
 		data.putLong(TAG_SESSION, sessionToken);
+		if (kind == Kind.EXIMUS) {
+			// 命令可在 scaleNow 之前写入指定原型；没有合法标签时随机补一个。
+			if (EximusArchetype.byId(data.getString(TAG_ARCHETYPE)) == null) {
+				data.putString(TAG_ARCHETYPE, EximusArchetype.random(entity.getRandom()).id());
+			}
+		} else {
+			data.remove(TAG_ARCHETYPE);
+		}
 
 		// TL 能力：新怪按 TL 区间抽取（0/1/2/3/4；卓越者 +1）；已有标签（残留 / 命令覆盖）则保留
 		if (AbilityEffects.enabled()) {
@@ -243,6 +254,8 @@ public final class MonsterScaler {
 		if (kind == Kind.EXIMUS) {
 			out.append(Component.literal(" 卓越护盾=%.1f/%.1f".formatted(
 					EximusShield.current(entity), EximusShield.max(entity))));
+			out.append(Component.literal(" 原型=" + EximusArchetype.displayNameOf(
+					entity.getPersistentData().getString(TAG_ARCHETYPE))));
 		}
 		out.append(Component.literal(" 能力="));
 		out.append(AbilityTexts.join(entity.getPersistentData().getString(TAG_ABILITIES), "·"));

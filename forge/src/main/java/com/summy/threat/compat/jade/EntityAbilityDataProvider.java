@@ -15,6 +15,7 @@ public enum EntityAbilityDataProvider implements IServerDataProvider<EntityAcces
 	public static final String KEY_TL = "tl";
 	public static final String KEY_KIND = "kind";
 	public static final String KEY_ABILITIES = "abilities";
+	public static final String KEY_ARCHETYPE = "archetype";
 	public static final String KEY_SHIELD = "eximus_shield";
 	public static final String KEY_SHIELD_MAX = "eximus_shield_max";
 
@@ -29,6 +30,10 @@ public enum EntityAbilityDataProvider implements IServerDataProvider<EntityAcces
 		}
 		data.putInt(KEY_TL, persistent.getInt(MonsterScaler.TAG_TL));
 		data.putString(KEY_KIND, MonsterScaler.kindOf(mob).name());
+		String archetype = persistent.getString(MonsterScaler.TAG_ARCHETYPE);
+		if (!archetype.isEmpty()) {
+			data.putString(KEY_ARCHETYPE, archetype);
+		}
 		if (EximusShield.isActive(mob)) {
 			data.putDouble(KEY_SHIELD, EximusShield.current(mob));
 			data.putDouble(KEY_SHIELD_MAX, EximusShield.max(mob));

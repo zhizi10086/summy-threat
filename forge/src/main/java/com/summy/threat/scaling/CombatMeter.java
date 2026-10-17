@@ -11,6 +11,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
@@ -68,7 +69,8 @@ public final class CombatMeter {
 		PLAYERS.remove(player.getUUID());
 	}
 
-	@SubscribeEvent
+	// LOWEST：在卓越护盾（LOW）吸收之后读取最终生命伤害与本次护盾吸收量。
+	@SubscribeEvent(priority = EventPriority.LOWEST)
 	public static void onDamage(LivingDamageEvent event) {
 		MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
 		if (server == null) {
@@ -117,9 +119,9 @@ public final class CombatMeter {
 			// 逐击承伤日志（效仿 SRA 的 log_trigger）：只影响日志输出，不影响统计与结算
 			if (Config.SPEC.isLoaded() && Config.LOG_PLAYER_TAKEN.get()) {
 				SummyThreat.LOGGER.info(
-						"[Summy Threat] 玩家承伤 {}：{} 点（攻击者 {}，TL {}），生命 {}/{}，吸收 {}，累计第 {} 次（单次最大 {}）",
+						"[Summy Threat] 玩家承伤 {}：{} 点（攻击者 {}，TL {}，类型 {}），生命 {}/{}，吸收 {}，累计第 {} 次（单次最大 {}）",
 						player.getGameProfile().getName(), fmt(amount), attacker.getName().getString(),
-						tlOf(attacker), fmt(player.getHealth()), fmt(player.getMaxHealth()),
+						tlOf(attacker), event.getSource().getMsgId(), fmt(player.getHealth()), fmt(player.getMaxHealth()),
 						fmt(player.getAbsorptionAmount()), s.takenCount, fmt(s.takenMax));
 			}
 		}

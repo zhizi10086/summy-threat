@@ -17,7 +17,7 @@ import java.util.UUID;
  *
  * <p>逐件表来源《玩家护甲-逐件数值.txt》（首轮核验通过）；列序为 头盔 / 胸甲 / 护腿 / 靴子。
  * 「下界合金（升级后）」= **回响下界合金**（本模组物品，锻造台升级获得），逐件 6/11/8/5 与 4/6/5/3。
- * 只改这两项属性，不触碰其它修饰符。
+ * 普通套装只改护甲/韧性；回响套在此基础上每件额外 +0.1 击退抗性（材质自带 0.1/件，满套 0.8）。
  *
  * <p><b>UUID 必须按部位各一个</b>（原版 {@code ArmorItem} 用 {@code ARMOR_MODIFIER_UUID_PER_TYPE} 就是这个道理）：
  * 原版的装备变更逻辑是"按 UUID 先移除、再加回"，若四件共用同一个 UUID，后穿上的会顶掉先穿上的，
@@ -41,6 +41,13 @@ public final class PlayerArmorRefill {
 			UUID.fromString("6f5c1a2e-0008-4a0b-9d1e-000000000022"),
 			UUID.fromString("6f5c1a2e-0008-4a0b-9d1e-000000000023"),
 			UUID.fromString("6f5c1a2e-0008-4a0b-9d1e-000000000024"),
+	};
+	/** 回响套额外击退抗性 UUID：每件 +0.1，叠加材质自带 0.1/件后满套 0.8。 */
+	private static final UUID[] ID_KNOCKBACK = {
+			UUID.fromString("6f5c1a2e-0008-4a0b-9d1e-000000000031"),
+			UUID.fromString("6f5c1a2e-0008-4a0b-9d1e-000000000032"),
+			UUID.fromString("6f5c1a2e-0008-4a0b-9d1e-000000000033"),
+			UUID.fromString("6f5c1a2e-0008-4a0b-9d1e-000000000034"),
 	};
 
 	/** 部位名（用于修饰符命名与命令输出） */
@@ -92,6 +99,12 @@ public final class PlayerArmorRefill {
 				"summy_threat:armor_refill/" + SLOT_NAMES[slot], values[0], AttributeModifier.Operation.ADDITION));
 		event.addModifier(Attributes.ARMOR_TOUGHNESS, new AttributeModifier(ID_TOUGHNESS[slot],
 				"summy_threat:toughness_refill/" + SLOT_NAMES[slot], values[1], AttributeModifier.Operation.ADDITION));
+		if (material == 6) {
+			// 回响套：在材质自带的 0.1 击退抗性之上，每件再补 0.1。
+			event.addModifier(Attributes.KNOCKBACK_RESISTANCE, new AttributeModifier(ID_KNOCKBACK[slot],
+					"summy_threat:echo_knockback/" + SLOT_NAMES[slot], 0.1D,
+					AttributeModifier.Operation.ADDITION));
+		}
 	}
 
 	private static int materialIndex(ArmorMaterial material) {

@@ -8,6 +8,8 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.summy.threat.Config;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityId;
+import com.summy.threat.armor.PlayerEximusShield;
+import com.summy.threat.eximus.EximusArchetype;
 import com.summy.threat.combat.ArmorDamageFormula;
 import com.summy.threat.scaling.CombatMeter;
 import com.summy.threat.scaling.MonsterScaler;
@@ -42,8 +44,11 @@ import java.util.Locale;
  *     <li>{@code tier [mode]}：查看或强制生态档位（auto / none / sr / se / sr_apocrypha / se_sr / full）。</li>
  *     <li>{@code tl [0-20|off]}：查看或设置全局 TL（临时驱动，正式 TL 由后续 PCF/CDF 提供）。</li>
  *     <li>{@code spawn <实体ID> <tl> [eximus|leader] [pcf]}：定点召唤一只已数值化的怪。</li>
- *     <li>{@code eximus <实体ID> [tl] [ability]}：直接召唤一只卓越者（默认当前全局 TL，未开启则 20）。</li>
+ *     <li>{@code eximus <实体ID> [tl] [原型|能力] [原型|能力]}：直接召唤卓越者；原型支持
+ *         flame / frost / poison / storm / shock / guardian / vampire / magnet，
+ *         {@code clear} 清空原型，{@code none} 抑制 TL 能力。</li>
  *     <li>{@code stats [玩家]}：查看计量结果（有效 DPS / 击杀耗时 / 无视护甲占比 / 承伤）。</li>
+ *     <li>{@code shield [0-100]}：查看或设置自己的玩家卓越护盾（调试用）。</li>
  * </ul>
  */
 public final class SummyThreatCommand {
@@ -80,13 +85,18 @@ public final class SummyThreatCommand {
 																		StringArgumentType.getString(ctx, "ability")))))))))
 				.then(Commands.literal("eximus")
 						.then(Commands.argument("entity", ResourceLocationArgument.id())
-								.executes(ctx -> spawnEximus(ctx, defaultSpawnTl(), null))
+								.executes(ctx -> spawnEximus(ctx, defaultSpawnTl(), null, null))
 								.then(Commands.argument("tl", IntegerArgumentType.integer(0, 20))
-										.executes(ctx -> spawnEximus(ctx, IntegerArgumentType.getInteger(ctx, "tl"), null))
-										.then(Commands.argument("ability", StringArgumentType.word())
+										.executes(ctx -> spawnEximus(ctx, IntegerArgumentType.getInteger(ctx, "tl"), null, null))
+										.then(Commands.argument("first", StringArgumentType.word())
 												.executes(ctx -> spawnEximus(ctx,
 														IntegerArgumentType.getInteger(ctx, "tl"),
-														StringArgumentType.getString(ctx, "ability")))))))
+														StringArgumentType.getString(ctx, "first"), null))
+												.then(Commands.argument("second", StringArgumentType.word())
+														.executes(ctx -> spawnEximus(ctx,
+																IntegerArgumentType.getInteger(ctx, "tl"),
+																StringArgumentType.getString(ctx, "first"),
+																StringArgumentType.getString(ctx, "second"))))))))
 				.then(Commands.literal("stats")
 						.executes(ctx -> showStats(ctx, ctx.getSource().getPlayer()))
 						.then(Commands.argument("player", EntityArgument.player())
@@ -95,6 +105,10 @@ public final class SummyThreatCommand {
 						.then(Commands.argument("target", EntityArgument.entity())
 								.then(Commands.argument("id", StringArgumentType.word())
 										.executes(SummyThreatCommand::setAbility))))
+				.then(Commands.literal("shield")
+						.executes(SummyThreatCommand::showShield)
+						.then(Commands.argument("value", IntegerArgumentType.integer(0, 100))
+								.executes(ctx -> setShield(ctx, IntegerArgumentType.getInteger(ctx, "value")))))
 				.then(Commands.literal("armor")
 						.executes(ctx -> showArmor(ctx, ctx.getSource().getPlayer()))
 						.then(Commands.argument("player", EntityArgument.player())
@@ -149,13 +163,71 @@ public final class SummyThreatCommand {
 
 	private static int spawn(CommandContext<CommandSourceStack> ctx, String kindRaw, double pcf, String ability) {
 		return spawnInternal(ctx.getSource(), ResourceLocationArgument.getId(ctx, "entity"),
-				IntegerArgumentType.getInteger(ctx, "tl"), kindRaw, pcf, ability);
+				IntegerArgumentType.getInteger(ctx, "tl"), kindRaw, pcf, ability, null, false);
 	}
 
-	/** 调试：直接生成卓越者；tl 缺省时用当前全局 TL，未开启则 20。 */
-	private static int spawnEximus(CommandContext<CommandSourceStack> ctx, int tl, String ability) {
+	/**
+	 * 调试：直接生成卓越者；tl 缺省时用当前全局 TL，未开启则 20。
+	 * 前两个可选词按“原型 / 能力”自动识别，因此以下写法都成立：
+	 * {@code flame}、{@code none flame}、{@code flame none}、{@code flame swift}。
+	 */
+	private static int spawnEximus(CommandContext<CommandSourceStack> ctx, int tl, String first, String second) {
+		String ability = null;
+		boolean suppressAbility = false;
+		EximusArchetype archetype = null;
+		boolean clearArchetype = false;
+		for (String token : new String[]{first, second}) {
+			if (token == null) {
+				continue;
+			}
+			String value = token.toLowerCase(Locale.ROOT);
+			if ("none".equals(value)) {
+				if (!suppressAbility) {
+					suppressAbility = true;
+					continue;
+				}
+				if (!clearArchetype) {
+					clearArchetype = true;
+					continue;
+				}
+				return fail(ctx, "none 重复过多；格式：eximus <实体> [tl] [原型|能力] [原型|能力]");
+			}
+			if ("clear".equals(value)) {
+				if (clearArchetype) {
+					return fail(ctx, "clear 重复");
+				}
+				clearArchetype = true;
+				continue;
+			}
+			if ("random".equals(value)) {
+				continue; // 保持原型随机
+			}
+			EximusArchetype foundArchetype = EximusArchetype.byId(value);
+			if (foundArchetype != null) {
+				if (archetype != null || clearArchetype) {
+					return fail(ctx, "原型重复指定：" + token);
+				}
+				archetype = foundArchetype;
+				continue;
+			}
+			AbilityId foundAbility = AbilityId.byId(value);
+			if (foundAbility != null) {
+				if (ability != null || suppressAbility) {
+					return fail(ctx, "TL 能力重复或被 none 抑制：" + token);
+				}
+				ability = foundAbility.id();
+				continue;
+			}
+			return fail(ctx, "未知原型/能力：" + token
+					+ "（原型：flame/frost/poison/storm/shock/guardian/vampire/magnet；能力见 /summythreat ability）");
+		}
 		return spawnInternal(ctx.getSource(), ResourceLocationArgument.getId(ctx, "entity"),
-				tl, "eximus", 20.0D, ability);
+				tl, "eximus", 20.0D, suppressAbility ? "none" : ability, archetype, clearArchetype);
+	}
+
+	private static int fail(CommandContext<CommandSourceStack> ctx, String message) {
+		ctx.getSource().sendFailure(Component.literal(message));
+		return 0;
 	}
 
 	private static int defaultSpawnTl() {
@@ -164,7 +236,7 @@ public final class SummyThreatCommand {
 	}
 
 	private static int spawnInternal(CommandSourceStack source, ResourceLocation entityId, int tl,
-			String kindRaw, double pcf, String ability) {
+			String kindRaw, double pcf, String ability, EximusArchetype archetype, boolean clearArchetype) {
 		EntityType<?> type = EntityType.byString(entityId.toString()).orElse(null);
 		if (type == null) {
 			source.sendFailure(Component.literal("未知实体 ID：" + entityId));
@@ -201,6 +273,9 @@ public final class SummyThreatCommand {
 
 		if ("eximus".equals(kind)) {
 			created.getPersistentData().putBoolean(MonsterScaler.TAG_EXIMUS, true);
+			if (archetype != null) {
+				created.getPersistentData().putString(MonsterScaler.TAG_ARCHETYPE, archetype.id());
+			}
 		} else if ("leader".equals(kind)) {
 			created.getPersistentData().putBoolean(MonsterScaler.TAG_LEADER, true);
 			created.getPersistentData().putDouble(MonsterScaler.TAG_PCF, pcf);
@@ -208,6 +283,9 @@ public final class SummyThreatCommand {
 
 		// 先数值化（此时实体还没进世界，避免 join 事件重复处理），再加进世界
 		MonsterScaler.scaleNow(living, tl);
+		if ("eximus".equals(kind) && clearArchetype) {
+			created.getPersistentData().remove(MonsterScaler.TAG_ARCHETYPE);
+		}
 		// 能力覆盖（测试用）：none = 抑制抽取；<id> = 强制单个
 		if (ability != null) {
 			if ("none".equalsIgnoreCase(ability)) {
@@ -253,6 +331,31 @@ public final class SummyThreatCommand {
 		}
 		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] ")
 				.append(MonsterScaler.describe(living)), true);
+		return 1;
+	}
+
+	private static int showShield(CommandContext<CommandSourceStack> ctx) {
+		ServerPlayer player = ctx.getSource().getPlayer();
+		if (player == null) {
+			ctx.getSource().sendFailure(Component.literal("该命令必须由玩家执行"));
+			return 0;
+		}
+		ctx.getSource().sendSuccess(() -> Component.literal(
+				"[Summy Threat] 玩家卓越护盾 = %.0f / %.0f".formatted(
+						PlayerEximusShield.current(player), PlayerEximusShield.MAX_SHIELD)), false);
+		return 1;
+	}
+
+	private static int setShield(CommandContext<CommandSourceStack> ctx, int value) {
+		ServerPlayer player = ctx.getSource().getPlayer();
+		if (player == null) {
+			ctx.getSource().sendFailure(Component.literal("该命令必须由玩家执行"));
+			return 0;
+		}
+		PlayerEximusShield.set(player, value);
+		ctx.getSource().sendSuccess(() -> Component.literal(
+				"[Summy Threat] 玩家卓越护盾已设为 %.0f / %.0f".formatted(
+						PlayerEximusShield.current(player), PlayerEximusShield.MAX_SHIELD)), true);
 		return 1;
 	}
 

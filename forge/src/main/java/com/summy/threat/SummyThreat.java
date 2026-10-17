@@ -4,9 +4,13 @@ import com.summy.threat.armor.PlayerArmorRefill;
 import com.summy.threat.attribute.AttributeCaps;
 import com.summy.threat.command.SummyThreatCommand;
 import com.summy.threat.ability.AbilityEffects;
+import com.summy.threat.armor.EchoArmorEffects;
+import com.summy.threat.armor.PlayerEximusShield;
+import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.eximus.EximusSpawner;
 import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.item.ModItems;
+import com.summy.threat.network.ModNetwork;
 import com.summy.threat.scaling.CombatMeter;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
@@ -52,16 +56,22 @@ public class SummyThreat {
 		// 配置的"首次加载 / 客户端收到服务端同步 / 运行期重载"都会触发 ModConfigEvent，
 		// 在这里统一应用上限：一处入口同时覆盖服务端与客户端。
 		modBus.addListener(SummyThreat::onConfigEvent);
+		// 玩家卓越护盾同步包（青色 HUD 用）
+		ModNetwork.register();
 
 		// 游戏事件总线：数值化 / 计量 / 命令 / 玩家护甲重填 / 开服时判定档位
 		MinecraftForge.EVENT_BUS.register(SummyThreat.class);
 		MinecraftForge.EVENT_BUS.register(MonsterScaler.class);
-		MinecraftForge.EVENT_BUS.register(CombatMeter.class);
 		MinecraftForge.EVENT_BUS.register(AbilityEffects.class);
+		MinecraftForge.EVENT_BUS.register(EchoArmorEffects.class);
+		MinecraftForge.EVENT_BUS.register(PlayerEximusShield.class);
 		MinecraftForge.EVENT_BUS.register(EximusShield.class);
+		MinecraftForge.EVENT_BUS.register(EximusArchetypeEffects.class);
 		MinecraftForge.EVENT_BUS.register(EximusSpawner.class);
 		MinecraftForge.EVENT_BUS.register(SummyThreatCommand.class);
 		MinecraftForge.EVENT_BUS.register(PlayerArmorRefill.class);
+		// 放在最后注册：与 EximusShield 同为 LOWEST 时后执行，能读到本次护盾吸收量。
+		MinecraftForge.EVENT_BUS.register(CombatMeter.class);
 	}
 
 	private static void onConfigEvent(ModConfigEvent event) {
