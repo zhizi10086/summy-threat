@@ -71,6 +71,8 @@ EA = A + (A×T)/15
 | 攻击 | A(TL)（1.0 → 16.44，v2.9）× 卓越者 1.25；区域首领 21.93 / 9.40 / 8.0（古守倍率当前无效）；Boss 3.29 / 4.0 / 3.0（末影龙 / 凋灵倍率当前无效） |
 | 移速 / 经验 | 卓越者 +5%；经验 ×2（`LivingExperienceDropEvent`） |
 | Jade 提示（可选） | 装 Jade 11.13+ 时，准星指向已数值化的怪显示 `TL / 类别`（能力行待能力系统）；未装时零影响 |
+| Boss 缩放 | **TL 曲线**（TL0 = 原版、TL20 = 现口径；监守者 TL0/10/20 = 500 / 7,620 / 35,000 血） |
+| TL 能力 | 按 TL 区间抽 0/1/2/3/4 个（卓越者 +1），14 个效果；`/summythreat spawn … <ability>` 覆盖、`/summythreat ability` 挂载 |
 
 **生态分档（§5.0）**：检测 `summy_enchantment` / `summy_reliquary` / `summy_reliquary_apocrypha`
 （SRA 强制依赖 SR，共 6 档）；两维系数 `r_hp`（生命 / 护甲）与 `r_atk`（攻击 / 特殊伤害）：
@@ -143,6 +145,7 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `environment_tier.hp_scale_*` / `atk_scale_*` | double | `0.35` / `0.55` / `0.55`(**攻击 0.35**) / `0.75` / `1.00` | 0.0 ~ 1.0 |
 | `scaling_debug.global_tl` | int | `-1`（关闭接管） | -1 ~ 20 |
 | `combat_log.log_player_taken` | boolean | `true` | 无 |
+| `tl_abilities.enable_tl_abilities` | boolean | `true` | 无 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
 
@@ -213,6 +216,20 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 仓库 | <https://github.com/zhizi10086/summy-threat>（工作副本 `_github/summy-threat`，其中 `forge/` 对应本工程） |
 
 ## 验证记录
+
+### Boss TL 曲线 + TL 能力落地（2026-10-17，v2.11，RCON 无头实测）
+
+| 项 | 结果 |
+| --- | --- |
+| `gradlew clean build` + `verifyMixinTargets` | 通过；产物 **710,328 字节**（含 14 个 TL 能力 + Boss TL 曲线） |
+| Boss 的 TL 曲线 | 监守者 tl0 / tl10 / tl20 → **500 / 7,620 / 35,000** 血；攻击属性 30.0 / 37.6 / 98.7（`rcon_scaling_test` 新增断言全绿） |
+| TL 能力数量与抽取 | TL3/5/9/13/17 → **0/1/2/3/4** 个；卓越者 TL9 → 3、TL3 → 0；id 合法、同一只怪不重复、解锁TL ≤ 怪物TL（`rcon_ability_test` 全绿） |
+| 能力效果（无头 RCON） | 迅捷 0.2645（0.23×1.15）、力量 64.12、狂怒低血 64.12、坚韧 200→掉 18、抗火 0、韧皮 200→掉 14、再生 2 秒 +2%、相位低血隐身、尸爆击杀邻近鸡——全部 OK |
+| 命令覆盖 | `spawn … <ability>` 强制单个；`/summythreat ability … clear` / `<id>` 挂载清除 OK |
+| 回归 | `rcon_damage_test` 5 例全绿；5 个文档脚本全绿（`verify_config_keys` 已含 `[tl_abilities]`） |
+| 配置 | 生成 `[tl_abilities] enable_tl_abilities = true` |
+| 部署 | jar 已进实例（710,328 字节），两个存档旧 serverconfig 已清（进世界按新默认重建） |
+| 未做（需你实机） | ① 吸血 / 荆棘 / 熔火 / 腐蚀 / 亡灵增援（需 AI 互殴）；② TL 8/12/16 的怪实际拿到 2/3/4 个能力并在 Jade 看到名字；③ Boss 不同 TL 的血量手感 |
 
 ### TL 能力表定稿 + 玩家承伤日志 + Jade 提示（2026-10-17，v2.10）
 
