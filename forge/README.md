@@ -57,7 +57,7 @@ EA = A + (A×T)/15
 
 ## 已实现③：基础数值表 + 生态分档 + 测量命令
 
-口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.16 的 §4~§8。本轮**只实装数值**：
+口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.17 的 §4~§8。本轮**只实装数值**：
 技能池（卓越者 / TL / 领袖 / Boss 能力）、PCF/CDF、刷新规则、破甲削甲均未实装。
 
 **TL 驱动（临时）**：正式 TL 由后续 PCF/CDF 计算；本轮用服务器级"全局 TL"——
@@ -76,7 +76,7 @@ EA = A + (A×T)/15
 | 比例型能力 | 吸血 / 荆棘 / 熔火 / 腐蚀以**减伤前伤害**为基数（护甲与吸收盾之前）；吸血每次至少回复自身最大生命 0.5% |
 | 投射物与荆棘冷却 | 吸血 / 熔火 / 腐蚀对**近战与投射物**（所有 `Projectile`，排除投掷药水）主命中生效；荆棘按**攻击者全局 0.25 秒**冷却 |
 | 尸爆 | 自身最大生命 **100%** 的魔法伤害（无视护甲）；对玩家上限 **85% 最大生命**；允许连锁，带灵魂爆发特效 |
-| 超宏防护（卓越者） | 最大生命 × Warframe `f1` 曲线（TL20 = **75%**，TL0/5/10/15 ≈ 0.31%/0.60%/4.98%/23.94%）；不可再生；护甲/附魔/吸收后、生命前承伤；负面 MobEffect、腐蚀与属性下降免疫（属性快照） |
+| 卓越护盾（卓越者） | 最大生命 × 等级曲线 `f1`（TL20 = **75%**，TL0/5/10/15 ≈ 0.31%/0.60%/4.98%/23.94%）；不可再生；护甲/附魔/吸收后、生命前承伤；负面 MobEffect、腐蚀与属性下降免疫（属性快照） |
 | 自然卓越者 | 自然类生成（NATURAL / CHUNK_GENERATION / STRUCTURE / PATROL / JOCKEY / REINFORCEMENT）5%；刷怪笼、命令、召唤、刷怪蛋等 0% |
 
 **生态分档（§5.0）**：检测 `summy_enchantment` / `summy_reliquary` / `summy_reliquary_apocrypha`
@@ -141,7 +141,7 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `eximus_health_multiplier_per_tl.tl0` ~ `tl20` | double | v2.6 表（`1.20` → `2.20`） | 0.0 ~ 10000.0 |
 | `eximus.armor_bonus` / `toughness_bonus` | double | `15.0` / `10.0` | 0.0 ~ 10000.0 |
 | `eximus.damage_multiplier` / `speed_bonus` / `xp_multiplier` | double | `1.25` / `0.05` / `2.0` | 见配置文件 |
-| `eximus.overguard_tl20_ratio` | double | `0.75`（TL20 超宏护盾占最大生命） | 0.0 ~ 10.0 |
+| `eximus.eximus_shield_tl20_ratio` | double | `0.75`（TL20 卓越护盾占最大生命） | 0.0 ~ 10.0 |
 | `eximus.natural_spawn_chance` | double | `0.05`（自然卓越者概率） | 0.0 ~ 1.0 |
 | `regional_boss_health.leader_zombie` / `piglin_brute` / `elder_guardian` | double | `1050` / `420` / `263` | 1.0 ~ 10000.0 |
 | `regional_boss_health.*_attack` | double | `21.93` / `9.40` / `8.0`（古守当前无效） | 0.0 ~ 10000.0 |
@@ -225,13 +225,27 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 
 ## 验证记录
 
-### 卓越者超宏防护 + 5% 自然刷新（2026-10-17，v2.16，RCON 无头实测）
+### 卓越护盾更名 + 亡灵增援同 TL（2026-10-17，v2.17，RCON 无头实测）
+
+| 项 | 结果 |
+| --- | --- |
+| `gradlew clean build` + `verifyMixinTargets` | 通过；产物 725,704 字节 |
+| 更名 | `Overguard` → `EximusShield`、`OverguardFloor` → `EximusShieldFloor`；ForgeData → `summy_threat:eximus_shield` / `_max`；配置键 → `eximus.eximus_shield_tl20_ratio`；Jade → `summy_threat.jade.eximus_shield`；显示文本统一为“卓越护盾 / Eximus Shield” |
+| 旧标签迁移 | 旧 `summy_threat:overguard` / `_max` 只读兼容；重缩放时迁移到新标签并删除旧标签；两段式测试通过（1,084 / 1,584 保留） |
+| 亡灵增援同 TL | 全局 TL 关闭时 owner 命令 TL20 → 召唤体 960 血、`TAG_TL=20`、同类型 zombie；全局 TL16 时召唤体仍 960（不是 548） |
+| 召唤体能力 | 召唤体有 4 个正常 TL 能力，但 `TAG_ABILITIES` 不含 `necro_reinforcement`；非卓越者、无卓越护盾、不会再连锁 |
+| Boss/领袖排除 | 领袖僵尸与凋灵即使命令强制挂载亡灵增援，反复受击也不产生召唤体 |
+| 回归 | `rcon_eximus_test`、`rcon_necro_test`、`rcon_ability_test`、`rcon_scaling_test`（21 项）、`rcon_damage_test`（5 例）、`rcon_armor_check`（28 项）全绿 |
+| 部署 | jar 已进实例（725,704 字节）；旧配置键被忽略，新键 `eximus_shield_tl20_ratio` 默认 0.75 |
+| 未做（需你实机） | Jade 新名称“卓越护盾”显示；自然 5% 刷新（`natural_spawn_chance=1.0` 测试后恢复）；护盾吸收/快照实机手感 |
+
+### 卓越护盾 + 5% 自然刷新（2026-10-17，v2.16，RCON 无头实测）
 
 | 项 | 结果 |
 | --- | --- |
 | `gradlew clean build` + `verifyMixinTargets` | 通过；产物 725,120 字节 |
-| Warframe 曲线 | TL0/5/10/15/20 护盾比例实测 **0.311% / 0.603% / 4.979% / 23.943% / 75.000%**，与 `f1(d)=1+0.0015d⁴`、`f1(20)=241` 归一化一致 |
-| 超宏数值 | TL20 卓越者 2,112 血 → **1,584 护盾**；魔法 100 → 护盾 1,484、生命不变；魔法 1,484 → 护盾 0、生命不变；破盾后物理 100 → 生命 2,102；3 秒后仍 0（不可再生） |
+| 等级曲线 | TL0/5/10/15/20 护盾比例实测 **0.311% / 0.603% / 4.979% / 23.943% / 75.000%**，与 `f1(d)=1+0.0015d⁴`、`f1(20)=241` 归一化一致 |
+| 卓越护盾数值 | TL20 卓越者 2,112 血 → **1,584 护盾**；魔法 100 → 护盾 1,484、生命不变；魔法 1,484 → 护盾 0、生命不变；破盾后物理 100 → 生命 2,102；3 秒后仍 0（不可再生） |
 | 属性快照 | 护盾 >0 时负向 `attribute modifier (-10)` 不改变护甲 53；破盾后护甲恢复为 43；负面 MobEffect（slowness）护盾期间被拒绝、破盾后可生效 |
 | 腐蚀交互 | 护盾下腐蚀不叠层（护甲 53）；破盾后腐蚀 1 层 → 47.7 |
 | 跨存档持久化 | 打掉 500 护盾（1,084/1,584）→ save-all → 关服 → 重启 → 仍为 1,084 / 1,584（不全满） |
@@ -240,7 +254,7 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 回归 | `rcon_eximus_test`、`rcon_ability_test`、`rcon_scaling_test`（21 项）、`rcon_damage_test`（5 例）、`rcon_armor_check`（28 项）、5 个文档脚本、`cross_check.py` 全绿 |
 | 尸爆连锁说明 | 卓越者 2,112 魔法爆发打不穿另一只卓越者（1,584 护盾 + 2,112 生命），所以卓越者尸爆不连锁；`rcon_ability_test` 的连锁断言改用普通怪（2 × 960 = 1,920） |
 | 部署 | jar 已进实例（725,120 字节）；新增两个 eximus 配置键，旧 serverconfig 自动补键 |
-| 未做（需你实机） | ① Jade 超宏行 + 粒子/破盾特效；② 自然 5% 刷新（`natural_spawn_chance = 1.0` 验证后恢复 0.05）；③ `/summythreat stats` 的护盾吸收与有效 DPS；④ 实机高频攻击下的快照手感 |
+| 未做（需你实机） | ① Jade 卓越护盾行 + 粒子/破盾特效；② 自然 5% 刷新（`natural_spawn_chance = 1.0` 验证后恢复 0.05）；③ `/summythreat stats` 的护盾吸收与有效 DPS；④ 实机高频攻击下的快照手感 |
 
 ### 投射物兼容 + 荆棘按攻击者 0.25 秒冷却（2026-10-17，v2.14，RCON 无头实测）
 
