@@ -70,7 +70,7 @@ EA = A + (A×T)/15
 | 生命 | M(TL)（1.0 → 48.0，v2.7）× E(TL)（1.20 → 2.20，卓越者）× 首领 / Boss 固定倍率 |
 | 攻击 | A(TL)（1.0 → 16.44，v2.9）× 卓越者 1.25；区域首领 21.93 / 9.40 / 8.0（古守倍率当前无效）；Boss 3.29 / 4.0 / 3.0（末影龙 / 凋灵倍率当前无效） |
 | 移速 / 经验 | 卓越者 +5%；经验 ×2（`LivingExperienceDropEvent`） |
-| Jade 提示（可选） | 装 Jade 11.13+ 时，准星指向已数值化的怪显示 `TL / 类别`（能力行待能力系统）；未装时零影响 |
+| Jade 提示（可选） | 装 Jade 11.13+ 时两行显示：`[Summy Threat] TL 20 卓越者`（普通单位不显示类型）/ `迅捷·力量`（能力名按解锁 TL 阶段上色：4-7 白、8-11 蓝、12-15 紫、16-20 金）；未装零影响 |
 | Boss 缩放 | **TL 曲线**（TL0 = 原版、TL20 = 现口径；监守者 TL0/10/20 = 500 / 7,620 / 35,000 血） |
 | TL 能力 | 按 TL 区间抽 0/1/2/3/4 个（卓越者 +1），14 个效果；`/summythreat spawn … <ability>` 覆盖、`/summythreat ability` 挂载 |
 
@@ -216,6 +216,19 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 仓库 | <https://github.com/zhizi10086/summy-threat>（工作副本 `_github/summy-threat`，其中 `forge/` 对应本工程） |
 
 ## 验证记录
+
+### Jade 两行格式 + 阶段配色 + 亡灵池限制 + 荆棘无击退（2026-10-17，v2.12）
+
+| 项 | 结果 |
+| --- | --- |
+| `gradlew build` + `verifyMixinTargets` | 通过 |
+| Jade 两行格式 | 第一行 `[Summy Threat] TL 20 卓越者`（普通单位走 `status_normal`，不显示类型）；第二行能力名以 `·` 连接、按解锁 TL 阶段上色（4-7 白 / 8-11 蓝 / 12-15 紫 / 16-20 金）；命令输出复用同一组件，不再 `getString()` 拍平 |
+| 能力按阶段上色 | `AbilityId.stage()`：4-7→2、8-11→3、12-15→4、16-20→5（0-3→1 灰占位）；色值集中在 `AbilityTexts` |
+| 亡灵增援入池限制 | `rcon_ability_test` 新增：TL17 蜘蛛（非亡灵）16 次抽取均无 `necro_reinforcement`；TL17 僵尸（亡灵）16 次至少出现一次——全绿 |
+| 荆棘无击退 | `damageExtra(..., suppressKnockback=true)`：结算前保存目标速度、`hurt` 后还原并置 `hurtMarked`；熔火 / 尸爆保持默认击退 |
+| 回归 | `rcon_scaling_test`（含 Boss TL0/10/20）、`rcon_ability_test`（31 项）、`rcon_damage_test`（5 例）、5 个文档脚本全绿 |
+| 部署 | jar 已进实例（本轮无新增配置键，未重置存档配置） |
+| 未做（需你实机） | ① Jade 两行与颜色显示；② 普通怪第一行无类型；③ 荆棘反弹无击退（熔火 / 尸爆仍有击退） |
 
 ### Boss TL 曲线 + TL 能力落地（2026-10-17，v2.11，RCON 无头实测）
 
