@@ -94,7 +94,8 @@ EA = A + (A×T)/15
 /summythreat tier [mode]        查看 / 强制档位（auto / none / sr / se / sr_apocrypha / se_sr / full）
 /summythreat tl [0-20|off]      查看 / 设置全局 TL
 /summythreat spawn <实体ID> <tl> [eximus|leader] [pcf]     定点召唤一只已数值化的怪
-/summythreat stats [玩家]       查看计量：有效 DPS / 击杀耗时 / 无视护甲占比 / 承伤 / 致死次数
+/summythreat eximus <实体ID> [tl] [ability]               直接召唤卓越者（默认当前全局 TL，未开启则 20）
+/summythreat stats [玩家]       查看计量：有效 DPS / 击杀耗时 / 无视护甲占比 / 护盾吸收 / 承伤 / 致死次数
 ```
 
 每次击杀被数值化的怪会在服务端日志输出一行摘要（含有效 DPS 与无视护甲占比），便于 RCON 脚本抓取。
@@ -228,16 +229,17 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 
 | 项 | 结果 |
 | --- | --- |
-| `gradlew clean build` + `verifyMixinTargets` | 通过；产物 724,772 字节 |
+| `gradlew clean build` + `verifyMixinTargets` | 通过；产物 725,120 字节 |
 | Warframe 曲线 | TL0/5/10/15/20 护盾比例实测 **0.311% / 0.603% / 4.979% / 23.943% / 75.000%**，与 `f1(d)=1+0.0015d⁴`、`f1(20)=241` 归一化一致 |
 | 超宏数值 | TL20 卓越者 2,112 血 → **1,584 护盾**；魔法 100 → 护盾 1,484、生命不变；魔法 1,484 → 护盾 0、生命不变；破盾后物理 100 → 生命 2,102；3 秒后仍 0（不可再生） |
 | 属性快照 | 护盾 >0 时负向 `attribute modifier (-10)` 不改变护甲 53；破盾后护甲恢复为 43；负面 MobEffect（slowness）护盾期间被拒绝、破盾后可生效 |
 | 腐蚀交互 | 护盾下腐蚀不叠层（护甲 53）；破盾后腐蚀 1 层 → 47.7 |
 | 跨存档持久化 | 打掉 500 护盾（1,084/1,584）→ save-all → 关服 → 重启 → 仍为 1,084 / 1,584（不全满） |
 | 自然刷新 | 5% 钩子已实现（自然类生成；刷怪笼/命令/召唤 0%）；无玩家 headless 环境无法自动验证自然生成，需实机把 `natural_spawn_chance` 临时设 1.0 观察 |
+| 调试指令 | `/summythreat eximus minecraft:zombie` 默认按当前全局 TL（未开启 20）生成卓越者；显式 `15 none` → TL15、23.943% 护盾，实测 OK |
 | 回归 | `rcon_eximus_test`、`rcon_ability_test`、`rcon_scaling_test`（21 项）、`rcon_damage_test`（5 例）、`rcon_armor_check`（28 项）、5 个文档脚本、`cross_check.py` 全绿 |
 | 尸爆连锁说明 | 卓越者 2,112 魔法爆发打不穿另一只卓越者（1,584 护盾 + 2,112 生命），所以卓越者尸爆不连锁；`rcon_ability_test` 的连锁断言改用普通怪（2 × 960 = 1,920） |
-| 部署 | jar 已进实例（724,772 字节）；新增两个 eximus 配置键，旧 serverconfig 自动补键 |
+| 部署 | jar 已进实例（725,120 字节）；新增两个 eximus 配置键，旧 serverconfig 自动补键 |
 | 未做（需你实机） | ① Jade 超宏行 + 粒子/破盾特效；② 自然 5% 刷新（`natural_spawn_chance = 1.0` 验证后恢复 0.05）；③ `/summythreat stats` 的护盾吸收与有效 DPS；④ 实机高频攻击下的快照手感 |
 
 ### 投射物兼容 + 荆棘按攻击者 0.25 秒冷却（2026-10-17，v2.14，RCON 无头实测）
