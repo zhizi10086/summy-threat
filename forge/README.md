@@ -67,8 +67,8 @@ EA = A + (A×T)/15
 | 项 | 取值 |
 | --- | --- |
 | 护甲 / 韧性 | 怪物护甲表（TL0 = 0/0 … TL20 = 38/28）；卓越者再 +15 / +10；区域首领 60/40、Boss 100/50 |
-| 生命 | M(TL)（1.0 → 34.6）× E(TL)（1.20 → 2.20，卓越者）× 首领 / Boss 固定倍率 |
-| 攻击 | A(TL)（1.0 → 21.0）× 卓越者 1.25；区域首领 12 / 4 / 8；Boss 1.5 / 4.0 / 3.0 |
+| 生命 | M(TL)（1.0 → 48.0，v2.7）× E(TL)（1.20 → 2.20，卓越者）× 首领 / Boss 固定倍率 |
+| 攻击 | A(TL)（1.0 → 16.44，v2.9）× 卓越者 1.25；区域首领 21.93 / 9.40 / 8.0（古守倍率当前无效）；Boss 3.29 / 4.0 / 3.0（末影龙 / 凋灵倍率当前无效） |
 | 移速 / 经验 | 卓越者 +5%；经验 ×2（`LivingExperienceDropEvent`） |
 
 **生态分档（§5.0）**：检测 `summy_enchantment` / `summy_reliquary` / `summy_reliquary_apocrypha`
@@ -78,7 +78,7 @@ EA = A + (A×T)/15
 （`r_hp = 1` 时与原来的减伤完全等价，设计期计算器的对照不受影响）。
 
 **玩家护甲重填（§3.1）**：`ItemAttributeModifierEvent` 把皮革 / 锁链 / 黄金 / 铁 / 钻石 / 下界合金（基础）
-四件的护甲与韧性改成设计值（如铁 3/6/4/2、钻石 5/9/7/4）；「升级后」因升级途径未定暂缺。
+四件的护甲与韧性改成设计值（如铁 3/6/4/2、钻石 5/9/7/4）；「升级后」= 回响下界合金（本模组物品）。
 
 **测量命令**（OP 2 级，配合实机校准）：
 
@@ -123,17 +123,17 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `damage_reduction.monster_max` | double | `0.90` | 0.0 ~ 1.0 |
 | `damage_reduction.monster_effective_ea_cap` | double | `100.0` | 0.0 ~ 10000.0 |
 | `player_armor.enabled` | boolean | `true` | 无 |
-| `health_multiplier_per_tl.tl0` ~ `tl20` | double | v2.6 表（`1.0` → `34.6`） | 0.0 ~ 10000.0 |
-| `attack_multiplier_per_tl.tl0` ~ `tl20` | double | v2.6 表（`1.0` → `21.0`） | 0.0 ~ 10000.0 |
+| `health_multiplier_per_tl.tl0` ~ `tl20` | double | v2.7 表（`1.0` → `48.0`） | 0.0 ~ 10000.0 |
+| `attack_multiplier_per_tl.tl0` ~ `tl20` | double | v2.9 表（`1.0` → `16.44`） | 0.0 ~ 10000.0 |
 | `eximus_health_multiplier_per_tl.tl0` ~ `tl20` | double | v2.6 表（`1.20` → `2.20`） | 0.0 ~ 10000.0 |
 | `eximus.armor_bonus` / `toughness_bonus` | double | `15.0` / `10.0` | 0.0 ~ 10000.0 |
 | `eximus.damage_multiplier` / `speed_bonus` / `xp_multiplier` | double | `1.25` / `0.05` / `2.0` | 见配置文件 |
-| `regional_boss_health.leader_zombie` / `piglin_brute` / `elder_guardian` | double | `150` / `60` / `38` | 1.0 ~ 10000.0 |
-| `regional_boss_health.*_attack` | double | `12.0` / `4.0` / `8.0` | 0.0 ~ 10000.0 |
+| `regional_boss_health.leader_zombie` / `piglin_brute` / `elder_guardian` | double | `1050` / `420` / `263` | 1.0 ~ 10000.0 |
+| `regional_boss_health.*_attack` | double | `21.93` / `9.40` / `8.0`（古守当前无效） | 0.0 ~ 10000.0 |
 | `regional_boss_health.pcf_base_factor` / `pcf_scale_divisor` | double | `0.3` / `28.0` | 见配置文件 |
-| `boss_health.warden` / `ender_dragon` / `wither` | double | `20` / `50` / `33` | 1.0 ~ 10000.0 |
-| `boss_health.warden_melee_attack` / `ender_dragon_attack` / `wither_attack` | double | `1.5` / `4.0` / `3.0` | 0.0 ~ 1000.0 |
-| `boss_health.default_effective_dps` | double | `100.0` | 1.0 ~ 100000.0 |
+| `boss_health.warden` / `ender_dragon` / `wither` | double | `70` / `175` / `117` | 1.0 ~ 10000.0 |
+| `boss_health.warden_melee_attack` / `ender_dragon_attack` / `wither_attack` | double | `3.29` / `4.0` / `3.0`（龙 / 凋灵当前无效） | 0.0 ~ 1000.0 |
+| `boss_health.default_effective_dps` | double | `700.0` | 1.0 ~ 100000.0 |
 | `environment_tier.mode` | enum | `auto` | auto / none / sr / se / sr_apocrypha / se_sr / full |
 | `environment_tier.hp_scale_*` / `atk_scale_*` | double | `0.35` / `0.55` / `0.55`(**攻击 0.35**) / `0.75` / `1.00` | 0.0 ~ 1.0 |
 | `scaling_debug.global_tl` | int | `-1`（关闭接管） | -1 ~ 20 |
@@ -205,6 +205,22 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 
 ## 验证记录
 
+### 攻击侧重标定 + 计量残影 / 残留怪修复（2026-10-17，v2.9，RCON 无头实测）
+
+| 项 | 结果 |
+| --- | --- |
+| `gradlew clean build` | 通过；`verifyMixinTargets` 全绿；产物 `summy-threat-0.1.0.jar`（692,064 字节）落到 `JAR/summy-threat-forge/` |
+| 攻击侧重标定（v2.9） | 按"满配一口血 168.5（护甲段 71.5% + 生命 84 + 吸收 84.5）"、困难难度 ×1.5 反推：A(TL) 整表 k=0.772（TL20 21.0 → **16.44**）、监守者 1.5 → **3.29**（4 次致死）、领袖僵尸 12 → **21.93**、猪灵蛮兵 4 → **9.40**（6 次致死）；猪灵蛮兵原版攻击属性实为 **7.0**（旧文档按 13.0 推算系误算，已校正） |
+| 数值核验（`run/calc/rcon_scaling_test.py`，21 项全绿） | sr 档僵尸攻击 19.21；full 档：普通 49.32 / 卓越者 61.65 / 领袖僵尸 65.79 / 猪灵蛮兵 65.80 / 监守者 98.70；血量与减伤项同表全绿 |
+| 硬编码伤害单位（v2.9 查实） | **末影龙**没有 `ATTACK_DAMAGE` 属性；**凋灵**有（Monster 默认 2.0，被倍率改成 6.0）但实际伤害（爆炸 / 头颅）不读它；**远古守卫者**有（8.0 → 131.52）但实际伤害是 thorns 2.0 + 激光。三者倍率键当前对实际伤害无效，待"攻击接管"轮 |
+| 护甲重填回归（`rcon_armor_check.py`，28 项全绿） | 含回响套：单件靴 7 / 3、单件胸 13 / 6、全套 32 / 18 |
+| 减伤回归（`rcon_damage_test.py`，5 例全绿） | 该脚本已显式切 full 档：A=100→90%、A=500→90%（截断）、A=50→63.64%、A=100/T=20→90%、A=0→0% |
+| 计量残影清理 | `onDamage` 跳过已死亡实体 + `onDeath` 要求 `dealt > 0`：击杀瞬间的二次事件不再产生"0.00s / DPS −1.00"残影行，击杀数不再翻倍 |
+| 残留怪重缩放（`rcon_rescale_test.py`，两段式 4 项全绿） | 起服 → TL20 僵尸 960 血 → save-all → 关服 → 再起服：日志出现「重新数值化残留实体」且该怪 max_health / Health = 960 |
+| 文档脚本 | `verify_scaling` / `verify_handover` / `verify_config_keys` / `verify_pcf_cdf` / `verify_player_armor` 五个脚本全绿（含新 A 表、§5.0 一击列 28.8 / 42.7 / 56.6 / 74.0） |
+| 部署 | `_st-test/deploy.ps1 -SkipBuild -ResetWorldConfig`：jar 已进实例（692,064 字节）；`saves\测试` 与 `saves\恶魔` 的旧 `serverconfig/summy_threat-server.toml` 已删（下次进世界按新默认重建） |
+| 未做（需你实机） | ① TL20 监守者击杀日志每次仅 1 行（无残影）、`/summythreat stats` 击杀数不翻倍；② 世界重载后残留怪自动重缩放并打日志；③ 被 TL20 僵尸打 ≈8 次致死 / 监守者近战 ≈4 次 / 领袖僵尸 ≈6 次（保护附魔与吸收再生会让实际更耐打，偏差大再按同公式微调） |
+
 ### 基础数值表落地后（2026-10-16，Forge 47.4.10 / JDK 17，指令经 RCON 下发）
 
 | 项 | 结果 |
@@ -214,7 +230,8 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | TL 驱动 | `/summythreat tl 20` → `全局 TL 已设为 20；新刷的敌对生物将按此 TL 数值化` |
 | 数值化实测（`run/calc/rcon_scaling_test.py`，**18 项全绿**） | sr 档 TL20 僵尸：255.2 血 / 护甲 38 / 韧性 28 / 攻击 24 / 减伤 53.7%；full 档：普通 692 血·63 攻击·90% 减伤；卓越者 1522.4 血·53 甲·38 韧·78.75 攻击；区域首领（PCF20）3042.9 血·60 甲·40 韧·36 攻击；监守者 10000 血·100 甲·50 韧·45 攻击 |
 | 减伤回归（r_hp = 1） | 既有 `rcon_damage_test.py` 全绿（A=100→90%、A=500→90%、A=50→63.64%、A=100/T=20→90%、A=0→0%）——确认档位压缩在 r=1 时与原实现完全等价 |
-| 攻击口径注记 | 僵尸 `ATTACK_DAMAGE` 属性基值是 **3.0**；文档 §7 / §8 的"基础攻击 4.5"是**困难难度**口径（原版在命中时再 ×1.5），硬难度实际命中伤害 = 3.0 × 1.5 × A(TL) |
+| 攻击口径注记 | 僵尸 `ATTACK_DAMAGE` 属性基值是 **3.0**；文档 §7 / §8 的"基础攻击 4.5"是**困难难度**口径（原版在命中时再 ×1.5），硬难度实际命中伤害 = 3.0 × 1.5 × A(TL)。**v2.9**：攻击侧以"满配一口血 168.5（护甲段 71.5% + 生命 84 + 吸收 84.5）"重标定，目标 TL20 普通怪 8 次 / 首领 6 次 / 监守者 4 次致死 |
+| 硬编码伤害单位（v2.9 查实） | **末影龙**（啃咬硬编码 10f/5f，连 `ATTACK_DAMAGE` 属性都没有）、**凋灵**（爆炸 + 头颅投射物；属性存在但默认 2.0，不驱动伤害）、**远古守卫者**（thorns 2.0 接触 + 激光；属性 8.0 不驱动伤害）——`ender_dragon_attack` / `wither_attack` / `elder_guardian_attack` 三个倍率键当前**对实际伤害不生效**（占位待"攻击接管"轮） |
 | 配置文件 | `world2/serverconfig/summy_threat-server.toml` 生成全部新块（`player_armor` / 三张 tl 表 / `eximus` / `regional_boss_health` / `boss_health` / `environment_tier` / `scaling_debug`），取值与 v2.6 一致（tl20 = 34.6 / 21.0 / 2.2，warden = 20，mode = AUTO） |
 | 文档脚本 | `verify_scaling` / `verify_handover` / `verify_pcf_cdf` / `verify_config_keys` / `verify_player_armor` 五个脚本全绿 |
 | 未做（需客户端） | 玩家护甲重填实机核对：无头服务端没有玩家；需在单人世界穿全套铁，`armor` 应为 **15**（3/6/4/2） |
