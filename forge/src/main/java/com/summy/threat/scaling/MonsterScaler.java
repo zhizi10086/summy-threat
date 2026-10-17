@@ -17,12 +17,14 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.common.ForgeConfigSpec;
 
+import java.util.ArrayList;
 import java.util.UUID;
 
 /**
@@ -62,6 +64,8 @@ public final class MonsterScaler {
 	private static final UUID ID_SPEED = UUID.fromString("6f5c1a2e-0007-4a0b-9d1e-000000000005");
 
 	private static final String MODIFIER_NAME = "summy_threat:scaling";
+	/** 原版领队僵尸的 MAX_HEALTH modifier 名称（只剥离生命，保留 spawn_reinforcements）。 */
+	private static final String VANILLA_LEADER_HEALTH_MODIFIER = "Leader zombie bonus";
 
 	/** 类别：普通 / 卓越者 / 区域首领 / Boss */
 	public enum Kind { NORMAL, EXIMUS, LEADER, BOSS }
@@ -101,6 +105,10 @@ public final class MonsterScaler {
 			return;
 		}
 		if (!ScalingState.enabled()) {
+			// 原版领队僵尸只抬最大生命、不回满当前生命；即使我们未接管 TL，也补一次当前生命。
+			if (hasVanillaLeaderHealthBonus(mob)) {
+				mob.setHealth(mob.getMaxHealth());
+			}
 			return;
 		}
 		scaleNow(mob, ScalingState.globalTl());
@@ -139,6 +147,8 @@ public final class MonsterScaler {
 	 */
 	public static boolean scaleNow(LivingEntity entity, int tl, Kind kind, boolean allowNecro) {
 		tl = ScalingState.clampTl(tl);
+		// 原版领队的 MAX_HEALTH 是 MULTIPLY_TOTAL；不剥离会与 M/E/首领倍率相乘（2–5 倍污染）
+		stripVanillaLeaderHealthBonus(entity);
 		double rHp = ScalingState.rHp();
 		double rAtk = ScalingState.rAtk();
 
@@ -336,5 +346,38 @@ public final class MonsterScaler {
 
 	private static String round(double v) {
 		return String.format("%.2f", v);
+	}
+
+	/** 是否带原版领队僵尸的最大生命 modifier。 */
+	public static boolean hasVanillaLeaderHealthBonus(LivingEntity entity) {
+		if (!(entity instanceof Zombie)) {
+			return false;
+		}
+		AttributeInstance maxHealth = entity.getAttribute(Attributes.MAX_HEALTH);
+		if (maxHealth == null) {
+			return false;
+		}
+		for (AttributeModifier modifier : maxHealth.getModifiers()) {
+			if (VANILLA_LEADER_HEALTH_MODIFIER.equals(modifier.getName())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** 只移除原版领队加在 MAX_HEALTH 上的 modifier；spawn_reinforcements / 破门保持不变。 */
+	private static void stripVanillaLeaderHealthBonus(LivingEntity entity) {
+		if (!(entity instanceof Zombie)) {
+			return;
+		}
+		AttributeInstance maxHealth = entity.getAttribute(Attributes.MAX_HEALTH);
+		if (maxHealth == null) {
+			return;
+		}
+		for (AttributeModifier modifier : new ArrayList<>(maxHealth.getModifiers())) {
+			if (VANILLA_LEADER_HEALTH_MODIFIER.equals(modifier.getName())) {
+				maxHealth.removeModifier(modifier);
+			}
+		}
 	}
 }
