@@ -4,6 +4,7 @@ import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityTexts;
+import com.summy.threat.eximus.Overguard;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -198,10 +199,15 @@ public final class MonsterScaler {
 			}
 		}
 
+		// 卓越者核心机制：超宏防护（新刷满盾；残留按剩余比例保留）
+		Overguard.refresh(entity, tl, kind == Kind.EXIMUS);
+
 		if (kind != Kind.NORMAL) {
-			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}，能力 {}",
+			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}，超宏防护 {}，能力 {}",
 					entity.getName().getString(), kind, tl, round(armorTarget), round(toughnessTarget),
 					round(healthMultiplier), round(attackMultiplier),
+					kind == Kind.EXIMUS
+							? round(Overguard.current(entity)) + " / " + round(Overguard.max(entity)) : "无",
 					data.getString(TAG_ABILITIES).isEmpty() ? "无" : data.getString(TAG_ABILITIES));
 		}
 		return true;
@@ -211,10 +217,15 @@ public final class MonsterScaler {
 	public static Component describe(LivingEntity entity) {
 		Kind kind = kindOf(entity);
 		int tl = entity.getPersistentData().getInt(TAG_TL);
-		MutableComponent out = Component.literal("TL=%d/%s 最大生命=%.1f 护甲=%.1f 韧性=%.1f 攻击=%.1f 能力=".formatted(
+		MutableComponent out = Component.literal("TL=%d/%s 最大生命=%.1f 护甲=%.1f 韧性=%.1f 攻击=%.1f".formatted(
 				tl, kind, entity.getMaxHealth(),
 				value(entity, Attributes.ARMOR), value(entity, Attributes.ARMOR_TOUGHNESS),
 				value(entity, Attributes.ATTACK_DAMAGE)));
+		if (kind == Kind.EXIMUS) {
+			out.append(Component.literal(" 超宏防护=%.1f/%.1f".formatted(
+					Overguard.current(entity), Overguard.max(entity))));
+		}
+		out.append(Component.literal(" 能力="));
 		out.append(AbilityTexts.join(entity.getPersistentData().getString(TAG_ABILITIES), "·"));
 		return out;
 	}

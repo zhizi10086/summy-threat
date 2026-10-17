@@ -244,7 +244,7 @@ public final class SummyThreatCommand {
 		double avgTaken = s.takenCount > 0 ? s.takenSum / s.takenCount : 0.0D;
 		ctx.getSource().sendSuccess(() -> Component.literal("""
 				[Summy Threat] 计量（%s）
-				  击杀 TL 怪：%d 次；最近一次：生命 %s，耗时 %s s，有效 DPS %s，无视护甲占比 %s
+				  击杀 TL 怪：%d 次；最近一次：生命 %s，耗时 %s s，有效 DPS %s，无视护甲占比 %s，护盾吸收 %s
 				  窗口 DPS（自上次首击起）：%s
 				  承受伤害：最大 %s / 平均 %s（%d 次）；被 TL 怪击杀 %d 次""".formatted(
 				player.getGameProfile().getName(), s.kills,
@@ -252,6 +252,7 @@ public final class SummyThreatCommand {
 				s.lastKillSeconds < 0 ? "—" : CombatMeter.fmt(s.lastKillSeconds),
 				s.lastKillDps < 0 ? "—" : CombatMeter.fmt(s.lastKillDps),
 				s.lastKillSeconds < 0 ? "—" : CombatMeter.pct(s.lastKillBypassShare),
+				s.lastKillSeconds < 0 ? "—" : CombatMeter.fmt(s.lastKillOverguard),
 				windowDps < 0 ? "—" : CombatMeter.fmt(windowDps),
 				CombatMeter.fmt(s.takenMax), CombatMeter.fmt(avgTaken), s.takenCount, s.deaths)), false);
 		return 1;

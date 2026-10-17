@@ -1,6 +1,7 @@
 package com.summy.threat.compat.jade;
 
 import com.summy.threat.ability.AbilityTexts;
+import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -32,12 +33,22 @@ public enum EntityAbilityTooltip implements IEntityComponentProvider {
 			tooltip.add(Component.translatable("summy_threat.jade.status", tl,
 					Component.translatable("summy_threat.jade.kind." + kind)));
 		}
+		if (data.contains(EntityAbilityDataProvider.KEY_OVERGUARD)) {
+			tooltip.add(Component.translatable("summy_threat.jade.overguard",
+					fmt(data.getDouble(EntityAbilityDataProvider.KEY_OVERGUARD)),
+					fmt(data.getDouble(EntityAbilityDataProvider.KEY_OVERGUARD_MAX)))
+					.withStyle(ChatFormatting.AQUA));
+		}
 		if (data.contains(EntityAbilityDataProvider.KEY_ABILITIES)) {
 			String csv = data.getString(EntityAbilityDataProvider.KEY_ABILITIES);
 			if (!csv.isEmpty()) {
 				tooltip.add(AbilityTexts.join(csv, "·"));
 			}
 		}
+	}
+
+	private static String fmt(double value) {
+		return value > 0.0D && value < 10.0D ? String.format("%.1f", value) : String.format("%,.0f", value);
 	}
 
 	@Override

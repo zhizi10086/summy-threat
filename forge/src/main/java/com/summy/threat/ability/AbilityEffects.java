@@ -1,6 +1,7 @@
 package com.summy.threat.ability;
 
 import com.summy.threat.Config;
+import com.summy.threat.eximus.Overguard;
 import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.particles.ParticleTypes;
@@ -275,7 +276,7 @@ public final class AbilityEffects {
 			if (has(attacker, AbilityId.EMBER)) {
 				damageExtra(victim, attacker.damageSources().onFire(), nominal * 0.10F, false);
 			}
-			if (has(attacker, AbilityId.CORROSION)) {
+			if (has(attacker, AbilityId.CORROSION) && !Overguard.isActive(victim)) {
 				applyCorrosion(victim);
 			}
 		}
@@ -412,6 +413,15 @@ public final class AbilityEffects {
 		}
 		stacks[slot] = now + 120L;
 		refreshCorrosionModifier(victim, now);
+	}
+
+	/** 超宏防护获得时清除已有腐蚀，保证属性快照基线干净。 */
+	public static void clearCorrosion(LivingEntity entity) {
+		CORROSION.remove(entity.getUUID());
+		AttributeInstance armor = entity.getAttribute(Attributes.ARMOR);
+		if (armor != null) {
+			armor.removeModifier(ID_CORROSION);
+		}
 	}
 
 	private static void updateCorrosion(LivingEntity victim) {

@@ -70,6 +70,10 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue EXIMUS_SPEED_BONUS;
 	/** 卓越者：经验倍率 */
 	public static final ForgeConfigSpec.DoubleValue EXIMUS_XP_MULTIPLIER;
+	/** 卓越者：超宏防护在 TL20 时占最大生命的比例（Warframe f1 曲线归一化） */
+	public static final ForgeConfigSpec.DoubleValue EXIMUS_OVERGUARD_TL20_RATIO;
+	/** 卓越者：自然生成概率 */
+	public static final ForgeConfigSpec.DoubleValue EXIMUS_NATURAL_SPAWN_CHANCE;
 
 	/** 区域首领：领袖僵尸生命固定倍率 */
 	public static final ForgeConfigSpec.DoubleValue LEADER_ZOMBIE_MULTIPLIER;
@@ -237,6 +241,12 @@ public final class Config {
 		EXIMUS_XP_MULTIPLIER = builder
 				.comment("经验倍率")
 				.defineInRange("xp_multiplier", 2.0D, 0.0D, 1000.0D);
+		EXIMUS_OVERGUARD_TL20_RATIO = builder
+				.comment("超宏防护：TL20 时占最大生命的比例（Warframe f1 曲线归一化；0.75 = 75%）")
+				.defineInRange("overguard_tl20_ratio", 0.75D, 0.0D, 10.0D);
+		EXIMUS_NATURAL_SPAWN_CHANCE = builder
+				.comment("自然生成的卓越者概率（0.05 = 5%；刷怪笼/命令/召唤不参与）")
+				.defineInRange("natural_spawn_chance", 0.05D, 0.0D, 1.0D);
 		builder.pop();
 
 		builder.comment("区域首领（领袖）：生命 = 基础生命 × 固定倍率 × (基数 + PCF / 除数)",
