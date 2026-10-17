@@ -11,7 +11,7 @@ import net.minecraftforge.common.ForgeConfigSpec;
  *         配合 {@code AttributeCaps} 里的 {@code Math.max} 形成"只抬不压"的双保险。</li>
  *     <li>{@code damage_reduction}：自定义护甲减伤公式的常量（口径见 docs/护甲公式计算.txt）。</li>
  *     <li>{@code player_armor}：玩家护甲重填总开关（逐件数值在 PlayerArmorRefill 里以常量保存）。</li>
- *     <li>数值表（v2.6）：{@code health_multiplier_per_tl} / {@code attack_multiplier_per_tl} /
+ *     <li>数值表（生命 v2.7 / 攻击 v2.8）：{@code health_multiplier_per_tl} / {@code attack_multiplier_per_tl} /
  *         {@code eximus_health_multiplier_per_tl} / {@code eximus} / {@code regional_boss_health} /
  *         {@code boss_health}——口径见内部《Summy Threat — 核心数值系统交接文档》§5~§8。</li>
  *     <li>{@code environment_tier}：生态分档（两维系数 r_hp / r_atk，见交接文档 §5.0）。</li>
@@ -177,7 +177,7 @@ public final class Config {
 
 		builder.comment(
 				"玩家护甲重填：按交接文档 §3.1 的逐件表重写原版护甲件（皮革 / 锁链 / 黄金 / 铁 / 钻石 / 下界合金基础）；",
-				"「下界合金（升级后）」因升级途径未定（待补 A1），暂缺。")
+				"「下界合金（升级后）」= 回响下界合金（本模组物品，锻造台升级获得，逐件 6/11/8/5 与 4/6/5/3）。")
 				.push("player_armor");
 		ENABLE_PLAYER_ARMOR_REFILL = builder
 				.comment("是否启用玩家护甲重填")
@@ -186,8 +186,10 @@ public final class Config {
 
 		double[] mTable = {1.0, 1.3, 1.6, 2.3, 2.9, 3.9, 4.9, 6.2, 7.4, 9.1, 10.7, 12.6, 14.8, 17.4, 20.3,
 				23.5, 27.4, 31.6, 36.4, 41.9, 48.0};
-		double[] aTable = {1.0, 1.0, 1.1, 1.2, 1.4, 1.6, 1.8, 2.1, 2.4, 2.8, 3.2, 3.8, 4.7, 5.8, 7.0,
-				8.5, 10.4, 12.5, 15.0, 18.0, 21.0};
+		// 攻击表 v2.8：按"满配一口血 168.5（护甲段减伤 71.5% + 生命 84 + 吸收 84.5）"口径整表重标定，
+		// A' = 1 + (v2.6值 − 1) × 0.772；TL20 = 16.44（僵尸对满配 ≈8 次致死）。口径见交接文档 §5.6 / §13。
+		double[] aTable = {1.0, 1.0, 1.08, 1.15, 1.31, 1.46, 1.62, 1.85, 2.08, 2.39, 2.70, 3.16, 3.86,
+				4.71, 5.63, 6.79, 8.26, 9.88, 11.81, 14.12, 16.44};
 		double[] eTable = {1.20, 1.21, 1.22, 1.24, 1.26, 1.30, 1.33, 1.36, 1.40, 1.45, 1.50, 1.55, 1.60,
 				1.65, 1.70, 1.75, 1.85, 1.95, 2.05, 2.12, 2.20};
 
@@ -198,7 +200,7 @@ public final class Config {
 		}
 		builder.pop();
 
-		builder.comment("普通单位攻击倍率 A(TL)（v2.6；只缩放基础攻击力）")
+		builder.comment("普通单位攻击倍率 A(TL)（v2.8：整表按满配口径重标定 k = 0.772；只缩放基础攻击力）")
 				.push("attack_multiplier_per_tl");
 		for (int i = 0; i < 21; i++) {
 			ATTACK_MULTIPLIER_PER_TL[i] = builder.defineInRange("tl" + i, aTable[i], 0.0D, 10_000.0D);
@@ -231,14 +233,23 @@ public final class Config {
 				.defineInRange("xp_multiplier", 2.0D, 0.0D, 1000.0D);
 		builder.pop();
 
-		builder.comment("区域首领（领袖）：生命 = 基础生命 × 固定倍率 × (基数 + PCF / 除数)")
+		builder.comment("区域首领（领袖）：生命 = 基础生命 × 固定倍率 × (基数 + PCF / 除数)",
+				"攻击口径（v2.8）：困难难度对玩家 ×1.5；满配一口血 168.5，目标 6 次致死；",
+				"猪灵蛮兵原版攻击属性实为 7.0（旧文档按 13.0 推算有误，已校正）。")
 				.push("regional_boss_health");
 		LEADER_ZOMBIE_MULTIPLIER = builder.defineInRange("leader_zombie", 1050.0D, 1.0D, 100_000.0D);
 		LEADER_PIGLIN_BRUTE_MULTIPLIER = builder.defineInRange("piglin_brute", 420.0D, 1.0D, 100_000.0D);
 		LEADER_ELDER_GUARDIAN_MULTIPLIER = builder.defineInRange("elder_guardian", 263.0D, 1.0D, 100_000.0D);
-		LEADER_ZOMBIE_ATTACK = builder.defineInRange("leader_zombie_attack", 12.0D, 0.0D, 10_000.0D);
-		LEADER_PIGLIN_BRUTE_ATTACK = builder.defineInRange("piglin_brute_attack", 4.0D, 0.0D, 10_000.0D);
-		LEADER_ELDER_GUARDIAN_ATTACK = builder.defineInRange("elder_guardian_attack", 8.0D, 0.0D, 10_000.0D);
+		LEADER_ZOMBIE_ATTACK = builder
+				.comment("领袖僵尸攻击倍率（v2.8：属性 3.0 × 21.93 × 1.5 ≈ 一击 98.7，满配 6 次致死）")
+				.defineInRange("leader_zombie_attack", 21.93D, 0.0D, 10_000.0D);
+		LEADER_PIGLIN_BRUTE_ATTACK = builder
+				.comment("猪灵蛮兵攻击倍率（v2.8：属性 7.0 × 9.40 × 1.5 ≈ 一击 98.7，满配 6 次致死）")
+				.defineInRange("piglin_brute_attack", 9.40D, 0.0D, 10_000.0D);
+		LEADER_ELDER_GUARDIAN_ATTACK = builder
+				.comment("远古守卫者攻击倍率——**当前无效**：古守伤害为硬编码（thorns 2.0 接触 + 激光），",
+						"不吃 ATTACK_DAMAGE 属性；数值暂留占位，待「攻击接管」轮启用。")
+				.defineInRange("elder_guardian_attack", 8.0D, 0.0D, 10_000.0D);
 		LEADER_PCF_BASE_FACTOR = builder
 				.comment("PCF 缩放的基数（默认 0.3）")
 				.defineInRange("pcf_base_factor", 0.3D, 0.0D, 10.0D);
@@ -247,14 +258,23 @@ public final class Config {
 				.defineInRange("pcf_scale_divisor", 28.0D, 1.0D, 1000.0D);
 		builder.pop();
 
-		builder.comment("原版 Boss：生命 = 基础生命 × 固定倍率（不随 PCF 缩放）")
+		builder.comment("原版 Boss：生命 = 基础生命 × 固定倍率（不随 PCF 缩放）",
+				"攻击口径（v2.8）：监守者目标 4 次致死（属性 30 × 3.29 × 1.5 ≈ 一击 148.1）；",
+				"末影龙（啃咬硬编码 10f/5f）与凋灵（爆炸 + 头颅投射物）伤害**不走 ATTACK_DAMAGE**，",
+				"对应倍率当前无效、数值暂留占位，待「攻击接管」轮启用。")
 				.push("boss_health");
 		BOSS_WARDEN_MULTIPLIER = builder.defineInRange("warden", 70.0D, 1.0D, 100_000.0D);
 		BOSS_ENDER_DRAGON_MULTIPLIER = builder.defineInRange("ender_dragon", 175.0D, 1.0D, 100_000.0D);
 		BOSS_WITHER_MULTIPLIER = builder.defineInRange("wither", 117.0D, 1.0D, 100_000.0D);
-		BOSS_WARDEN_ATTACK = builder.defineInRange("warden_melee_attack", 1.5D, 0.0D, 1000.0D);
-		BOSS_ENDER_DRAGON_ATTACK = builder.defineInRange("ender_dragon_attack", 4.0D, 0.0D, 1000.0D);
-		BOSS_WITHER_ATTACK = builder.defineInRange("wither_attack", 3.0D, 0.0D, 1000.0D);
+		BOSS_WARDEN_ATTACK = builder
+				.comment("监守者近战攻击倍率（v2.8：属性 30 × 3.29 × 1.5 ≈ 一击 148.1，满配 4 次致死）")
+				.defineInRange("warden_melee_attack", 3.29D, 0.0D, 1000.0D);
+		BOSS_ENDER_DRAGON_ATTACK = builder
+				.comment("末影龙攻击倍率——**当前无效**（啃咬伤害硬编码 10f/5f，无 ATTACK_DAMAGE 属性）")
+				.defineInRange("ender_dragon_attack", 4.0D, 0.0D, 1000.0D);
+		BOSS_WITHER_ATTACK = builder
+				.comment("凋灵攻击倍率——**对实际伤害无效**（伤害来自爆炸与头颅投射物；属性存在但默认 2.0，源码不读它）")
+				.defineInRange("wither_attack", 3.0D, 0.0D, 1000.0D);
 		DEFAULT_EFFECTIVE_DPS = builder
 				.comment("Mod Boss 反推公式用的默认有效 DPS（v2.7 校准常数：Boss 档实测 ≈700；Mod Boss 支持落地后启用）")
 				.defineInRange("default_effective_dps", 700.0D, 1.0D, 1_000_000.0D);
