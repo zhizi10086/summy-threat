@@ -70,6 +70,7 @@ EA = A + (A×T)/15
 | 生命 | M(TL)（1.0 → 48.0，v2.7）× E(TL)（1.20 → 2.20，卓越者）× 首领 / Boss 固定倍率 |
 | 攻击 | A(TL)（1.0 → 16.44，v2.9）× 卓越者 1.25；区域首领 21.93 / 9.40 / 8.0（古守倍率当前无效）；Boss 3.29 / 4.0 / 3.0（末影龙 / 凋灵倍率当前无效） |
 | 移速 / 经验 | 卓越者 +5%；经验 ×2（`LivingExperienceDropEvent`） |
+| Jade 提示（可选） | 装 Jade 11.13+ 时，准星指向已数值化的怪显示 `TL / 类别`（能力行待能力系统）；未装时零影响 |
 
 **生态分档（§5.0）**：检测 `summy_enchantment` / `summy_reliquary` / `summy_reliquary_apocrypha`
 （SRA 强制依赖 SR，共 6 档）；两维系数 `r_hp`（生命 / 护甲）与 `r_atk`（攻击 / 特殊伤害）：
@@ -90,6 +91,10 @@ EA = A + (A×T)/15
 ```
 
 每次击杀被数值化的怪会在服务端日志输出一行摘要（含有效 DPS 与无视护甲占比），便于 RCON 脚本抓取。
+
+玩家承伤同样可落日志：`combat_log.log_player_taken`（**默认开**，效仿 SRA 的 `log_trigger`）——
+每次受击一行（伤害 / 攻击者 / TL / 扣血前生命与剩余吸收）+ 被 TL 怪击杀时一行会话汇总；
+关闭后不再逐击记录，但仍计入 `/summythreat stats`。
 
 ## 已实现④：回响下界合金（强化下界合金）
 
@@ -137,8 +142,12 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `environment_tier.mode` | enum | `auto` | auto / none / sr / se / sr_apocrypha / se_sr / full |
 | `environment_tier.hp_scale_*` / `atk_scale_*` | double | `0.35` / `0.55` / `0.55`(**攻击 0.35**) / `0.75` / `1.00` | 0.0 ~ 1.0 |
 | `scaling_debug.global_tl` | int | `-1`（关闭接管） | -1 ~ 20 |
+| `combat_log.log_player_taken` | boolean | `true` | 无 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
+
+**可选依赖 Jade**：`libs/jade-11.13.3.jar`（MIT）只作**编译期 API**；运行时由 Jade 扫描 `@WailaPlugin` 加载，
+未安装 Jade 时零影响。dev 客户端跑 `runClient` 会自动把 fg.deobf 副本放进 `run/mods` 供冒烟。
 
 Forge 1.20.1 **没有** `defaultconfigs/` 目录机制（那是 NeoForge 的特性，本机 1.21.1 工程里才看得到）。若要让多个世界共用同一套值，只能把已生成的 `summy_threat-server.toml` 复制进各个世界的 `serverconfig/`。
 
@@ -204,6 +213,19 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 仓库 | <https://github.com/zhizi10086/summy-threat>（工作副本 `_github/summy-threat`，其中 `forge/` 对应本工程） |
 
 ## 验证记录
+
+### TL 能力表定稿 + 玩家承伤日志 + Jade 提示（2026-10-17，v2.10）
+
+| 项 | 结果 |
+| --- | --- |
+| `gradlew clean build` + `verifyMixinTargets` | 通过（含 Jade 11.13.3 的 compileOnly / fg.deobf 解析）；产物 697,836 字节；jar 内 **不含** `snownee/jade` 类，只含 `com/summy/threat/compat/jade/*` |
+| TL 能力表（§6.5） | 定稿：TL18 只留尸爆（删除生命链接）、荆棘/熔火按"本次伤害"10%、腐蚀 6 秒、亡灵增援备注（仅亡灵 / 半径 8 格）；追加段无敌帧规则（进清前帧、不清后帧）写入 §6.5 注与 §13-15 |
+| 玩家承伤日志 | `combat_log.log_player_taken`（默认开）：逐击 INFO（伤害 / 攻击者 / TL / 扣血前生命与剩余吸收）+ 死亡会话汇总；关闭后仍计入 `/summythreat stats` |
+| Jade 提示（可选） | `@WailaPlugin("summy_threat")`：服务端写 TL / 类别 / 能力（预留 `summy_threat:abilities`），客户端显示 `[Summy Threat] TL 20 · 卓越者`；`libs/jade-11.13.3.jar`（MIT）仅编译期，`runClient` 自动放 dev 副本 |
+| 回归（无头 RCON，脚本需串行跑） | `rcon_scaling_test.py` 21 项全绿；`rcon_damage_test.py` 5 例全绿；配置生成 `[combat_log] log_player_taken = true` |
+| 文档脚本 | `verify_scaling` / `verify_handover` / `verify_config_keys` / `verify_pcf_cdf` / `verify_player_armor` 全绿（`verify_config_keys` 已含 `[combat_log]` 组） |
+| 部署 | `deploy.ps1 -SkipBuild -ResetWorldConfig`：jar 已进实例（697,836 字节），两个存档旧 serverconfig 已清（进世界按新默认重建） |
+| 未做（需你实机） | ① 受击逐击日志 + 死亡汇总；关闭开关后无逐击行；② 装 Jade 指向 TL20 怪显示 `TL 20 · 卓越者`（能力行待能力系统）；③ 卸掉 Jade 不崩溃 |
 
 ### 攻击侧重标定 + 计量残影 / 残留怪修复（2026-10-17，v2.9，RCON 无头实测）
 
