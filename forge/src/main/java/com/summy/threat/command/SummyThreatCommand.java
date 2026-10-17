@@ -275,7 +275,7 @@ public final class SummyThreatCommand {
 				s.lastKillSeconds < 0 ? "—" : CombatMeter.fmt(s.lastKillSeconds),
 				s.lastKillDps < 0 ? "—" : CombatMeter.fmt(s.lastKillDps),
 				s.lastKillSeconds < 0 ? "—" : CombatMeter.pct(s.lastKillBypassShare),
-				s.lastKillSeconds < 0 ? "—" : CombatMeter.fmt(s.lastKillOverguard),
+				s.lastKillSeconds < 0 ? "—" : CombatMeter.fmt(s.lastKillShield),
 				windowDps < 0 ? "—" : CombatMeter.fmt(windowDps),
 				CombatMeter.fmt(s.takenMax), CombatMeter.fmt(avgTaken), s.takenCount, s.deaths)), false);
 		return 1;

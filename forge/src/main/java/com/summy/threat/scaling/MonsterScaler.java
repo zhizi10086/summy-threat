@@ -4,7 +4,7 @@ import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityTexts;
-import com.summy.threat.eximus.Overguard;
+import com.summy.threat.eximus.EximusShield;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -131,6 +131,13 @@ public final class MonsterScaler {
 	}
 
 	public static boolean scaleNow(LivingEntity entity, int tl, Kind kind) {
+		return scaleNow(entity, tl, kind, true);
+	}
+
+	/**
+	 * @param allowNecro 是否允许亡灵增援进入能力池；召唤体传 false，避免代际连锁。
+	 */
+	public static boolean scaleNow(LivingEntity entity, int tl, Kind kind, boolean allowNecro) {
 		tl = ScalingState.clampTl(tl);
 		double rHp = ScalingState.rHp();
 		double rAtk = ScalingState.rAtk();
@@ -192,22 +199,24 @@ public final class MonsterScaler {
 		if (AbilityEffects.enabled()) {
 			if (!data.contains(TAG_ABILITIES)) {
 				int extra = kind == Kind.EXIMUS ? 1 : 0;
+				boolean necroEligible = allowNecro && entity.getMobType() == MobType.UNDEAD
+						&& kind != Kind.BOSS && kind != Kind.LEADER;
 				AbilityEffects.setAbilities(entity, tl, AbilityEffects.roll(tl, extra, entity.getRandom(),
-						entity.getMobType() == MobType.UNDEAD));
+						necroEligible));
 			} else {
 				AbilityEffects.setAbilities(entity, tl, data.getString(TAG_ABILITIES));
 			}
 		}
 
-		// 卓越者核心机制：超宏防护（新刷满盾；残留按剩余比例保留）
-		Overguard.refresh(entity, tl, kind == Kind.EXIMUS);
+		// 卓越者核心机制：卓越护盾（新刷满盾；残留按剩余比例保留）
+		EximusShield.refresh(entity, tl, kind == Kind.EXIMUS);
 
 		if (kind != Kind.NORMAL) {
-			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}，超宏防护 {}，能力 {}",
+			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}，卓越护盾 {}，能力 {}",
 					entity.getName().getString(), kind, tl, round(armorTarget), round(toughnessTarget),
 					round(healthMultiplier), round(attackMultiplier),
 					kind == Kind.EXIMUS
-							? round(Overguard.current(entity)) + " / " + round(Overguard.max(entity)) : "无",
+							? round(EximusShield.current(entity)) + " / " + round(EximusShield.max(entity)) : "无",
 					data.getString(TAG_ABILITIES).isEmpty() ? "无" : data.getString(TAG_ABILITIES));
 		}
 		return true;
@@ -222,8 +231,8 @@ public final class MonsterScaler {
 				value(entity, Attributes.ARMOR), value(entity, Attributes.ARMOR_TOUGHNESS),
 				value(entity, Attributes.ATTACK_DAMAGE)));
 		if (kind == Kind.EXIMUS) {
-			out.append(Component.literal(" 超宏防护=%.1f/%.1f".formatted(
-					Overguard.current(entity), Overguard.max(entity))));
+			out.append(Component.literal(" 卓越护盾=%.1f/%.1f".formatted(
+					EximusShield.current(entity), EximusShield.max(entity))));
 		}
 		out.append(Component.literal(" 能力="));
 		out.append(AbilityTexts.join(entity.getPersistentData().getString(TAG_ABILITIES), "·"));

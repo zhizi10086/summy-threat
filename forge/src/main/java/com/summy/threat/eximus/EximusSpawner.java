@@ -13,7 +13,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
  * 5% 自然卓越者刷新：只处理自然类生成，在 {@code EntityJoinLevelEvent} 缩放前写入标签，
- * 这样 E(TL)、护甲/韧性/攻击/移速与超宏防护都会按卓越者分支生效。
+ * 这样 E(TL)、护甲/韧性/攻击/移速与卓越护盾都会按卓越者分支生效。
  */
 public final class EximusSpawner {
 	private EximusSpawner() {

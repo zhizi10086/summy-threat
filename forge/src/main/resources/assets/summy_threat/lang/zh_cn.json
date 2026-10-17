@@ -63,7 +63,7 @@
   "summy_threat.configuration.combat_log.log_player_taken": "玩家承伤逐击日志",
   "summy_threat.jade.status": "[Summy Threat] TL %s %s",
   "summy_threat.jade.status_normal": "[Summy Threat] TL %s",
-  "summy_threat.jade.overguard": "超宏防护 %s / %s",
+  "summy_threat.jade.eximus_shield": "卓越护盾 %s / %s",
   "summy_threat.jade.kind.normal": "普通",
   "summy_threat.jade.kind.eximus": "卓越者",
   "summy_threat.jade.kind.leader": "领袖",

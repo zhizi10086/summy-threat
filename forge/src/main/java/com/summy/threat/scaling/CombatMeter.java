@@ -2,7 +2,7 @@ package com.summy.threat.scaling;
 
 import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
-import com.summy.threat.eximus.Overguard;
+import com.summy.threat.eximus.EximusShield;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.entity.Entity;
@@ -35,7 +35,7 @@ public final class CombatMeter {
 		long firstTick = -1L;
 		double dealt;
 		double bypass;
-		double overguardAbsorbed;
+		double shieldAbsorbed;
 	}
 
 	/** 单个玩家的统计 */
@@ -47,7 +47,7 @@ public final class CombatMeter {
 		public double lastKillHp;
 		public double lastKillDps = -1.0D;
 		public double lastKillBypassShare;
-		public double lastKillOverguard;
+		public double lastKillShield;
 		public double takenMax;
 		public double takenSum;
 		public int takenCount;
@@ -93,10 +93,10 @@ public final class CombatMeter {
 			}
 			// 溢出封顶：LivingDamageEvent 触发时"吸收已结算、生命尚未扣减"，所以按目标当前生命封顶，
 			// 即"最多只计到打死为止"——否则斩杀类超量伤害会把有效 DPS 抬高。
-			double absorbed = Overguard.consumeAbsorbed(victim);
+			double absorbed = EximusShield.consumeAbsorbed(victim);
 			double counted = Math.min(amount, Math.max(0.0D, victim.getHealth())) + absorbed;
 			target.dealt += counted;
-			target.overguardAbsorbed += absorbed;
+			target.shieldAbsorbed += absorbed;
 			if (bypass) {
 				target.bypass += counted;
 			}
@@ -149,12 +149,12 @@ public final class CombatMeter {
 				s.lastKillHp = victim.getMaxHealth();
 				s.lastKillDps = dps;
 				s.lastKillBypassShare = bypassShare;
-				s.lastKillOverguard = target.overguardAbsorbed;
+				s.lastKillShield = target.shieldAbsorbed;
 				SummyThreat.LOGGER.info(
 						"[Summy Threat] 击杀 {}（TL {}）：最大生命 {}，耗时 {}s，有效 DPS {}，无视护甲占比 {}，护盾吸收 {}",
 						victim.getName().getString(), victim.getPersistentData().getInt(MonsterScaler.TAG_TL),
 						fmt(victim.getMaxHealth()), fmt(seconds), fmt(dps), pct(bypassShare),
-						fmt(target.overguardAbsorbed));
+						fmt(target.shieldAbsorbed));
 			}
 			return;
 		}

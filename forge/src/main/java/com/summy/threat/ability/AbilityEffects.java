@@ -1,8 +1,9 @@
 package com.summy.threat.ability;
 
 import com.summy.threat.Config;
-import com.summy.threat.eximus.Overguard;
+import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.scaling.MonsterScaler;
+import com.summy.threat.scaling.ScalingState;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
@@ -112,13 +113,13 @@ public final class AbilityEffects {
 
 	/**
 	 * 按 TL 区间抽取：等概率、同一只怪不重复；extra = 卓越者的 +1。
-	 * 亡灵增援只对亡灵生物进入候选池。
+	 * necroEligible 为 false 时，亡灵增援不进入候选池（Boss/领袖/召唤体）。
 	 */
-	public static String roll(int tl, int extra, RandomSource random, boolean undead) {
+	public static String roll(int tl, int extra, RandomSource random, boolean necroEligible) {
 		List<AbilityId> pool = new ArrayList<>();
 		for (AbilityId id : AbilityId.values()) {
 			if (id.unlockTl() <= tl) {
-				if (id == AbilityId.NECRO_REINFORCEMENT && !undead) {
+				if (id == AbilityId.NECRO_REINFORCEMENT && !necroEligible) {
 					continue;
 				}
 				pool.add(id);
@@ -276,7 +277,7 @@ public final class AbilityEffects {
 			if (has(attacker, AbilityId.EMBER)) {
 				damageExtra(victim, attacker.damageSources().onFire(), nominal * 0.10F, false);
 			}
-			if (has(attacker, AbilityId.CORROSION) && !Overguard.isActive(victim)) {
+			if (has(attacker, AbilityId.CORROSION) && !EximusShield.isActive(victim)) {
 				applyCorrosion(victim);
 			}
 		}
@@ -295,7 +296,7 @@ public final class AbilityEffects {
 
 		// —— 亡灵增援：受击时按 TL 概率召唤普通同类（上限 2 只）——
 		if (extraDepth == 0 && has(victim, AbilityId.NECRO_REINFORCEMENT)
-				&& victim.getMobType() == MobType.UNDEAD
+				&& necroEligible(victim)
 				&& victim.level() instanceof ServerLevel level) {
 			int tl = victim.getPersistentData().getInt(MonsterScaler.TAG_TL);
 			if (tl >= 16) {
@@ -305,6 +306,15 @@ public final class AbilityEffects {
 				}
 			}
 		}
+	}
+
+	/** 亡灵增援只对普通/卓越者亡灵生效；Boss 与区域首领不参与。 */
+	private static boolean necroEligible(LivingEntity entity) {
+		if (entity.getMobType() != MobType.UNDEAD) {
+			return false;
+		}
+		MonsterScaler.Kind kind = MonsterScaler.kindOf(entity);
+		return kind == MonsterScaler.Kind.NORMAL || kind == MonsterScaler.Kind.EXIMUS;
 	}
 
 	@SubscribeEvent
@@ -415,7 +425,7 @@ public final class AbilityEffects {
 		refreshCorrosionModifier(victim, now);
 	}
 
-	/** 超宏防护获得时清除已有腐蚀，保证属性快照基线干净。 */
+	/** 卓越护盾获得时清除已有腐蚀，保证属性快照基线干净。 */
 	public static void clearCorrosion(LivingEntity entity) {
 		CORROSION.remove(entity.getUUID());
 		AttributeInstance armor = entity.getAttribute(Attributes.ARMOR);
@@ -472,8 +482,12 @@ public final class AbilityEffects {
 		mob.moveTo(owner.getX() + dx, owner.getY(), owner.getZ() + dz, level.random.nextFloat() * 360.0F, 0.0F);
 		mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), MobSpawnType.MOB_SUMMONED,
 				null, null);
-		// 召唤体为普通同类：能力标签置空（join 缩放时"已有标签"→不再抽取）
-		mob.getPersistentData().putString(MonsterScaler.TAG_ABILITIES, "");
+		mob.setPersistenceRequired();
+		// 召唤体为普通同类：按 owner TL 缩放并正常抽取 TL 能力，但排除亡灵增援（不连锁）
+		int ownerTl = owner.getPersistentData().contains(MonsterScaler.TAG_TL)
+				? owner.getPersistentData().getInt(MonsterScaler.TAG_TL)
+				: Math.max(0, ScalingState.globalTl());
+		MonsterScaler.scaleNow(mob, ownerTl, MonsterScaler.Kind.NORMAL, false);
 		level.addFreshEntity(mob);
 		list.add(mob.getUUID());
 	}

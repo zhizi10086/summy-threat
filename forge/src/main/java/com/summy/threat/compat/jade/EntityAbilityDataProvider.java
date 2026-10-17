@@ -1,6 +1,6 @@
 package com.summy.threat.compat.jade;
 
-import com.summy.threat.eximus.Overguard;
+import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -15,8 +15,8 @@ public enum EntityAbilityDataProvider implements IServerDataProvider<EntityAcces
 	public static final String KEY_TL = "tl";
 	public static final String KEY_KIND = "kind";
 	public static final String KEY_ABILITIES = "abilities";
-	public static final String KEY_OVERGUARD = "overguard";
-	public static final String KEY_OVERGUARD_MAX = "overguard_max";
+	public static final String KEY_SHIELD = "eximus_shield";
+	public static final String KEY_SHIELD_MAX = "eximus_shield_max";
 
 	@Override
 	public void appendServerData(CompoundTag data, EntityAccessor accessor) {
@@ -29,9 +29,9 @@ public enum EntityAbilityDataProvider implements IServerDataProvider<EntityAcces
 		}
 		data.putInt(KEY_TL, persistent.getInt(MonsterScaler.TAG_TL));
 		data.putString(KEY_KIND, MonsterScaler.kindOf(mob).name());
-		if (Overguard.isActive(mob)) {
-			data.putDouble(KEY_OVERGUARD, Overguard.current(mob));
-			data.putDouble(KEY_OVERGUARD_MAX, Overguard.max(mob));
+		if (EximusShield.isActive(mob)) {
+			data.putDouble(KEY_SHIELD, EximusShield.current(mob));
+			data.putDouble(KEY_SHIELD_MAX, EximusShield.max(mob));
 		}
 		// 能力系统落地后会把能力名写进该标签；现在没有时就不显示能力行
 		String abilities = persistent.getString(MonsterScaler.TAG_ABILITIES);

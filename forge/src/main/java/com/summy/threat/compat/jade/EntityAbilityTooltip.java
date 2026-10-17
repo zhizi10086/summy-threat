@@ -33,10 +33,10 @@ public enum EntityAbilityTooltip implements IEntityComponentProvider {
 			tooltip.add(Component.translatable("summy_threat.jade.status", tl,
 					Component.translatable("summy_threat.jade.kind." + kind)));
 		}
-		if (data.contains(EntityAbilityDataProvider.KEY_OVERGUARD)) {
-			tooltip.add(Component.translatable("summy_threat.jade.overguard",
-					fmt(data.getDouble(EntityAbilityDataProvider.KEY_OVERGUARD)),
-					fmt(data.getDouble(EntityAbilityDataProvider.KEY_OVERGUARD_MAX)))
+		if (data.contains(EntityAbilityDataProvider.KEY_SHIELD)) {
+			tooltip.add(Component.translatable("summy_threat.jade.eximus_shield",
+					fmt(data.getDouble(EntityAbilityDataProvider.KEY_SHIELD)),
+					fmt(data.getDouble(EntityAbilityDataProvider.KEY_SHIELD_MAX)))
 					.withStyle(ChatFormatting.AQUA));
 		}
 		if (data.contains(EntityAbilityDataProvider.KEY_ABILITIES)) {

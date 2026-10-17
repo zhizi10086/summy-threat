@@ -29,23 +29,26 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 卓越者核心机制：超宏防护（Overguard）。
+ * 卓越者核心机制：卓越护盾（Eximus Shield）。
  *
- * <p>数值按 Warframe 图公式：{@code d = TL}、{@code f1(d)=1+0.0015d⁴}，
+ * <p>数值按配置表图片的等级曲线：{@code d = TL}、{@code f1(d)=1+0.0015d⁴}，
  * 45–50 用 {@code g} 插值、>50 用 {@code f2(d)=1+260d^0.9}；当前 TL 上限 20，
  * 以 {@code f1(20)=241} 归一化、TL20 锚点由配置决定（默认 75%）。
  *
  * <p>承伤在 {@link LivingDamageEvent}（HIGHEST）里、护甲/附魔/吸收之后扣，
  * 不可再生；破盾/死亡/重缩放时清除属性快照地板，负向 modifier 重新生效。
  */
-public final class Overguard {
-	public static final String TAG_OVERGUARD = "summy_threat:overguard";
-	public static final String TAG_OVERGUARD_MAX = "summy_threat:overguard_max";
+public final class EximusShield {
+	public static final String TAG_SHIELD = "summy_threat:eximus_shield";
+	public static final String TAG_SHIELD_MAX = "summy_threat:eximus_shield_max";
+	/** 旧版标签：只读兼容并一次性迁移到新标签。 */
+	public static final String TAG_LEGACY_SHIELD = "summy_threat:overguard";
+	public static final String TAG_LEGACY_SHIELD_MAX = "summy_threat:overguard_max";
 
 	/** 玩家 → 卓越者的护盾吸收量（由 CombatMeter 一次性消费）。 */
 	private static final Map<UUID, Float> ABSORBED = new HashMap<>();
 
-	private Overguard() {
+	private EximusShield() {
 	}
 
 	public static boolean isEximus(LivingEntity entity) {
@@ -58,11 +61,16 @@ public final class Overguard {
 	}
 
 	public static double current(LivingEntity entity) {
-		return Math.max(0.0D, entity.getPersistentData().getDouble(TAG_OVERGUARD));
+		CompoundTag data = entity.getPersistentData();
+		double value = data.contains(TAG_SHIELD) ? data.getDouble(TAG_SHIELD) : data.getDouble(TAG_LEGACY_SHIELD);
+		return Math.max(0.0D, value);
 	}
 
 	public static double max(LivingEntity entity) {
-		return Math.max(0.0D, entity.getPersistentData().getDouble(TAG_OVERGUARD_MAX));
+		CompoundTag data = entity.getPersistentData();
+		double value = data.contains(TAG_SHIELD_MAX)
+				? data.getDouble(TAG_SHIELD_MAX) : data.getDouble(TAG_LEGACY_SHIELD_MAX);
+		return Math.max(0.0D, value);
 	}
 
 	/** 当前 TL 的护盾占最大生命比例。 */
@@ -70,7 +78,7 @@ public final class Overguard {
 		int d = Math.max(0, Math.min(20, tl));
 		double value = f(d);
 		double anchor = f(20);
-		double ratio = Config.EXIMUS_OVERGUARD_TL20_RATIO.get() * value / anchor;
+		double ratio = Config.EXIMUS_SHIELD_TL20_RATIO.get() * value / anchor;
 		return Math.max(0.0D, Math.min(10.0D, ratio));
 	}
 
@@ -94,6 +102,7 @@ public final class Overguard {
 
 	/**
 	 * 新刷 / 重缩放时调用：新卓越者满盾；残留卓越者按剩余比例保留（不可再生）。
+	 * 旧 {@code summy_threat:overguard} 标签会在这里迁移到新标签。
 	 */
 	public static void refresh(LivingEntity entity, int tl, boolean eximus) {
 		CompoundTag data = entity.getPersistentData();
@@ -107,15 +116,21 @@ public final class Overguard {
 		AbilityEffects.clearCorrosion(entity);
 		double newMax = Math.max(0.0D, entity.getMaxHealth() * ratio(tl));
 		double current;
-		if (data.contains(TAG_OVERGUARD) && data.contains(TAG_OVERGUARD_MAX)) {
-			double oldCurrent = Math.max(0.0D, data.getDouble(TAG_OVERGUARD));
-			double oldMax = Math.max(0.0D, data.getDouble(TAG_OVERGUARD_MAX));
+		if (data.contains(TAG_SHIELD) && data.contains(TAG_SHIELD_MAX)) {
+			double oldCurrent = Math.max(0.0D, data.getDouble(TAG_SHIELD));
+			double oldMax = Math.max(0.0D, data.getDouble(TAG_SHIELD_MAX));
+			current = oldMax > 0.0D ? Math.min(newMax, oldCurrent / oldMax * newMax) : newMax;
+		} else if (data.contains(TAG_LEGACY_SHIELD) && data.contains(TAG_LEGACY_SHIELD_MAX)) {
+			double oldCurrent = Math.max(0.0D, data.getDouble(TAG_LEGACY_SHIELD));
+			double oldMax = Math.max(0.0D, data.getDouble(TAG_LEGACY_SHIELD_MAX));
 			current = oldMax > 0.0D ? Math.min(newMax, oldCurrent / oldMax * newMax) : newMax;
 		} else {
 			current = newMax;
 		}
-		data.putDouble(TAG_OVERGUARD_MAX, newMax);
-		data.putDouble(TAG_OVERGUARD, current);
+		data.putDouble(TAG_SHIELD_MAX, newMax);
+		data.putDouble(TAG_SHIELD, current);
+		data.remove(TAG_LEGACY_SHIELD);
+		data.remove(TAG_LEGACY_SHIELD_MAX);
 		if (current > 0.0D) {
 			applySnapshot(entity);
 		} else {
@@ -125,8 +140,10 @@ public final class Overguard {
 
 	public static void clear(LivingEntity entity) {
 		CompoundTag data = entity.getPersistentData();
-		data.remove(TAG_OVERGUARD);
-		data.remove(TAG_OVERGUARD_MAX);
+		data.remove(TAG_SHIELD);
+		data.remove(TAG_SHIELD_MAX);
+		data.remove(TAG_LEGACY_SHIELD);
+		data.remove(TAG_LEGACY_SHIELD_MAX);
 		clearSnapshot(entity);
 		ABSORBED.remove(entity.getUUID());
 	}
@@ -143,7 +160,7 @@ public final class Overguard {
 	private static void applySnapshot(LivingEntity entity) {
 		clearSnapshot(entity);
 		for (AttributeInstance instance : entity.getAttributes().getSyncableAttributes()) {
-			if (instance instanceof OverguardFloor floor) {
+			if (instance instanceof EximusShieldFloor floor) {
 				floor.summyThreat$setFloor(instance.getValue());
 			}
 		}
@@ -151,7 +168,7 @@ public final class Overguard {
 
 	private static void clearSnapshot(LivingEntity entity) {
 		for (AttributeInstance instance : entity.getAttributes().getSyncableAttributes()) {
-			if (instance instanceof OverguardFloor floor) {
+			if (instance instanceof EximusShieldFloor floor) {
 				floor.summyThreat$clearFloor();
 			}
 		}
@@ -173,7 +190,7 @@ public final class Overguard {
 		}
 		double absorbed = Math.min(current, amount);
 		double left = current - absorbed;
-		victim.getPersistentData().putDouble(TAG_OVERGUARD, left);
+		victim.getPersistentData().putDouble(TAG_SHIELD, left);
 		event.setAmount((float) (amount - absorbed));
 		if (event.getSource().getEntity() instanceof Player) {
 			ABSORBED.merge(victim.getUUID(), (float) absorbed, Float::sum);
@@ -181,7 +198,7 @@ public final class Overguard {
 		if (left <= 0.0D) {
 			breakFx(victim);
 			clearSnapshot(victim);
-			SummyThreat.LOGGER.info("[Summy Threat] 超宏防护破碎：{}", victim.getName().getString());
+			SummyThreat.LOGGER.info("[Summy Threat] 卓越护盾破碎：{}", victim.getName().getString());
 		}
 	}
 
