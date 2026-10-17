@@ -58,5 +58,13 @@
   "item.summy_threat.echo_netherite_chestplate": "回响下界合金胸甲",
   "item.summy_threat.echo_netherite_leggings": "回响下界合金护腿",
   "item.summy_threat.echo_netherite_boots": "回响下界合金靴子",
-  "item.summy_threat.eximus_essence": "卓越者精华"
+  "item.summy_threat.eximus_essence": "卓越者精华",
+  "summy_threat.configuration.combat_log": "战斗日志",
+  "summy_threat.configuration.combat_log.log_player_taken": "玩家承伤逐击日志",
+  "summy_threat.jade.status": "[Summy Threat] TL %s · %s",
+  "summy_threat.jade.abilities": "能力：%s",
+  "summy_threat.jade.kind.normal": "普通",
+  "summy_threat.jade.kind.eximus": "卓越者",
+  "summy_threat.jade.kind.leader": "领袖",
+  "summy_threat.jade.kind.boss": "Boss"
 }

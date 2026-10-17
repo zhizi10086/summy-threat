@@ -40,6 +40,8 @@ public final class MonsterScaler {
 	public static final String TAG_PCF = "summy_threat:pcf";
 	/** 会话令牌：与当前服务端会话比对，用于识别跨存档残留实体 */
 	public static final String TAG_SESSION = "summy_threat:session";
+	/** 能力名列表（能力系统落地后写入；Jade 提示框读取显示） */
+	public static final String TAG_ABILITIES = "summy_threat:abilities";
 
 	/** 默认 PCF：正式 PCF 系统落地前，区域首领用 20 档 */
 	public static final double DEFAULT_PCF = 20.0D;

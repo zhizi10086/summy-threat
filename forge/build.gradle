@@ -104,6 +104,25 @@ tasks.register('copyAttributeFixDevJar', Copy) {
     into layout.projectDirectory.dir('run/mods')
 }
 
+// Jade 11.13.3（MIT）：编译期 API + dev 客户端冒烟副本。
+// compileOnly 保证产物不含 Jade 类、未装 Jade 时零影响；runClient 会自动把 fg.deobf 副本放进 run/mods。
+configurations {
+    jadeDev
+}
+
+dependencies {
+    jadeDev fg.deobf('jade:jade:11.13.3')
+}
+
+tasks.register('copyJadeDevJar', Copy) {
+    from configurations.jadeDev
+    into layout.projectDirectory.dir('run/mods')
+}
+
+tasks.matching { it.name == 'runClient' }.configureEach {
+    dependsOn 'copyJadeDevJar'
+}
+
 mixin {
     // AP 生成 refmap：@Accessor 的字段名也要靠它从 maxValue 翻成生产环境的 SRG 名（f_22308_）
     add sourceSets.main, 'summy-threat.refmap.json'
@@ -137,6 +156,9 @@ dependencies {
     // 用"精确范围" [0.5.5]：JarJar 要求 Maven 范围格式，精确范围同时把解析范围收窄到唯一版本。
     compileOnly(annotationProcessor('io.github.llamalad7:mixinextras-common:0.5.5'))
     implementation(jarJar(group: 'io.github.llamalad7', name: 'mixinextras-forge', version: '[0.5.5]'))
+
+    // Jade 可选依赖：只编译期引用其 API；@WailaPlugin 由 Jade 在运行时扫描加载
+    compileOnly fg.deobf('jade:jade:11.13.3')
 }
 
 // 把 gradle.properties 的版本号写进 mods.toml

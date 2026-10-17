@@ -15,6 +15,8 @@ run/
 
 # 本地冒烟用的第三方生产 jar（配 fg.deobf 生成 dev 副本），不入库
 libs/*.jar
+# Jade 可选依赖的编译期 API（MIT，随仓库分发以保证离线可编译）
+!libs/jade-*.jar
 
 # Python 缓存（docs/护甲减伤计算器.py 被导入时会生成 __pycache__）
 __pycache__/
