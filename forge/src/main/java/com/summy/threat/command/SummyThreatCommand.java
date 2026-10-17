@@ -42,6 +42,7 @@ import java.util.Locale;
  *     <li>{@code tier [mode]}：查看或强制生态档位（auto / none / sr / se / sr_apocrypha / se_sr / full）。</li>
  *     <li>{@code tl [0-20|off]}：查看或设置全局 TL（临时驱动，正式 TL 由后续 PCF/CDF 提供）。</li>
  *     <li>{@code spawn <实体ID> <tl> [eximus|leader] [pcf]}：定点召唤一只已数值化的怪。</li>
+ *     <li>{@code eximus <实体ID> [tl] [ability]}：直接召唤一只卓越者（默认当前全局 TL，未开启则 20）。</li>
  *     <li>{@code stats [玩家]}：查看计量结果（有效 DPS / 击杀耗时 / 无视护甲占比 / 承伤）。</li>
  * </ul>
  */
@@ -77,6 +78,15 @@ public final class SummyThreatCommand {
 																		StringArgumentType.getString(ctx, "kind"),
 																		DoubleArgumentType.getDouble(ctx, "pcf"),
 																		StringArgumentType.getString(ctx, "ability")))))))))
+				.then(Commands.literal("eximus")
+						.then(Commands.argument("entity", ResourceLocationArgument.id())
+								.executes(ctx -> spawnEximus(ctx, defaultSpawnTl(), null))
+								.then(Commands.argument("tl", IntegerArgumentType.integer(0, 20))
+										.executes(ctx -> spawnEximus(ctx, IntegerArgumentType.getInteger(ctx, "tl"), null))
+										.then(Commands.argument("ability", StringArgumentType.word())
+												.executes(ctx -> spawnEximus(ctx,
+														IntegerArgumentType.getInteger(ctx, "tl"),
+														StringArgumentType.getString(ctx, "ability")))))))
 				.then(Commands.literal("stats")
 						.executes(ctx -> showStats(ctx, ctx.getSource().getPlayer()))
 						.then(Commands.argument("player", EntityArgument.player())
@@ -138,10 +148,23 @@ public final class SummyThreatCommand {
 	}
 
 	private static int spawn(CommandContext<CommandSourceStack> ctx, String kindRaw, double pcf, String ability) {
-		CommandSourceStack source = ctx.getSource();
-		ResourceLocation entityId = ResourceLocationArgument.getId(ctx, "entity");
-		int tl = IntegerArgumentType.getInteger(ctx, "tl");
+		return spawnInternal(ctx.getSource(), ResourceLocationArgument.getId(ctx, "entity"),
+				IntegerArgumentType.getInteger(ctx, "tl"), kindRaw, pcf, ability);
+	}
 
+	/** 调试：直接生成卓越者；tl 缺省时用当前全局 TL，未开启则 20。 */
+	private static int spawnEximus(CommandContext<CommandSourceStack> ctx, int tl, String ability) {
+		return spawnInternal(ctx.getSource(), ResourceLocationArgument.getId(ctx, "entity"),
+				tl, "eximus", 20.0D, ability);
+	}
+
+	private static int defaultSpawnTl() {
+		int tl = ScalingState.globalTl();
+		return tl >= 0 ? tl : 20;
+	}
+
+	private static int spawnInternal(CommandSourceStack source, ResourceLocation entityId, int tl,
+			String kindRaw, double pcf, String ability) {
 		EntityType<?> type = EntityType.byString(entityId.toString()).orElse(null);
 		if (type == null) {
 			source.sendFailure(Component.literal("未知实体 ID：" + entityId));
