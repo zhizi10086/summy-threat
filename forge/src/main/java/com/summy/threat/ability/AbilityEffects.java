@@ -20,6 +20,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
@@ -90,11 +91,17 @@ public final class AbilityEffects {
 		refreshStaticModifiers(entity, tl);
 	}
 
-	/** 按 TL 区间抽取：等概率、同一只怪不重复；extra = 卓越者的 +1。 */
-	public static String roll(int tl, int extra, RandomSource random) {
+	/**
+	 * 按 TL 区间抽取：等概率、同一只怪不重复；extra = 卓越者的 +1。
+	 * 亡灵增援只对亡灵生物进入候选池。
+	 */
+	public static String roll(int tl, int extra, RandomSource random, boolean undead) {
 		List<AbilityId> pool = new ArrayList<>();
 		for (AbilityId id : AbilityId.values()) {
 			if (id.unlockTl() <= tl) {
+				if (id == AbilityId.NECRO_REINFORCEMENT && !undead) {
+					continue;
+				}
 				pool.add(id);
 			}
 		}
@@ -185,7 +192,7 @@ public final class AbilityEffects {
 				attacker.heal(amount * 0.15F);
 			}
 			if (has(attacker, AbilityId.EMBER)) {
-				damageExtra(victim, attacker.damageSources().onFire(), amount * 0.10F);
+				damageExtra(victim, attacker.damageSources().onFire(), amount * 0.10F, false);
 			}
 			if (has(attacker, AbilityId.CORROSION)) {
 				applyCorrosion(victim);
@@ -195,7 +202,8 @@ public final class AbilityEffects {
 		// —— 荆棘：反弹本次承伤 10%（追加段不连锁）——
 		if (extraDepth == 0 && amount > 0.0F && sourceEntity instanceof LivingEntity attacker
 				&& attacker != victim && has(victim, AbilityId.THORNS)) {
-			damageExtra(attacker, victim.damageSources().thorns(victim), amount * 0.10F);
+			// 荆棘：无击退（结算前后保存 / 还原目标速度）
+			damageExtra(attacker, victim.damageSources().thorns(victim), amount * 0.10F, true);
 		}
 
 		// —— 亡灵增援：受击时按 TL 概率召唤普通同类（上限 2 只）——
@@ -228,7 +236,7 @@ public final class AbilityEffects {
 				if (target instanceof Player player) {
 					amount = Math.min(amount, player.getMaxHealth());
 				}
-				damageExtra(target, victim.damageSources().mobAttack(victim), amount);
+				damageExtra(target, victim.damageSources().mobAttack(victim), amount, false);
 			}
 		}
 		cleanup(victim);
@@ -269,14 +277,19 @@ public final class AbilityEffects {
 	}
 
 	/** 追加段：进清前帧、结算后不清；期间跳过攻击方链式能力。 */
-	private static void damageExtra(LivingEntity target, DamageSource source, float amount) {
+	private static void damageExtra(LivingEntity target, DamageSource source, float amount, boolean suppressKnockback) {
 		if (amount <= 0.0F || !target.isAlive()) {
 			return;
 		}
 		extraDepth++;
 		try {
+			Vec3 velocity = suppressKnockback ? target.getDeltaMovement() : null;
 			target.invulnerableTime = 0;
-			target.hurt(source, amount);
+			boolean landed = target.hurt(source, amount);
+			if (suppressKnockback && landed) {
+				target.setDeltaMovement(velocity);
+				target.hurtMarked = true;
+			}
 		} finally {
 			extraDepth--;
 		}

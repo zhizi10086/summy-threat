@@ -3,10 +3,13 @@ package com.summy.threat.scaling;
 import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.ability.AbilityEffects;
+import com.summy.threat.ability.AbilityTexts;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MobType;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -188,7 +191,8 @@ public final class MonsterScaler {
 		if (AbilityEffects.enabled()) {
 			if (!data.contains(TAG_ABILITIES)) {
 				int extra = kind == Kind.EXIMUS ? 1 : 0;
-				AbilityEffects.setAbilities(entity, tl, AbilityEffects.roll(tl, extra, entity.getRandom()));
+				AbilityEffects.setAbilities(entity, tl, AbilityEffects.roll(tl, extra, entity.getRandom(),
+						entity.getMobType() == MobType.UNDEAD));
 			} else {
 				AbilityEffects.setAbilities(entity, tl, data.getString(TAG_ABILITIES));
 			}
@@ -207,11 +211,12 @@ public final class MonsterScaler {
 	public static Component describe(LivingEntity entity) {
 		Kind kind = kindOf(entity);
 		int tl = entity.getPersistentData().getInt(TAG_TL);
-		String abilities = entity.getPersistentData().getString(TAG_ABILITIES);
-		return Component.literal("TL=%d/%s 最大生命=%.1f 护甲=%.1f 韧性=%.1f 攻击=%.1f 能力=%s".formatted(
+		MutableComponent out = Component.literal("TL=%d/%s 最大生命=%.1f 护甲=%.1f 韧性=%.1f 攻击=%.1f 能力=".formatted(
 				tl, kind, entity.getMaxHealth(),
 				value(entity, Attributes.ARMOR), value(entity, Attributes.ARMOR_TOUGHNESS),
-				value(entity, Attributes.ATTACK_DAMAGE), abilities.isEmpty() ? "无" : abilities));
+				value(entity, Attributes.ATTACK_DAMAGE)));
+		out.append(AbilityTexts.join(entity.getPersistentData().getString(TAG_ABILITIES), "·"));
+		return out;
 	}
 
 	/** Boss 的 TL 曲线：TL0 = 1.0、TL20 = 锚点倍率；形状与普通怪 M/A 表同形（不含档位压缩）。 */

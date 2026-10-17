@@ -54,4 +54,17 @@ public enum AbilityId {
 		}
 		return Math.min(4, (tl - 4) / 4 + 1);
 	}
+
+	/** 阶段（《基础TL抽取.txt》区间）：0-3 → 1、4-7 → 2、8-11 → 3、12-15 → 4、16-20 → 5。 */
+	public static int stageOf(int tl) {
+		if (tl < 4) {
+			return 1;
+		}
+		return Math.min(5, (tl - 4) / 4 + 2);
+	}
+
+	/** 该能力所属的解锁阶段。 */
+	public int stage() {
+		return stageOf(unlockTl);
+	}
 }

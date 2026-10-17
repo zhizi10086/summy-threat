@@ -200,8 +200,8 @@ public final class SummyThreatCommand {
 		}
 		level.addFreshEntity(created);
 
-		source.sendSuccess(() -> Component.literal("[Summy Threat] 已召唤 %s：%s".formatted(
-				entityId, MonsterScaler.describe(living).getString())), true);
+		source.sendSuccess(() -> Component.literal("[Summy Threat] 已召唤 %s：".formatted(entityId))
+				.append(MonsterScaler.describe(living)), true);
 		return 1;
 	}
 
@@ -228,7 +228,8 @@ public final class SummyThreatCommand {
 			}
 			AbilityEffects.setAbilities(living, tl, id.id());
 		}
-		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] " + MonsterScaler.describe(living).getString()), true);
+		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] ")
+				.append(MonsterScaler.describe(living)), true);
 		return 1;
 	}
 
