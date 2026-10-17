@@ -22,6 +22,8 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.ThrownPotion;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
@@ -68,6 +70,8 @@ public final class AbilityEffects {
 	private static final Map<UUID, List<UUID>> SUMMONS = new HashMap<>();
 	/** 本击减伤前伤害：受害者 UUID → (伤害, tick)，仅在 LivingHurt → LivingDamage 之间有效 */
 	private static final Map<UUID, NominalHit> NOMINAL = new HashMap<>();
+	/** 荆棘：攻击者 UUID → 下次可触发 tick（按攻击者全局 0.25 秒冷却） */
+	private static final Map<UUID, Long> THORNS_COOLDOWN = new HashMap<>();
 
 	private record NominalHit(float amount, long tick) {
 	}
@@ -209,6 +213,20 @@ public final class AbilityEffects {
 		return Math.max(hit.amount(), 0.0F);
 	}
 
+	/**
+	 * 命中是否已连接到攻击者：近战直击，或攻击者所属的投射物（排除投掷药水）。
+	 * 箭、火球、三叉戟、潜影贝子弹、羊驼唾液、凋灵头颅等都会命中此分支。
+	 */
+	private static boolean isAttackConnected(DamageSource source, LivingEntity attacker) {
+		Entity direct = source.getDirectEntity();
+		if (direct == attacker) {
+			return true;
+		}
+		return direct instanceof Projectile projectile
+				&& !(projectile instanceof ThrownPotion)
+				&& projectile.getOwner() == attacker;
+	}
+
 	/** 每 200 tick 清一次无对应 LivingDamage 的残留记录（被取消的命中）。 */
 	@SubscribeEvent
 	public static void onServerTick(TickEvent.ServerTickEvent event) {
@@ -217,6 +235,7 @@ public final class AbilityEffects {
 		}
 		long now = event.getServer().overworld().getGameTime();
 		NOMINAL.entrySet().removeIf(entry -> now - entry.getValue().tick() > 40L);
+		THORNS_COOLDOWN.entrySet().removeIf(entry -> now - entry.getValue() > 200L);
 	}
 
 	@SubscribeEvent
@@ -248,7 +267,7 @@ public final class AbilityEffects {
 
 		// —— 攻击方触发：吸血 / 熔火 / 腐蚀（追加段不连锁）——
 		if (extraDepth == 0 && nominal > 0.0F && sourceEntity instanceof LivingEntity attacker
-				&& attacker != victim && event.getSource().getDirectEntity() == attacker) {
+				&& attacker != victim && isAttackConnected(event.getSource(), attacker)) {
 			if (has(attacker, AbilityId.LIFESTEAL)) {
 				// 至少回复自身最大生命的 0.5%，避免高血量单位（尤其 Boss）几乎不可见
 				attacker.heal(Math.max(nominal * 0.15F, attacker.getMaxHealth() * 0.005F));
@@ -264,8 +283,13 @@ public final class AbilityEffects {
 		// —— 荆棘：反弹本次承伤 10%（追加段不连锁）——
 		if (extraDepth == 0 && nominal > 0.0F && sourceEntity instanceof LivingEntity attacker
 				&& attacker != victim && has(victim, AbilityId.THORNS)) {
-			// 荆棘：无击退（结算前后保存 / 还原目标速度）
-			damageExtra(attacker, victim.damageSources().thorns(victim), nominal * 0.10F, true);
+			// 按攻击者全局冷却 0.25 秒（5 tick），防止 SRA 高频攻击瞬间反死玩家
+			long now = victim.level().getGameTime();
+			if (now >= THORNS_COOLDOWN.getOrDefault(attacker.getUUID(), 0L)) {
+				THORNS_COOLDOWN.put(attacker.getUUID(), now + 5L);
+				// 荆棘：无击退（结算前后保存 / 还原目标速度）
+				damageExtra(attacker, victim.damageSources().thorns(victim), nominal * 0.10F, true);
+			}
 		}
 
 		// —— 亡灵增援：受击时按 TL 概率召唤普通同类（上限 2 只）——
@@ -450,5 +474,6 @@ public final class AbilityEffects {
 		PHASE_COOLDOWN.remove(id);
 		SUMMONS.remove(id);
 		NOMINAL.remove(id);
+		THORNS_COOLDOWN.remove(id);
 	}
 }
