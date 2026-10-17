@@ -3,7 +3,10 @@ package com.summy.threat.ability;
 import com.summy.threat.Config;
 import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
@@ -21,9 +24,12 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayList;
@@ -39,6 +45,9 @@ import java.util.UUID;
  * <p>追加段（熔火 / 荆棘 / 尸爆）统一走 {@link #damageExtra}：结算前清目标 {@code invulnerableTime}
  * （进清前帧、保证落地），结算后不清（保留原版受击帧、防连击）；追加段带防递归标记，
  * 不再触发吸血 / 熔火 / 腐蚀 / 荆棘 / 亡灵增援的连锁。
+ *
+ * <p>比例型能力（吸血 / 熔火 / 荆棘 / 腐蚀）的基数取 {@link LivingHurtEvent} 的减伤前伤害：
+ * 吸收盾把 {@link LivingDamageEvent} 的 amount 扣成 0 时仍然生效，也不会被 80%~90% 的减伤压没。
  */
 public final class AbilityEffects {
 	private static final UUID ID_SWIFT = UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000101");
@@ -57,6 +66,11 @@ public final class AbilityEffects {
 	private static final Map<UUID, Long> PHASE_COOLDOWN = new HashMap<>();
 	/** 亡灵增援：召唤者 UUID → 召唤体 UUID */
 	private static final Map<UUID, List<UUID>> SUMMONS = new HashMap<>();
+	/** 本击减伤前伤害：受害者 UUID → (伤害, tick)，仅在 LivingHurt → LivingDamage 之间有效 */
+	private static final Map<UUID, NominalHit> NOMINAL = new HashMap<>();
+
+	private record NominalHit(float amount, long tick) {
+	}
 
 	private AbilityEffects() {
 	}
@@ -160,6 +174,51 @@ public final class AbilityEffects {
 		}
 	}
 
+	/**
+	 * 记录本击的减伤前伤害（护甲 / 附魔 / 吸收之前）。
+	 * LOWEST 优先级确保看到其它模组处理后的最终名义值。
+	 */
+	@SubscribeEvent(priority = EventPriority.LOWEST)
+	public static void onLivingHurt(LivingHurtEvent event) {
+		if (!enabled()) {
+			return;
+		}
+		LivingEntity victim = event.getEntity();
+		Entity attacker = event.getSource().getEntity();
+		// 只缓存与数值化怪物相关的命中，避免无意义地记录全部环境伤害
+		if (!isScaled(victim) && !(attacker instanceof LivingEntity living && isScaled(living))) {
+			return;
+		}
+		NOMINAL.put(victim.getUUID(), new NominalHit(event.getAmount(), victim.level().getGameTime()));
+	}
+
+	private static boolean isScaled(LivingEntity entity) {
+		return entity.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED);
+	}
+
+	/** 取本击减伤前伤害（同 tick 内有效）；没有记录或已过期时回退到最终伤害。 */
+	private static float nominalOf(LivingEntity victim, float fallback) {
+		NominalHit hit = NOMINAL.remove(victim.getUUID());
+		if (hit == null) {
+			return fallback;
+		}
+		long now = victim.level().getGameTime();
+		if (Math.abs(now - hit.tick()) > 1L) {
+			return fallback;
+		}
+		return Math.max(hit.amount(), 0.0F);
+	}
+
+	/** 每 200 tick 清一次无对应 LivingDamage 的残留记录（被取消的命中）。 */
+	@SubscribeEvent
+	public static void onServerTick(TickEvent.ServerTickEvent event) {
+		if (event.phase != TickEvent.Phase.END || event.getServer().getTickCount() % 200 != 0) {
+			return;
+		}
+		long now = event.getServer().overworld().getGameTime();
+		NOMINAL.entrySet().removeIf(entry -> now - entry.getValue().tick() > 40L);
+	}
+
 	@SubscribeEvent
 	public static void onLivingDamage(LivingDamageEvent event) {
 		if (!enabled()) {
@@ -168,6 +227,8 @@ public final class AbilityEffects {
 		LivingEntity victim = event.getEntity();
 		Entity sourceEntity = event.getSource().getEntity();
 		float amount = event.getAmount();
+		// 先取出名义伤害：即使最终伤害被吸收盾扣成 0，比例型能力仍然生效
+		float nominal = nominalOf(victim, amount);
 
 		// —— 受害方减伤：抗火 → 坚韧 → 韧皮（追加段同样吃这几层）——
 		if (has(victim, AbilityId.FIREPROOF) && event.getSource().is(DamageTypeTags.IS_FIRE)) {
@@ -186,13 +247,14 @@ public final class AbilityEffects {
 		}
 
 		// —— 攻击方触发：吸血 / 熔火 / 腐蚀（追加段不连锁）——
-		if (extraDepth == 0 && amount > 0.0F && sourceEntity instanceof LivingEntity attacker
+		if (extraDepth == 0 && nominal > 0.0F && sourceEntity instanceof LivingEntity attacker
 				&& attacker != victim && event.getSource().getDirectEntity() == attacker) {
 			if (has(attacker, AbilityId.LIFESTEAL)) {
-				attacker.heal(amount * 0.15F);
+				// 至少回复自身最大生命的 0.5%，避免高血量单位（尤其 Boss）几乎不可见
+				attacker.heal(Math.max(nominal * 0.15F, attacker.getMaxHealth() * 0.005F));
 			}
 			if (has(attacker, AbilityId.EMBER)) {
-				damageExtra(victim, attacker.damageSources().onFire(), amount * 0.10F, false);
+				damageExtra(victim, attacker.damageSources().onFire(), nominal * 0.10F, false);
 			}
 			if (has(attacker, AbilityId.CORROSION)) {
 				applyCorrosion(victim);
@@ -200,10 +262,10 @@ public final class AbilityEffects {
 		}
 
 		// —— 荆棘：反弹本次承伤 10%（追加段不连锁）——
-		if (extraDepth == 0 && amount > 0.0F && sourceEntity instanceof LivingEntity attacker
+		if (extraDepth == 0 && nominal > 0.0F && sourceEntity instanceof LivingEntity attacker
 				&& attacker != victim && has(victim, AbilityId.THORNS)) {
 			// 荆棘：无击退（结算前后保存 / 还原目标速度）
-			damageExtra(attacker, victim.damageSources().thorns(victim), amount * 0.10F, true);
+			damageExtra(attacker, victim.damageSources().thorns(victim), nominal * 0.10F, true);
 		}
 
 		// —— 亡灵增援：受击时按 TL 概率召唤普通同类（上限 2 只）——
@@ -228,18 +290,34 @@ public final class AbilityEffects {
 			return;
 		}
 		if (has(victim, AbilityId.DEATH_BURST) && victim.level() instanceof ServerLevel level) {
-			float base = (float) (victim.getMaxHealth() * 0.10D);
+			// 尸爆：自身最大生命 100% 的魔法伤害（indirect_magic 无视护甲），允许连锁
+			float base = victim.getMaxHealth();
+			deathBurstFx(level, victim);
+			DamageSource burst = victim.damageSources().indirectMagic(victim, victim);
 			AABB box = victim.getBoundingBox().inflate(3.0D);
 			for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, box,
 					e -> e != victim && e.isAlive())) {
 				float amount = base;
 				if (target instanceof Player player) {
-					amount = Math.min(amount, player.getMaxHealth());
+					// 对玩家的原始伤害上限 = 玩家最大生命的 85%（附魔保护 / 抗性 / 吸收仍继续结算）
+					amount = Math.min(amount, player.getMaxHealth() * 0.85F);
 				}
-				damageExtra(target, victim.damageSources().mobAttack(victim), amount, false);
+				damageExtra(target, burst, amount, false);
 			}
 		}
 		cleanup(victim);
+	}
+
+	/** 灵魂爆发：爆炸烟尘 + 灵魂火粒子环 + 低沉爆炸音。 */
+	private static void deathBurstFx(ServerLevel level, LivingEntity victim) {
+		double x = victim.getX();
+		double y = victim.getY() + victim.getBbHeight() * 0.5D;
+		double z = victim.getZ();
+		level.sendParticles(ParticleTypes.EXPLOSION_EMITTER, x, y, z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+		level.sendParticles(ParticleTypes.SOUL, x, y, z, 24, 1.6D, 0.9D, 1.6D, 0.02D);
+		level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, x, y, z, 12, 1.2D, 0.6D, 1.2D, 0.01D);
+		level.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE, SoundSource.HOSTILE, 1.0F, 0.8F);
+		level.playSound(null, x, y, z, SoundEvents.SOUL_ESCAPE, SoundSource.HOSTILE, 0.6F, 0.9F);
 	}
 
 	@SubscribeEvent
@@ -371,5 +449,6 @@ public final class AbilityEffects {
 		CORROSION.remove(id);
 		PHASE_COOLDOWN.remove(id);
 		SUMMONS.remove(id);
+		NOMINAL.remove(id);
 	}
 }
