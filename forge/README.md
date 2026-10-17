@@ -57,7 +57,7 @@ EA = A + (A×T)/15
 
 ## 已实现③：基础数值表 + 生态分档 + 测量命令
 
-口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.17 的 §4~§8。本轮**只实装数值**：
+口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.18 的 §4~§8。本轮**只实装数值**：
 技能池（卓越者 / TL / 领袖 / Boss 能力）、PCF/CDF、刷新规则、破甲削甲均未实装。
 
 **TL 驱动（临时）**：正式 TL 由后续 PCF/CDF 计算；本轮用服务器级"全局 TL"——
@@ -78,6 +78,7 @@ EA = A + (A×T)/15
 | 尸爆 | 自身最大生命 **100%** 的魔法伤害（无视护甲）；对玩家上限 **85% 最大生命**；允许连锁，带灵魂爆发特效 |
 | 卓越护盾（卓越者） | 最大生命 × 等级曲线 `f1`（TL20 = **75%**，TL0/5/10/15 ≈ 0.31%/0.60%/4.98%/23.94%）；不可再生；护甲/附魔/吸收后、生命前承伤；负面 MobEffect、腐蚀与属性下降免疫（属性快照） |
 | 自然卓越者 | 自然类生成（NATURAL / CHUNK_GENERATION / STRUCTURE / PATROL / JOCKEY / REINFORCEMENT）5%；刷怪笼、命令、召唤、刷怪蛋等 0% |
+| 原版领队僵尸 | 剥离原版 `Leader zombie bonus` 的 MAX_HEALTH modifier（避免与 M/E/首领倍率相乘），保留 `spawn_reinforcements` 与破门；TL 关闭时补满当前生命；与区域首领不合并 |
 
 **生态分档（§5.0）**：检测 `summy_enchantment` / `summy_reliquary` / `summy_reliquary_apocrypha`
 （SRA 强制依赖 SR，共 6 档）；两维系数 `r_hp`（生命 / 护甲）与 `r_atk`（攻击 / 特殊伤害）：
@@ -224,6 +225,19 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 仓库 | <https://github.com/zhizi10086/summy-threat>（工作副本 `_github/summy-threat`，其中 `forge/` 对应本工程） |
 
 ## 验证记录
+
+### 原版领队僵尸生命修正（2026-10-17，v2.18，RCON 无头实测）
+
+| 项 | 结果 |
+| --- | --- |
+| `gradlew clean build` + `verifyMixinTargets` | 通过；产物 726,274 字节 |
+| 原版领队判定 | 原版 `Leader zombie bonus` 加在 MAX_HEALTH 上是 `MULTIPLY_TOTAL`（×2–×5）；`scaleNow` 只剥离 MAX_HEALTH，保留 `spawn_reinforcements`（ADDITION 0.5–0.75）与困难破门 |
+| TL 关闭 | 原版领队最大生命 50 → 当前生命补满 **50/50**（不再是 20/50） |
+| TL 开启 | 普通 TL20 僵尸仍 **960**（不是 960×2.5），当前生命 960 |
+| 区域首领 | 带原版领队 modifier 的区域首领仍 **21,300 / 21,300**（不是 21,300×2.5），不合并两套系统 |
+| 回归 | `rcon_leader_test`、`rcon_eximus_test`、`rcon_ability_test`、`rcon_scaling_test`（21 项）、`rcon_damage_test`（5 例）、`rcon_armor_check`（28 项）、5 个文档脚本、`cross_check.py` 全绿 |
+| 部署 | jar 已进实例（726,274 字节）；无新增配置键 |
+| 未做（需你实机） | 原版领队自然生成时显示 50/50；区域首领/卓越者不受原版领队生命 modifier 污染 |
 
 ### 卓越护盾更名 + 亡灵增援同 TL（2026-10-17，v2.17，RCON 无头实测）
 
