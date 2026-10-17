@@ -8,6 +8,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
@@ -71,6 +72,12 @@ public final class CombatMeter {
 		}
 		long now = server.getTickCount();
 		LivingEntity victim = event.getEntity();
+		// 击杀瞬间的后续伤害（多段伤害的后段等）会落在已死亡的实体上：若继续登记，
+		// 计量目标会被重建，同 tick 的二次死亡事件就会再打一条"0.00s / DPS −1.00"残影日志。
+		// 击杀本体那次 LivingDamageEvent 在扣血前触发（生命 > 0），不受这条保护影响。
+		if (victim.isDeadOrDying()) {
+			return;
+		}
 		Entity attacker = event.getSource().getEntity();
 		float amount = event.getAmount();
 		boolean bypass = event.getSource().is(DamageTypeTags.BYPASSES_ARMOR);
@@ -116,7 +123,9 @@ public final class CombatMeter {
 
 		if (victim.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED)) {
 			Target target = TARGETS.remove(victim.getUUID());
-			if (killer instanceof Player player && target != null && target.firstTick >= 0L) {
+			// dealt > 0：排除"击杀瞬间残留伤害重建出的空记录"，避免残影日志、击杀数翻倍与
+			// "最近一次"被 0.00s 记录覆盖；真正的秒杀（dealt > 0）仍照常记录。
+			if (killer instanceof Player player && target != null && target.firstTick >= 0L && target.dealt > 0.0D) {
 				double seconds = (now - target.firstTick) / 20.0D;
 				double dps = seconds > 0.0D ? target.dealt / seconds : -1.0D;
 				double bypassShare = target.dealt > 0.0D ? target.bypass / target.dealt : 0.0D;
@@ -138,6 +147,12 @@ public final class CombatMeter {
 				&& killer.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED)) {
 			stats(player).deaths++;
 		}
+	}
+
+	/** 开服：清掉上一场会话遗留的"逐目标"记录（旧 tick 计数会污染跨会话的计时与 DPS） */
+	@SubscribeEvent
+	public static void onServerAboutToStart(ServerAboutToStartEvent event) {
+		TARGETS.clear();
 	}
 
 	/** 最近窗口的实际 DPS（窗口内伤害 ÷ 窗口已过秒数） */

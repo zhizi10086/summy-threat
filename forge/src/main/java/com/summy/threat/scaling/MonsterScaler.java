@@ -14,6 +14,7 @@ import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.UUID;
@@ -23,6 +24,8 @@ import java.util.UUID;
  *
  * <p>口径见交接文档 §4 / §5.3 / §5.4 / §5.6 / §7 / §8；本类只做数值，不做能力与刷新。
  * 受影响的是"敌对生物"（{@link Enemy}）与末影龙；写入用 transient modifier，便于整体回收。
+ * 跨存档时这些运行期修正会丢失，所以另用**会话令牌**（{@code summy_threat:session}）区分
+ * "本会话已数值化"与"跨存档残留"：残留实体重新载入时按存档 TL 补一次重缩放。
  */
 public final class MonsterScaler {
 	/** 已经被本模组数值化过的标记（防重复叠加） */
@@ -35,9 +38,14 @@ public final class MonsterScaler {
 	public static final String TAG_LEADER = "summy_threat:leader";
 	/** 区域首领的 PCF（生命公式用，默认 20） */
 	public static final String TAG_PCF = "summy_threat:pcf";
+	/** 会话令牌：与当前服务端会话比对，用于识别跨存档残留实体 */
+	public static final String TAG_SESSION = "summy_threat:session";
 
 	/** 默认 PCF：正式 PCF 系统落地前，区域首领用 20 档 */
 	public static final double DEFAULT_PCF = 20.0D;
+
+	/** 当前会话令牌（开服时换发）；0 = 尚未开服 */
+	private static long sessionToken;
 
 	private static final UUID ID_ARMOR = UUID.fromString("6f5c1a2e-0007-4a0b-9d1e-000000000001");
 	private static final UUID ID_TOUGHNESS = UUID.fromString("6f5c1a2e-0007-4a0b-9d1e-000000000002");
@@ -53,6 +61,12 @@ public final class MonsterScaler {
 	private MonsterScaler() {
 	}
 
+	/** 开服换发会话令牌：此后 join 的实体与本会话绑定；令牌不同的旧实体视为跨存档残留 */
+	@SubscribeEvent
+	public static void onServerAboutToStart(ServerAboutToStartEvent event) {
+		sessionToken = System.nanoTime();
+	}
+
 	/** 实体加入世界：自然刷怪与命令召唤都会经过这里 */
 	@SubscribeEvent
 	public static void onEntityJoin(EntityJoinLevelEvent event) {
@@ -62,7 +76,20 @@ public final class MonsterScaler {
 		if (!(event.getEntity() instanceof Mob mob) || !isScalable(mob)) {
 			return;
 		}
-		if (mob.getPersistentData().contains(TAG_SCALED)) {
+		CompoundTag data = mob.getPersistentData();
+		if (data.contains(TAG_SCALED)) {
+			if (data.getLong(TAG_SESSION) == sessionToken) {
+				return; // 本会话已数值化（重复 join 不重复处理）
+			}
+			// 跨存档 / 跨会话的残留实体：运行期属性修正已丢失、但标记仍在（此前会一直保持原版数值）。
+			// 用存档里的 TL 补一次重缩放——不依赖当前全局 TL；档位 none（短路）时跳过。
+			if (ScalingState.tier() == ScalingState.Tier.NONE) {
+				return;
+			}
+			int storedTl = data.contains(TAG_TL) ? data.getInt(TAG_TL) : 0;
+			scaleNow(mob, storedTl);
+			SummyThreat.LOGGER.info("[Summy Threat] 重新数值化残留实体 {}（TL {}）",
+					mob.getName().getString(), storedTl);
 			return;
 		}
 		if (!ScalingState.enabled()) {
@@ -149,6 +176,7 @@ public final class MonsterScaler {
 		CompoundTag data = entity.getPersistentData();
 		data.putBoolean(TAG_SCALED, true);
 		data.putInt(TAG_TL, tl);
+		data.putLong(TAG_SESSION, sessionToken);
 
 		if (kind != Kind.NORMAL) {
 			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}",
