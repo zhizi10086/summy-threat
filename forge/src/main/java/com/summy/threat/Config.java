@@ -125,6 +125,9 @@ public final class Config {
 	/** 调试：全局 TL（-1 = 不接管；0~20 = 接管并指定 TL）——运行期也可用 /summythreat tl 改 */
 	public static final ForgeConfigSpec.IntValue SCALING_GLOBAL_TL;
 
+	/** 玩家承伤日志开关（效仿 SRA 的 log_trigger） */
+	public static final ForgeConfigSpec.BooleanValue LOG_PLAYER_TAKEN;
+
 	public static final ForgeConfigSpec SPEC;
 
 	static {
@@ -308,6 +311,14 @@ public final class Config {
 		SCALING_GLOBAL_TL = builder
 				.comment("启动时的默认全局 TL；-1 表示关闭怪物侧接管")
 				.defineInRange("global_tl", -1, -1, 20);
+		builder.pop();
+
+		builder.comment("战斗日志（效仿 SRA 的 log_trigger）：只影响日志输出，不影响统计与结算。")
+				.push("combat_log");
+		LOG_PLAYER_TAKEN = builder
+				.comment("玩家承伤日志：每次受击打一行 INFO（伤害 / 攻击者 / TL / 剩余生命与吸收）；",
+						"关闭后不再逐击记录，但仍计入 /summythreat stats")
+				.define("log_player_taken", true);
 		builder.pop();
 
 		SPEC = builder.build();

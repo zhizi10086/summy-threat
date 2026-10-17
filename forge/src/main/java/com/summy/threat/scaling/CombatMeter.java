@@ -1,5 +1,6 @@
 package com.summy.threat.scaling;
 
+import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tags.DamageTypeTags;
@@ -108,6 +109,14 @@ public final class CombatMeter {
 			s.takenSum += amount;
 			s.takenCount++;
 			s.takenMax = Math.max(s.takenMax, amount);
+			// 逐击承伤日志（效仿 SRA 的 log_trigger）：只影响日志输出，不影响统计与结算
+			if (Config.SPEC.isLoaded() && Config.LOG_PLAYER_TAKEN.get()) {
+				SummyThreat.LOGGER.info(
+						"[Summy Threat] 玩家承伤 {}：{} 点（攻击者 {}，TL {}），生命 {}/{}，吸收 {}，累计第 {} 次（单次最大 {}）",
+						player.getGameProfile().getName(), fmt(amount), attacker.getName().getString(),
+						tlOf(attacker), fmt(player.getHealth()), fmt(player.getMaxHealth()),
+						fmt(player.getAbsorptionAmount()), s.takenCount, fmt(s.takenMax));
+			}
 		}
 	}
 
@@ -145,8 +154,20 @@ public final class CombatMeter {
 
 		if (victim instanceof Player player && killer != null
 				&& killer.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED)) {
-			stats(player).deaths++;
+			Stats s = stats(player);
+			s.deaths++;
+			if (Config.SPEC.isLoaded() && Config.LOG_PLAYER_TAKEN.get()) {
+				SummyThreat.LOGGER.info(
+						"[Summy Threat] 玩家被 TL 怪击杀：{}（会话累计：受击 {} 次 / 总伤 {} / 最大 {}；死亡 {} 次）",
+						player.getGameProfile().getName(), s.takenCount, fmt(s.takenSum), fmt(s.takenMax), s.deaths);
+			}
 		}
+	}
+
+	/** 攻击者的 TL（未数值化时显示 —） */
+	private static String tlOf(Entity attacker) {
+		return attacker.getPersistentData().contains(MonsterScaler.TAG_TL)
+				? String.valueOf(attacker.getPersistentData().getInt(MonsterScaler.TAG_TL)) : "—";
 	}
 
 	/** 开服：清掉上一场会话遗留的"逐目标"记录（旧 tick 计数会污染跨会话的计时与 DPS） */
