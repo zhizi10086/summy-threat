@@ -2,6 +2,7 @@ package com.summy.threat.scaling;
 
 import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
+import com.summy.threat.ability.AbilityEffects;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.LivingEntity;
@@ -16,6 +17,7 @@ import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 import java.util.UUID;
 
@@ -145,11 +147,13 @@ public final class MonsterScaler {
 				attackMultiplier = ScalingState.scale(leaderAttack(entity), rAtk);
 			}
 			case BOSS -> {
-				// Boss：护甲固定 100 / 50；生命与攻击用固定倍率，不随 PCF
+				// Boss：护甲固定 100 / 50；生命与攻击走 TL 曲线（锚点 TL0 = 原版、TL20 = 配置倍率）
 				armorTarget = 100.0D;
 				toughnessTarget = 50.0D;
-				healthMultiplier = ScalingState.scale(bossMultiplier(entity), rHp);
-				attackMultiplier = ScalingState.scale(bossAttack(entity), rAtk);
+				healthMultiplier = ScalingState.scale(
+						bossTlCurve(tl, bossMultiplier(entity), Config.HEALTH_MULTIPLIER_PER_TL), rHp);
+				attackMultiplier = ScalingState.scale(
+						bossTlCurve(tl, bossAttack(entity), Config.ATTACK_MULTIPLIER_PER_TL), rAtk);
 			}
 			default -> {
 				boolean eximus = kind == Kind.EXIMUS;
@@ -180,10 +184,21 @@ public final class MonsterScaler {
 		data.putInt(TAG_TL, tl);
 		data.putLong(TAG_SESSION, sessionToken);
 
+		// TL 能力：新怪按 TL 区间抽取（0/1/2/3/4；卓越者 +1）；已有标签（残留 / 命令覆盖）则保留
+		if (AbilityEffects.enabled()) {
+			if (!data.contains(TAG_ABILITIES)) {
+				int extra = kind == Kind.EXIMUS ? 1 : 0;
+				AbilityEffects.setAbilities(entity, tl, AbilityEffects.roll(tl, extra, entity.getRandom()));
+			} else {
+				AbilityEffects.setAbilities(entity, tl, data.getString(TAG_ABILITIES));
+			}
+		}
+
 		if (kind != Kind.NORMAL) {
-			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}",
+			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}，能力 {}",
 					entity.getName().getString(), kind, tl, round(armorTarget), round(toughnessTarget),
-					round(healthMultiplier), round(attackMultiplier));
+					round(healthMultiplier), round(attackMultiplier),
+					data.getString(TAG_ABILITIES).isEmpty() ? "无" : data.getString(TAG_ABILITIES));
 		}
 		return true;
 	}
@@ -192,10 +207,21 @@ public final class MonsterScaler {
 	public static Component describe(LivingEntity entity) {
 		Kind kind = kindOf(entity);
 		int tl = entity.getPersistentData().getInt(TAG_TL);
-		return Component.literal("TL=%d/%s 最大生命=%.1f 护甲=%.1f 韧性=%.1f 攻击=%.1f".formatted(
+		String abilities = entity.getPersistentData().getString(TAG_ABILITIES);
+		return Component.literal("TL=%d/%s 最大生命=%.1f 护甲=%.1f 韧性=%.1f 攻击=%.1f 能力=%s".formatted(
 				tl, kind, entity.getMaxHealth(),
 				value(entity, Attributes.ARMOR), value(entity, Attributes.ARMOR_TOUGHNESS),
-				value(entity, Attributes.ATTACK_DAMAGE)));
+				value(entity, Attributes.ATTACK_DAMAGE), abilities.isEmpty() ? "无" : abilities));
+	}
+
+	/** Boss 的 TL 曲线：TL0 = 1.0、TL20 = 锚点倍率；形状与普通怪 M/A 表同形（不含档位压缩）。 */
+	private static double bossTlCurve(int tl, double anchor, ForgeConfigSpec.DoubleValue[] table) {
+		double v = table[ScalingState.clampTl(tl)].get();
+		double v20 = table[20].get();
+		if (v20 <= 1.0D) {
+			return 1.0D;
+		}
+		return 1.0D + (anchor - 1.0D) * (v - 1.0D) / (v20 - 1.0D);
 	}
 
 	private static double value(LivingEntity entity, net.minecraft.world.entity.ai.attributes.Attribute attribute) {

@@ -2,6 +2,7 @@ package com.summy.threat.compat.jade;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IEntityComponentProvider;
@@ -28,8 +29,22 @@ public enum EntityAbilityTooltip implements IEntityComponentProvider {
 		tooltip.add(Component.translatable("summy_threat.jade.status", tl,
 				Component.translatable("summy_threat.jade.kind." + kind)));
 		if (data.contains(EntityAbilityDataProvider.KEY_ABILITIES)) {
-			tooltip.add(Component.translatable("summy_threat.jade.abilities",
-					data.getString(EntityAbilityDataProvider.KEY_ABILITIES)));
+			MutableComponent joined = Component.empty();
+			boolean first = true;
+			for (String part : data.getString(EntityAbilityDataProvider.KEY_ABILITIES).split(",")) {
+				String id = part.trim();
+				if (id.isEmpty()) {
+					continue;
+				}
+				if (!first) {
+					joined.append(Component.literal(" / "));
+				}
+				joined.append(Component.translatable("summy_threat.jade.ability." + id));
+				first = false;
+			}
+			if (!first) {
+				tooltip.add(Component.translatable("summy_threat.jade.abilities", joined));
+			}
 		}
 	}
 

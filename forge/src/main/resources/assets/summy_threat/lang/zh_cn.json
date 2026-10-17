@@ -66,5 +66,21 @@
   "summy_threat.jade.kind.normal": "普通",
   "summy_threat.jade.kind.eximus": "卓越者",
   "summy_threat.jade.kind.leader": "领袖",
-  "summy_threat.jade.kind.boss": "Boss"
+  "summy_threat.jade.kind.boss": "Boss",
+  "summy_threat.configuration.tl_abilities": "TL 能力",
+  "summy_threat.configuration.tl_abilities.enable_tl_abilities": "启用 TL 能力",
+  "summy_threat.jade.ability.swift": "迅捷",
+  "summy_threat.jade.ability.toughness": "坚韧",
+  "summy_threat.jade.ability.regeneration": "再生",
+  "summy_threat.jade.ability.strength": "力量",
+  "summy_threat.jade.ability.fireproof": "抗火",
+  "summy_threat.jade.ability.frenzy": "狂怒",
+  "summy_threat.jade.ability.thick_hide": "韧皮",
+  "summy_threat.jade.ability.lifesteal": "吸血",
+  "summy_threat.jade.ability.thorns": "荆棘",
+  "summy_threat.jade.ability.ember": "熔火",
+  "summy_threat.jade.ability.necro_reinforcement": "亡灵增援",
+  "summy_threat.jade.ability.corrosion": "腐蚀",
+  "summy_threat.jade.ability.death_burst": "尸爆",
+  "summy_threat.jade.ability.phase": "相位"
 }

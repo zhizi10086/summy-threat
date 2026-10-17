@@ -128,6 +128,9 @@ public final class Config {
 	/** 玩家承伤日志开关（效仿 SRA 的 log_trigger） */
 	public static final ForgeConfigSpec.BooleanValue LOG_PLAYER_TAKEN;
 
+	/** TL 能力总开关（关闭后不抽取、不生效） */
+	public static final ForgeConfigSpec.BooleanValue TL_ABILITIES_ENABLED;
+
 	public static final ForgeConfigSpec SPEC;
 
 	static {
@@ -319,6 +322,14 @@ public final class Config {
 				.comment("玩家承伤日志：每次受击打一行 INFO（伤害 / 攻击者 / TL / 剩余生命与吸收）；",
 						"关闭后不再逐击记录，但仍计入 /summythreat stats")
 				.define("log_player_taken", true);
+		builder.pop();
+
+		builder.comment("TL 能力（交接文档 §6.5）：按 TL 区间抽取 0/1/2/3/4 个基础能力、卓越者再 +1；",
+				"关闭后既不抽取也不生效（已挂载的标签保留）。")
+				.push("tl_abilities");
+		TL_ABILITIES_ENABLED = builder
+				.comment("是否启用 TL 能力")
+				.define("enable_tl_abilities", true);
 		builder.pop();
 
 		SPEC = builder.build();

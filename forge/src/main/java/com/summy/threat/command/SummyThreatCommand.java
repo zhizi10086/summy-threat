@@ -4,7 +4,10 @@ import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.summy.threat.Config;
+import com.summy.threat.ability.AbilityEffects;
+import com.summy.threat.ability.AbilityId;
 import com.summy.threat.combat.ArmorDamageFormula;
 import com.summy.threat.scaling.CombatMeter;
 import com.summy.threat.scaling.MonsterScaler;
@@ -62,17 +65,26 @@ public final class SummyThreatCommand {
 				.then(Commands.literal("spawn")
 						.then(Commands.argument("entity", ResourceLocationArgument.id())
 								.then(Commands.argument("tl", IntegerArgumentType.integer(0, 20))
-										.executes(ctx -> spawn(ctx, "normal", 20.0D))
+										.executes(ctx -> spawn(ctx, "normal", 20.0D, null))
 										.then(Commands.argument("kind", StringArgumentType.word())
-												.executes(ctx -> spawn(ctx, StringArgumentType.getString(ctx, "kind"), 20.0D))
+												.executes(ctx -> spawn(ctx, StringArgumentType.getString(ctx, "kind"), 20.0D, null))
 												.then(Commands.argument("pcf", DoubleArgumentType.doubleArg(0.0D, 20.0D))
 														.executes(ctx -> spawn(ctx,
 																StringArgumentType.getString(ctx, "kind"),
-																DoubleArgumentType.getDouble(ctx, "pcf"))))))))
+																DoubleArgumentType.getDouble(ctx, "pcf"), null))
+														.then(Commands.argument("ability", StringArgumentType.word())
+																.executes(ctx -> spawn(ctx,
+																		StringArgumentType.getString(ctx, "kind"),
+																		DoubleArgumentType.getDouble(ctx, "pcf"),
+																		StringArgumentType.getString(ctx, "ability")))))))))
 				.then(Commands.literal("stats")
 						.executes(ctx -> showStats(ctx, ctx.getSource().getPlayer()))
 						.then(Commands.argument("player", EntityArgument.player())
 								.executes(ctx -> showStats(ctx, EntityArgument.getPlayer(ctx, "player")))))
+				.then(Commands.literal("ability")
+						.then(Commands.argument("target", EntityArgument.entity())
+								.then(Commands.argument("id", StringArgumentType.word())
+										.executes(SummyThreatCommand::setAbility))))
 				.then(Commands.literal("armor")
 						.executes(ctx -> showArmor(ctx, ctx.getSource().getPlayer()))
 						.then(Commands.argument("player", EntityArgument.player())
@@ -125,7 +137,7 @@ public final class SummyThreatCommand {
 		return 1;
 	}
 
-	private static int spawn(CommandContext<CommandSourceStack> ctx, String kindRaw, double pcf) {
+	private static int spawn(CommandContext<CommandSourceStack> ctx, String kindRaw, double pcf, String ability) {
 		CommandSourceStack source = ctx.getSource();
 		ResourceLocation entityId = ResourceLocationArgument.getId(ctx, "entity");
 		int tl = IntegerArgumentType.getInteger(ctx, "tl");
@@ -173,10 +185,50 @@ public final class SummyThreatCommand {
 
 		// 先数值化（此时实体还没进世界，避免 join 事件重复处理），再加进世界
 		MonsterScaler.scaleNow(living, tl);
+		// 能力覆盖（测试用）：none = 抑制抽取；<id> = 强制单个
+		if (ability != null) {
+			if ("none".equalsIgnoreCase(ability)) {
+				AbilityEffects.setAbilities(living, tl, "");
+			} else {
+				AbilityId id = AbilityId.byId(ability);
+				if (id == null) {
+					source.sendFailure(Component.literal("未知能力 id：" + ability));
+					return 0;
+				}
+				AbilityEffects.setAbilities(living, tl, id.id());
+			}
+		}
 		level.addFreshEntity(created);
 
 		source.sendSuccess(() -> Component.literal("[Summy Threat] 已召唤 %s：%s".formatted(
 				entityId, MonsterScaler.describe(living).getString())), true);
+		return 1;
+	}
+
+	/** 给已有实体挂载单个能力（clear = 清空）。 */
+	private static int setAbility(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		Entity target = EntityArgument.getEntity(ctx, "target");
+		String raw = StringArgumentType.getString(ctx, "id");
+		if (!(target instanceof LivingEntity living)) {
+			ctx.getSource().sendFailure(Component.literal("目标必须是生物"));
+			return 0;
+		}
+		if (!living.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED)) {
+			ctx.getSource().sendFailure(Component.literal("目标尚未被数值化（先 /summythreat spawn 或开启全局 TL）"));
+			return 0;
+		}
+		int tl = living.getPersistentData().getInt(MonsterScaler.TAG_TL);
+		if ("clear".equalsIgnoreCase(raw)) {
+			AbilityEffects.setAbilities(living, tl, "");
+		} else {
+			AbilityId id = AbilityId.byId(raw);
+			if (id == null) {
+				ctx.getSource().sendFailure(Component.literal("未知能力 id：" + raw));
+				return 0;
+			}
+			AbilityEffects.setAbilities(living, tl, id.id());
+		}
+		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] " + MonsterScaler.describe(living).getString()), true);
 		return 1;
 	}
 

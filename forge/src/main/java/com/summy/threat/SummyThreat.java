@@ -3,6 +3,7 @@ package com.summy.threat;
 import com.summy.threat.armor.PlayerArmorRefill;
 import com.summy.threat.attribute.AttributeCaps;
 import com.summy.threat.command.SummyThreatCommand;
+import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.item.ModItems;
 import com.summy.threat.scaling.CombatMeter;
 import com.summy.threat.scaling.MonsterScaler;
@@ -54,6 +55,7 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(SummyThreat.class);
 		MinecraftForge.EVENT_BUS.register(MonsterScaler.class);
 		MinecraftForge.EVENT_BUS.register(CombatMeter.class);
+		MinecraftForge.EVENT_BUS.register(AbilityEffects.class);
 		MinecraftForge.EVENT_BUS.register(SummyThreatCommand.class);
 		MinecraftForge.EVENT_BUS.register(PlayerArmorRefill.class);
 	}

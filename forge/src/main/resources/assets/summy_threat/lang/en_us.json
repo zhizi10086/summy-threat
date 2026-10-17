@@ -66,5 +66,21 @@
   "summy_threat.jade.kind.normal": "Normal",
   "summy_threat.jade.kind.eximus": "Eximus",
   "summy_threat.jade.kind.leader": "Leader",
-  "summy_threat.jade.kind.boss": "Boss"
+  "summy_threat.jade.kind.boss": "Boss",
+  "summy_threat.configuration.tl_abilities": "TL Abilities",
+  "summy_threat.configuration.tl_abilities.enable_tl_abilities": "Enable TL abilities",
+  "summy_threat.jade.ability.swift": "Swift",
+  "summy_threat.jade.ability.toughness": "Toughness",
+  "summy_threat.jade.ability.regeneration": "Regeneration",
+  "summy_threat.jade.ability.strength": "Strength",
+  "summy_threat.jade.ability.fireproof": "Fireproof",
+  "summy_threat.jade.ability.frenzy": "Frenzy",
+  "summy_threat.jade.ability.thick_hide": "Thick Hide",
+  "summy_threat.jade.ability.lifesteal": "Lifesteal",
+  "summy_threat.jade.ability.thorns": "Thorns",
+  "summy_threat.jade.ability.ember": "Ember",
+  "summy_threat.jade.ability.necro_reinforcement": "Necro Reinforcement",
+  "summy_threat.jade.ability.corrosion": "Corrosion",
+  "summy_threat.jade.ability.death_burst": "Death Burst",
+  "summy_threat.jade.ability.phase": "Phase"
 }
