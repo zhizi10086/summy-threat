@@ -1,12 +1,12 @@
 # Summy Threat
 
-Forge 1.20.1 的"属性与怪物机制改造"模组，承载三块内容：
+Forge 1.20.1 的"属性与怪物机制改造"模组，承载四块内容：
 
 1. **属性上限抬升**（已实现）
 2. **护甲减伤公式替换**（已实现）
 3. **基础数值表**：怪物侧 TL 缩放（护甲 / 生命 / 攻击）、区域首领与 Boss 倍率、生态分档、
-   玩家护甲重填、测量命令（已实现，2026-10-16）；**刷新规则、PCF/CDF、技能池（卓越者 / TL / 领袖 / Boss 能力）、
-   破甲削甲仍未实装**
+   玩家护甲重填、测量命令（已实现，2026-10-16）；**TL 数值、PCF/CDF、TL 能力、卓越者与 8 个原型已实装；
+   完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲仍未实装**
 4. **回响下界合金（强化下界合金）**：锻造台升级的 4 件护甲 + 卓越者精华（已实现，2026-10-17；
    贴图/模型复用原版下界合金；四件独特能力已实装）
 
@@ -57,12 +57,19 @@ EA = A + (A×T)/15
 
 ## 已实现③：基础数值表 + 生态分档 + 测量命令
 
-口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.32 的 §4~§8。
-当前已实装数值表、TL 能力池、卓越护盾与 8 个卓越者原型；PCF/CDF、刷新规则、破甲削甲仍未实装。
+口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.34 的 §4~§8。
+当前已实装数值表、PCF/CDF、TL 能力池、卓越护盾、8 个卓越者原型与 5% 自然刷新；
+完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲、SR 背叛仍未实装。
 
-**TL 驱动（临时）**：正式 TL 由后续 PCF/CDF 计算；本轮用服务器级"全局 TL"——
-`/summythreat tl <0-20>`（`off` 关闭；**默认关闭**，配置键 `scaling_debug.global_tl` 可预设）。
-开启后**新刷的敌对生物**（`Enemy` 接口的怪 + 末影龙）会按该 TL 数值化。
+**当前状态（v2.34）**：
+
+- 已完成：TL 数值、PCF/CDF 与 TL 合成、卓越护盾、TL 能力、8 个卓越者原型、回响下界合金四件、玩家护盾 HUD、承伤日志。
+- 未完成：领袖 / Boss / 超级 Boss 能力池、龙 / 凋灵 / 古守攻击接管、
+  穿甲削甲、SR 背叛、卓越者精华获取、回响套正式贴图/模型。
+- 历史验证记录保留原样；以后续“当前状态”与内部《缺失项清单》为准。
+
+**TL 驱动**：默认 `global_tl = -1`，由 PCF/CDF 自动计算；`/summythreat tl <0-20>` 可手动覆盖，
+`tl auto` 恢复自动，`tl off` 完全关闭。开启后**新刷的敌对生物**（`Enemy` 接口的怪 + 末影龙）会按该 TL 数值化。
 
 | 项 | 取值 |
 | --- | --- |
@@ -73,6 +80,7 @@ EA = A + (A×T)/15
 | Jade 提示（可选） | 装 Jade 11.13+ 时两行显示：`[Summy Threat] TL 20 卓越者·烈焰`（普通单位不显示类型；卓越者追加原型名）/ `迅捷·力量`（能力名按解锁 TL 阶段上色：4-7 白、8-11 蓝、12-15 紫、16-20 金）；未装零影响 |
 | 卓越者原型 | 8 个专属原型（烈焰/冰霜/剧毒/电涌/震荡/守护/吸血/磁力）；前摇/推进柱/云团预警/守护 90% 转移；电涌 48 格跟随 + 路径容差 + 0.5 秒追踪后定身；云团每目标最多一团并优先脚下；震荡瞄准目标、裂地金柱但粒子短收尾；范围技能命中卓越者自身目标，冰霜/守护仅作用于 `Enemy` 友军 |
 | Boss 缩放 | **TL 曲线**（TL0 = 原版、TL20 = 现口径；监守者 TL0/10/20 = 500 / 7,620 / 35,000 血） |
+| PCF / CDF | 玩家四因子 PCF（装备 / Boss / 探索 / 资源，5 秒平滑）+ 区块 CDF（每秒上升、无玩家衰减、区块 NBT 持久化）；区域倍率与区域首领 TL 上限按文档生效 |
 | TL 能力 | 按 TL 区间抽 0/1/2/3/4 个（卓越者 +1），14 个效果；`/summythreat spawn … <ability>` 覆盖、`/summythreat ability` 挂载 |
 | 比例型能力 | 吸血 / 荆棘 / 熔火 / 腐蚀以**减伤前伤害**为基数（护甲与吸收盾之前）；吸血每次至少回复自身最大生命 0.5% |
 | 投射物与荆棘冷却 | 吸血 / 熔火 / 腐蚀对**近战与投射物**（所有 `Projectile`，排除投掷药水）主命中生效；荆棘按**攻击者全局 0.25 秒**冷却；追加段结算后恢复 `max(旧帧, 结果帧)`，防止被取消的 ember 追加段造成每 tick 连击 |
@@ -94,9 +102,15 @@ EA = A + (A×T)/15
 
 ```
 /summythreat tier [mode]        查看 / 强制档位（auto / none / sr / se / sr_apocrypha / se_sr / full）
-/summythreat tl [0-20|off]      查看 / 设置全局 TL
+/summythreat tl [0-20|auto|off] 查看 / 设置全局 TL（auto = PCF/CDF，off = 关闭）
+/summythreat pcf [玩家]         查看 PCF 四项分数、平滑值与选中值
+/summythreat pcf set <玩家> <0-20>  调试设置 PCF
+/summythreat cdf                查看当前区块 CDF / 区域
+/summythreat cdf <0-20>         调试设置当前区块 CDF
+/summythreat spawnstats [on|off|reset] 查看/控制刷怪与卓越者词条审计
 /summythreat spawn <实体ID> <tl> [eximus|leader] [pcf]     定点召唤一只已数值化的怪
 /summythreat eximus <实体ID> [tl] [原型|能力] [原型|能力]   直接召唤指定原型卓越者（默认当前全局 TL，未开启则 20）
+/summythreat ability <目标> <id|clear>                    给已数值化目标挂载 / 清除单个 TL 能力
 /summythreat shield [0-100]                             查看/设置自己的玩家卓越护盾（调试用）
 /summythreat stats [玩家]       查看计量：有效 DPS / 击杀耗时 / 无视护甲占比 / 护盾吸收 / 承伤 / 致死次数
 ```
@@ -106,7 +120,7 @@ EA = A + (A×T)/15
 玩家承伤同样可落日志：`combat_log.log_player_taken`（**默认开**，效仿 SRA 的 `log_trigger`）——
 每次受击一行（伤害 / 攻击者 / TL / **伤害类型** / 扣血前生命与剩余吸收）+ 被 TL 怪击杀时一行会话汇总；
 关闭后不再逐击记录，但仍计入 `/summythreat stats`。
-`run/calc/audit_player_damage.py` 可按攻击者/伤害类型统计每秒命中数与最小间隔，便于排查高频连击。
+内部承伤审计脚本可按攻击者/伤害类型统计每秒命中数与最小间隔，便于排查高频连击。
 
 ## 已实现④：回响下界合金（强化下界合金）
 
@@ -159,11 +173,38 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `boss_health.default_effective_dps` | double | `700.0` | 1.0 ~ 100000.0 |
 | `environment_tier.mode` | enum | `auto` | auto / none / sr / se / sr_apocrypha / se_sr / full |
 | `environment_tier.hp_scale_*` / `atk_scale_*` | double | `0.35` / `0.55` / `0.55`(**攻击 0.35**) / `0.75` / `1.00` | 0.0 ~ 1.0 |
-| `scaling_debug.global_tl` | int | `-1`（关闭接管） | -1 ~ 20 |
+| `scaling_debug.global_tl` | int | `-1`（自动 PCF/CDF） | -2 ~ 20 |
+| `player_challenge_factor.*` | double/list | 四因子权重、装备/Boss/探索/资源分、`mod_boss_ids`、`mod_material_ids` | 见配置文件 |
+| `chunk_difficulty_factor.*` | double | 上升/衰减/击杀/死亡参数 | 见配置文件 |
+| `multiplayer.*` | double/string/int | PCF 选取与 128 格检测 | 见配置文件 |
+| `region_multiplier.*` / `region_tl_cap.*` | double/int | 区域倍率与区域首领 TL 上限 | 见配置文件 |
 | `combat_log.log_player_taken` | boolean | `true` | 无 |
 | `tl_abilities.enable_tl_abilities` | boolean | `true` | 无 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
+
+## 自检入口
+
+服务端与客户端自检脚本属于内部开发工具，不随公开仓库发布；正式 jar 不包含 `com/summy/threat/devcheck`。
+
+开发环境需要复跑客户端自检时，使用：
+
+```powershell
+gradlew runClient -Pdevcheck --args="--quickPlaySingleplayer DevCheckWorld"
+```
+
+`-Pdevcheck` 只在开发客户端生效；公开仓库只包含 DevCheck 源码，不包含内部测试世界与脚本。粒子审美、前摇可读性、云团颜色辨识度等复杂视觉项仍由人工核验。
+
+刷怪审计使用真实事件判断，不依赖视觉：
+
+```text
+/summythreat spawnstats reset
+/summythreat spawnstats on
+... 让自然刷怪/刷怪笼/命令各自触发 ...
+/summythreat spawnstats
+```
+
+输出包含 `natural / naturalEximus / types / recent`，以及最终的 `Kind / TL / PCF / CDF / region / abilities / archetype`。
 
 **可选依赖 Jade**：`libs/jade-11.13.3.jar`（MIT）只作**编译期 API**；运行时由 Jade 扫描 `@WailaPlugin` 加载，
 未安装 Jade 时零影响。dev 客户端跑 `runClient` 会自动把 fg.deobf 副本放进 `run/mods` 供冒烟。
@@ -210,7 +251,7 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 
 三者口径必须一致：**改公式先改 txt，再同步 py 与 java**。
 
-### ③ 怪物刷新与属性强化（数值部分已实现，刷新链路与技能池待做）
+### ③ 怪物刷新与属性强化（数值与卓越者核心已实现，完整刷新链路与专属能力池待做）
 
 - 刷新链路（Forge 官方事件）：`LevelEvent.PotentialSpawns`（候选怪与权重）→ `SpawnPlacementRegisterEvent` / `MobSpawnEvent.SpawnPlacementCheck`（刷新规则）→ `MobSpawnEvent.PositionCheck`（落点）→ `MobSpawnEvent.FinalizeSpawn`（初始化时加属性/标记）→ `EntityJoinLevelEvent`（兜底）。
 - 属性：所有生物默认就带 `MAX_HEALTH` / `ATTACK_DAMAGE` / `ARMOR` / `ARMOR_TOUGHNESS`，可直接挂修饰符；注意永久修饰符会随 NBT 存档，重复施加会叠加，需要"只挂一次"的标记。
@@ -233,6 +274,18 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 
 ## 验证记录
 
+> 以下为各轮次历史记录；旧轮次的“未做 / 未包含”不代表当前状态，当前状态见上方 v2.34 块。
+
+### PCF / CDF + TL 合成（2026-10-17，v2.34，构建 / RCON）
+
+| 项 | 结果 |
+| --- | --- |
+| `gradlew build` + `verifyMixinTargets` | 通过；产物 **815,268 字节**；已复制到 `JAR/summy-threat-forge/` |
+| PCF / CDF | CDF 命令设置 → `save-all` → 停服 → 重启后仍保留（实测约 4.74，按无玩家衰减）；PCF/CDF 配置组与默认值由服务端生成 |
+| TL 选择 | `global_tl=-2` 完全关闭、`-1` 自动 PCF/CDF、`0~20` 手动覆盖；区域判定与区域首领 clamp 已接入 |
+| 回归 | `rcon_scaling_test` 21 项、`rcon_eximus_test`、`rcon_ability_test`、`rcon_damage_test` 全绿 |
+| 未做（需你实机） | 玩家实际 PCF 四项分数与平滑；A11 的“仅 SE / 仅 SR”两档校准；自然刷怪的 PCF/CDF TL 体感 |
+
 ### 电涌追踪 + 多目标唯一匹配 + 震荡瞄准/粒子收尾（2026-10-17，v2.32，构建）
 
 | 项 | 结果 |
@@ -251,7 +304,7 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | `gradlew build` + `verifyMixinTargets` | 通过；产物 **770,239 字节**；4 个 mixin 文件校验通过 |
 | 电涌寻路 | `FOLLOW_RANGE` 补到 48；冲刺 `maxDistanceToWaypoint = 2.0`；连续 10 tick 卡住则中止冲刺并休息 40 tick；保留 4× / step +0.5 |
 | 史莱姆连续伤害 | 修复前日志 110 次命中、单秒最多 12 次、最小间隔 0.00s；v2.31 客户端复测为 **35 次、最小 0.247s、单秒最多 4 次**；根因是 ember 追加段被 SR 火焰免疫取消后未恢复无敌帧，改为 `max(旧帧, 结果帧)` |
-| 玩家承伤日志 | 逐击行增加 `类型` 字段（`mob_attack` / `on_fire` / `thorns` 等）；新增 `run/calc/audit_player_damage.py` |
+| 玩家承伤日志 | 逐击行增加 `类型` 字段（`mob_attack` / `on_fire` / `thorns` 等）；新增内部承伤审计脚本 |
 | 震荡冲击柱 | 预警地环 + 白色核心金柱 + 电弧/石块 + 冲击波环 + `GENERIC_EXPLODE`；伤害仍为 20/柱 |
 | 回归 | `rcon_eximus_test`、`rcon_ability_test`、`rcon_armor_check`、`rcon_damage_test`、`rcon_scaling_test` 与 5 个文档脚本全绿 |
 | 未做（需你实机） | 电涌复杂地形寻路手感；史莱姆/Godhead 场景不再每 tick 连击；冲击柱视觉强度 |
@@ -276,7 +329,7 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 玩家护盾 HUD | 改为真正的青色条（`RenderGuiEvent.Post` + 自定义同步包），替换原紫色 Boss 条 |
 | 目标口径 | 攻击技能命中卓越者自己的当前目标（僵尸追村民可命中）；冰霜/守护只作用于 `Enemy`，排除当前目标与背叛靶子 |
 | RCON 实测 | 剧毒 100→95、烈焰 100→55、冰盾 25、守护转移 54（自身再 −40%）、震荡 20、电涌 step +0.5（基础 0.6 → 1.1） |
-| 猪灵蛮兵口径发现 | 裸属性 7.0；`finalizeSpawn` 自带金斧 +6，实际战斗属性 **13.0**，TL20 首领一击 **122.2**（不是文档目标 98.7）；待确认是否按带斧重标定 |
+| 猪灵蛮兵口径发现 | 属性 **13.0**（含金斧），TL20 属性 **122.2**，困难命中再 ×1.5；旧“7.0 / 65.8”为空手推算，已校正 |
 | 回归 | `rcon_eximus_test`、`rcon_ability_test`、`rcon_armor_check`、`rcon_damage_test`、`rcon_scaling_test` 全绿 |
 | 未做（需你实机） | 8 原型战斗手感、Jade 原型名、青色 HUD、电涌跨 1 格台阶、苦力怕引线电弧 |
 
@@ -425,8 +478,8 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 项 | 结果 |
 | --- | --- |
 | `gradlew clean build` | 通过；`verifyMixinTargets` 全绿；产物 `summy-threat-0.1.0.jar`（692,064 字节）落到 `JAR/summy-threat-forge/` |
-| 攻击侧重标定（v2.9） | 按"满配一口血 168.5（护甲段 71.5% + 生命 84 + 吸收 84.5）"、困难难度 ×1.5 反推：A(TL) 整表 k=0.772（TL20 21.0 → **16.44**）、监守者 1.5 → **3.29**（4 次致死）、领袖僵尸 12 → **21.93**、猪灵蛮兵 4 → **9.40**（6 次致死）；猪灵蛮兵原版攻击属性实为 **7.0**（旧文档按 13.0 推算系误算，已校正） |
-| 数值核验（`run/calc/rcon_scaling_test.py`，21 项全绿） | sr 档僵尸攻击 19.21；full 档：普通 49.32 / 卓越者 61.65 / 领袖僵尸 65.79 / 猪灵蛮兵 65.80 / 监守者 98.70；血量与减伤项同表全绿 |
+| 攻击侧重标定（v2.9） | 按"满配一口血 168.5（护甲段 71.5% + 生命 84 + 吸收 84.5）"、困难难度 ×1.5 反推：A(TL) 整表 k=0.772（TL20 21.0 → **16.44**）、监守者 1.5 → **3.29**（4 次致死）、领袖僵尸 12 → **21.93**、猪灵蛮兵 4 → **9.40**（6 次致死）；猪灵蛮兵原版攻击属性 **13.0**（含金斧），旧 7.0 为空手推算，已校正 |
+| 数值核验（内部 RCON 脚本，21 项全绿） | sr 档僵尸攻击 19.21；full 档：普通 49.32 / 卓越者 61.65 / 领袖僵尸 65.79 / 猪灵蛮兵 **122.20** / 监守者 98.70；血量与减伤项同表全绿 |
 | 硬编码伤害单位（v2.9 查实） | **末影龙**没有 `ATTACK_DAMAGE` 属性；**凋灵**有（Monster 默认 2.0，被倍率改成 6.0）但实际伤害（爆炸 / 头颅）不读它；**远古守卫者**有（8.0 → 131.52）但实际伤害是 thorns 2.0 + 激光。三者倍率键当前对实际伤害无效，待"攻击接管"轮 |
 | 护甲重填回归（`rcon_armor_check.py`，28 项全绿） | 含回响套：单件靴 7 / 3、单件胸 13 / 6、全套 32 / 18 |
 | 减伤回归（`rcon_damage_test.py`，5 例全绿） | 该脚本已显式切 full 档：A=100→90%、A=500→90%（截断）、A=50→63.64%、A=100/T=20→90%、A=0→0% |

@@ -1,12 +1,12 @@
 # Summy Threat
 
-Minecraft **1.20.1**（Forge）的"属性与怪物机制改造"模组：先把原版被硬编码封顶的属性救回来——
-`generic.armor` 与 `generic.max_health` 的上限改由配置驱动（默认 100 / 100000，可关闭回到原版
-的 30 / 1024）；后续接入护甲减伤公式替换与怪物刷新/属性强化。作者：**Summy**。
+Minecraft **1.20.1**（Forge）的“属性与怪物机制改造”模组。当前已实现属性上限抬升、护甲减伤公式替换、
+TL 数值缩放、PCF/CDF、卓越者与 8 个专属原型、回响下界合金与玩家卓越护盾；完整刷新链路、
+领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲与 SR 背叛仍在开发中。作者：**Summy**。
 
 | 目录 | 平台 | 版本 | 说明 |
 | --- | --- | --- | --- |
-| [`forge/`](forge/README.md) | Forge 47.4.10（ForgeGradle 6 + MixinExtras） | `0.1.0` | 当前唯一实现：属性上限抬升，含设计期计算器（`docs/`） |
+| [`forge/`](forge/README.md) | Forge 47.4.10（ForgeGradle 6 + MixinExtras） | `0.1.0` | 当前实现：属性上限、护甲公式、TL 数值、卓越者核心、回响套与测量命令 |
 
 ## 构建
 
