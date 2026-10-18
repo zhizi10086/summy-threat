@@ -72,6 +72,10 @@ minecraft {
             // 生产环境是 SRG 运行，不需要这两项。
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
+            // 只有显式加 -Pdevcheck 时才打开客户端自检；测试脚本会自动停止客户端。
+            if (project.hasProperty('devcheck')) {
+                property 'summy_threat.devcheck', 'true'
+            }
         }
         server {
             workingDirectory project.file('run')
@@ -262,6 +266,9 @@ tasks.named('check') {
 jar {
     // refmap 既在 resources 里（供 dev 运行），又被 MixinGradle 加进 jar，去重即可
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    if (!project.hasProperty('devcheck')) {
+        exclude 'com/summy/threat/devcheck/**'
+    }
     manifest {
         attributes([
                 'Specification-Title'   : project.archives_base_name,
@@ -276,6 +283,13 @@ jar {
     }
     from('LICENSE') {
         rename { "${it}_${project.base.archivesName.get()}" }
+    }
+}
+
+// JarJar 会重新打包主 jar；同样把 devcheck 排除在正式产物之外。
+tasks.named('jarJar') {
+    if (!project.hasProperty('devcheck')) {
+        exclude 'com/summy/threat/devcheck/**'
     }
 }
 
