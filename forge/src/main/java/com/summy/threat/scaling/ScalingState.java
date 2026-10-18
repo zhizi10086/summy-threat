@@ -13,7 +13,8 @@ import net.minecraftforge.fml.ModList;
  *     <li>§4 怪物护甲表（按 TL）——数值稳定，直接以常量保存。</li>
  * </ul>
  *
- * <p>TL 来源：本轮只有"全局 TL"（命令 / 配置），后续由 PCF/CDF 替换。
+ * <p>TL 来源：{@code global_tl = -2} 关闭接管；{@code -1} 使用 PCF/CDF 自动计算；
+ * {@code 0~20} 为手动覆盖（调试 / 测试）。
  */
 public final class ScalingState {
 	/** 三件套档位；SRA 强制依赖 SR，故"仅 SRA"不存在 */
@@ -130,13 +131,13 @@ public final class ScalingState {
 
 	public static void setGlobalTl(int tl) {
 		ensureInit();
-		globalTl = Math.max(-1, Math.min(20, tl));
+		globalTl = Math.max(-2, Math.min(20, tl));
 	}
 
-	/** 是否接管怪物侧：档位不是 none，且全局 TL 已设置（≥ 0） */
+	/** 是否接管怪物侧：档位不是 none，且未设置完全关闭（-2）。 */
 	public static boolean enabled() {
 		ensureInit();
-		return tier != Tier.NONE && globalTl >= 0;
+		return tier != Tier.NONE && globalTl != -2;
 	}
 
 	/** 缩放公式 v' = 1 + (v − 1) × r */

@@ -11,9 +11,13 @@ import com.summy.threat.ability.AbilityId;
 import com.summy.threat.armor.PlayerEximusShield;
 import com.summy.threat.eximus.EximusArchetype;
 import com.summy.threat.combat.ArmorDamageFormula;
+import com.summy.threat.pcf.CdfManager;
+import com.summy.threat.pcf.PcfManager;
+import com.summy.threat.pcf.SpawnRegion;
 import com.summy.threat.scaling.CombatMeter;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
+import com.summy.threat.scaling.SpawnAudit;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -22,6 +26,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.commands.arguments.ResourceLocationArgument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -42,7 +47,10 @@ import java.util.Locale;
  *
  * <ul>
  *     <li>{@code tier [mode]}：查看或强制生态档位（auto / none / sr / se / sr_apocrypha / se_sr / full）。</li>
- *     <li>{@code tl [0-20|off]}：查看或设置全局 TL（临时驱动，正式 TL 由后续 PCF/CDF 提供）。</li>
+ *     <li>{@code tl [0-20|auto|off]}：查看或设置全局 TL（auto = PCF/CDF，off = 完全关闭）。</li>
+ *     <li>{@code pcf [玩家]} / {@code pcf set <玩家> <0-20>}：查看或调试 PCF。</li>
+ *     <li>{@code cdf} / {@code cdf <0-20>}：查看或调试当前区块 CDF。</li>
+ *     <li>{@code spawnstats [on|off|reset]}：查看刷怪类型与卓越者词条发布审计。</li>
  *     <li>{@code spawn <实体ID> <tl> [eximus|leader] [pcf]}：定点召唤一只已数值化的怪。</li>
  *     <li>{@code eximus <实体ID> [tl] [原型|能力] [原型|能力]}：直接召唤卓越者；原型支持
  *         flame / frost / poison / storm / shock / guardian / vampire / magnet，
@@ -65,9 +73,27 @@ public final class SummyThreatCommand {
 								.executes(ctx -> setTier(ctx, StringArgumentType.getString(ctx, "mode")))))
 				.then(Commands.literal("tl")
 						.executes(SummyThreatCommand::showTl)
-						.then(Commands.literal("off").executes(ctx -> setTl(ctx, -1)))
+						.then(Commands.literal("off").executes(ctx -> setTl(ctx, -2)))
+						.then(Commands.literal("auto").executes(ctx -> setTl(ctx, -1)))
 						.then(Commands.argument("tl", IntegerArgumentType.integer(0, 20))
 								.executes(ctx -> setTl(ctx, IntegerArgumentType.getInteger(ctx, "tl")))))
+				.then(Commands.literal("pcf")
+						.executes(ctx -> showPcf(ctx, ctx.getSource().getPlayer()))
+						.then(Commands.literal("set")
+								.then(Commands.argument("player", EntityArgument.player())
+										.then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0D, 20.0D))
+												.executes(SummyThreatCommand::setPcf))))
+						.then(Commands.argument("player", EntityArgument.player())
+								.executes(ctx -> showPcf(ctx, EntityArgument.getPlayer(ctx, "player")))))
+				.then(Commands.literal("cdf")
+						.executes(SummyThreatCommand::showCdf)
+						.then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0D, 20.0D))
+								.executes(SummyThreatCommand::setCdf)))
+				.then(Commands.literal("spawnstats")
+						.executes(SummyThreatCommand::showSpawnStats)
+						.then(Commands.literal("reset").executes(SummyThreatCommand::resetSpawnStats))
+						.then(Commands.literal("on").executes(ctx -> setSpawnAudit(ctx, true)))
+						.then(Commands.literal("off").executes(ctx -> setSpawnAudit(ctx, false))))
 				.then(Commands.literal("spawn")
 						.then(Commands.argument("entity", ResourceLocationArgument.id())
 								.then(Commands.argument("tl", IntegerArgumentType.integer(0, 20))
@@ -117,11 +143,12 @@ public final class SummyThreatCommand {
 
 	private static int showTier(CommandContext<CommandSourceStack> ctx) {
 		ScalingState.Tier tier = ScalingState.tier();
+		int globalTl = ScalingState.globalTl();
 		ctx.getSource().sendSuccess(() -> Component.literal(
 				"[Summy Threat] 档位 %s（r_hp=%.2f，r_atk=%.2f）｜模式 %s｜全局 TL %s".formatted(
 						tier, ScalingState.rHp(), ScalingState.rAtk(),
 						Config.ENVIRONMENT_TIER_MODE.get(),
-						ScalingState.globalTl() < 0 ? "关闭" : String.valueOf(ScalingState.globalTl()))), false);
+						globalTl == -2 ? "关闭" : globalTl == -1 ? "自动 PCF/CDF" : String.valueOf(globalTl))), false);
 		return 1;
 	}
 
@@ -146,18 +173,95 @@ public final class SummyThreatCommand {
 		int tl = ScalingState.globalTl();
 		ctx.getSource().sendSuccess(() -> Component.literal(
 				"[Summy Threat] 全局 TL = %s（档位 %s，接管%s）".formatted(
-						tl < 0 ? "关闭" : String.valueOf(tl), ScalingState.tier(),
+						tl == -2 ? "关闭" : tl == -1 ? "自动 PCF/CDF" : String.valueOf(tl), ScalingState.tier(),
 						ScalingState.enabled() ? "生效" : "未生效")), false);
 		return 1;
 	}
 
 	private static int setTl(CommandContext<CommandSourceStack> ctx, int tl) {
 		ScalingState.setGlobalTl(tl);
+		String suffix = tl == -2
+				? "新刷的敌对生物不会数值化"
+				: tl == -1
+						? "新刷的敌对生物将按 PCF/CDF 自动计算 TL"
+						: "新刷的敌对生物将按此 TL 数值化";
+		if (tl >= 0 && ScalingState.tier() == ScalingState.Tier.NONE) {
+			suffix = "注意：当前档位为 none（短路），怪物侧不会数值化";
+		}
+		String finalSuffix = suffix;
 		ctx.getSource().sendSuccess(() -> Component.literal(
 				"[Summy Threat] 全局 TL 已设为 %s；%s".formatted(
-						tl < 0 ? "关闭（不再接管新刷的怪）" : String.valueOf(tl),
-						tl >= 0 && ScalingState.tier() == ScalingState.Tier.NONE
-								? "注意：当前档位为 none（短路），怪物侧不会数值化" : "新刷的敌对生物将按此 TL 数值化")), true);
+						tl == -2 ? "完全关闭（不再接管新刷的怪）"
+								: tl == -1 ? "自动 PCF/CDF" : String.valueOf(tl),
+						finalSuffix)), true);
+		return 1;
+	}
+
+	private static int showPcf(CommandContext<CommandSourceStack> ctx, ServerPlayer player) {
+		if (player == null) {
+			ctx.getSource().sendFailure(Component.literal("当前上下文没有玩家；请用 /summythreat pcf <玩家>"));
+			return 0;
+		}
+		PcfManager.Snapshot s = PcfManager.snapshot(player);
+		double normal = PcfManager.selectedPcf(player.serverLevel(), player.position(), MonsterScaler.Kind.NORMAL);
+		double eximus = PcfManager.selectedPcf(player.serverLevel(), player.position(), MonsterScaler.Kind.EXIMUS);
+		double leader = PcfManager.selectedPcf(player.serverLevel(), player.position(), MonsterScaler.Kind.LEADER);
+		ctx.getSource().sendSuccess(() -> Component.literal(
+				"[Summy Threat] PCF %s（原始 %s）｜装备 %s｜Boss %s｜探索 %s｜资源 %s｜重置锁 %s"
+						.formatted(fmt(s.value()), fmt(s.calc()), fmt(s.equipment()), fmt(s.boss()),
+								fmt(s.exploration()), fmt(s.resource()), s.locked() ? "生效" : "无")
+						+ "｜选中：普通 " + fmt(normal) + " / 卓越 " + fmt(eximus) + " / 首领 " + fmt(leader)), false);
+		return 1;
+	}
+
+	private static int setPcf(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
+		double value = DoubleArgumentType.getDouble(ctx, "value");
+		PcfManager.setValue(player, value);
+		ctx.getSource().sendSuccess(() -> Component.literal(
+				"[Summy Threat] PCF 已设为 %s（%s）".formatted(fmt(value), player.getGameProfile().getName())), true);
+		return 1;
+	}
+
+	private static int showCdf(CommandContext<CommandSourceStack> ctx) {
+		ServerLevel level = ctx.getSource().getLevel();
+		BlockPos pos = BlockPos.containing(ctx.getSource().getPosition());
+		CdfManager.Snapshot s = CdfManager.snapshot(level, pos);
+		SpawnRegion region = SpawnRegion.detect(level, ctx.getSource().getPosition(), MobSpawnType.NATURAL);
+		ctx.getSource().sendSuccess(() -> Component.literal(
+				"[Summy Threat] CDF %s（目标 %s，峰值 %s）｜区域 %s（×%s，首领上限 %d）｜击杀加成 %s｜死亡惩罚 %s｜玩家 %s"
+						.formatted(fmt(s.value()), fmt(s.target()), fmt(s.peakPcf()), region.id(),
+								fmt(region.multiplier()), region.leaderCap(), fmt(s.killBonus()),
+								s.deathPenaltyUntil() > level.getGameTime() ? "有效" : "无",
+								s.hasPlayers() ? "在区块内" : "无")), false);
+		return 1;
+	}
+
+	private static int setCdf(CommandContext<CommandSourceStack> ctx) {
+		ServerLevel level = ctx.getSource().getLevel();
+		BlockPos pos = BlockPos.containing(ctx.getSource().getPosition());
+		double value = DoubleArgumentType.getDouble(ctx, "value");
+		CdfManager.setCurrent(level, pos, value);
+		ctx.getSource().sendSuccess(() -> Component.literal(
+				"[Summy Threat] 当前区块 CDF 已设为 %s".formatted(fmt(value))), true);
+		return 1;
+	}
+
+	private static int showSpawnStats(CommandContext<CommandSourceStack> ctx) {
+		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] 刷怪审计：" + SpawnAudit.summary()), false);
+		return 1;
+	}
+
+	private static int resetSpawnStats(CommandContext<CommandSourceStack> ctx) {
+		SpawnAudit.reset();
+		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] 刷怪审计计数已清空"), true);
+		return 1;
+	}
+
+	private static int setSpawnAudit(CommandContext<CommandSourceStack> ctx, boolean enabled) {
+		SpawnAudit.setRecording(enabled);
+		ctx.getSource().sendSuccess(() -> Component.literal(
+				"[Summy Threat] 刷怪审计记录已" + (enabled ? "开启" : "关闭")), true);
 		return 1;
 	}
 
@@ -233,6 +337,10 @@ public final class SummyThreatCommand {
 	private static int defaultSpawnTl() {
 		int tl = ScalingState.globalTl();
 		return tl >= 0 ? tl : 20;
+	}
+
+	private static String fmt(double value) {
+		return String.format("%.2f", value);
 	}
 
 	private static int spawnInternal(CommandSourceStack source, ResourceLocation entityId, int tl,

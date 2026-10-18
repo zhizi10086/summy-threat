@@ -17,7 +17,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  * 回响胸甲提供的“玩家卓越护盾”池。
  *
  * <p>击杀卓越者 +20、上限 100；承伤在护甲/附魔/原版吸收之后、生命之前扣除。
- * 服务端把当前值同步给客户端，由 {@code PlayerShieldHud} 绘制青色顶部条。
+ * 服务端把当前值同步给客户端，由 {@code PlayerShieldHud} 绘制屏幕左侧竖向青色条。
  */
 public final class PlayerEximusShield {
 	public static final String TAG_SHIELD = "summy_threat:player_eximus_shield";

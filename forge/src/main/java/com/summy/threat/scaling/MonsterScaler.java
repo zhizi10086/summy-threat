@@ -6,9 +6,14 @@ import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityTexts;
 import com.summy.threat.eximus.EximusArchetype;
 import com.summy.threat.eximus.EximusShield;
+import com.summy.threat.pcf.CdfManager;
+import com.summy.threat.pcf.PcfManager;
+import com.summy.threat.pcf.SpawnRegion;
+import com.summy.threat.pcf.TlSelector;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobType;
@@ -103,6 +108,7 @@ public final class MonsterScaler {
 			}
 			int storedTl = data.contains(TAG_TL) ? data.getInt(TAG_TL) : 0;
 			scaleNow(mob, storedTl);
+			auditJoin(mob, (ServerLevel) event.getLevel());
 			SummyThreat.LOGGER.info("[Summy Threat] 重新数值化残留实体 {}（TL {}）",
 					mob.getName().getString(), storedTl);
 			return;
@@ -114,7 +120,22 @@ public final class MonsterScaler {
 			}
 			return;
 		}
-		scaleNow(mob, ScalingState.globalTl());
+		scaleNow(mob, TlSelector.select((ServerLevel) event.getLevel(), mob, kindOf(mob)));
+		auditJoin(mob, (ServerLevel) event.getLevel());
+	}
+
+	private static void auditJoin(Mob mob, ServerLevel level) {
+		if (!SpawnAudit.recording()) {
+			return;
+		}
+		Kind kind = kindOf(mob);
+		int tl = mob.getPersistentData().getInt(TAG_TL);
+		String region = SpawnRegion.forEntity(level, mob).id();
+		SpawnAudit.recordJoin(mob, kind, tl,
+				PcfManager.selectedPcf(level, mob.position(), kind),
+				CdfManager.current(level, mob.blockPosition()),
+				region, mob.getPersistentData().getString(TAG_ABILITIES),
+				mob.getPersistentData().getString(TAG_ARCHETYPE));
 	}
 
 	/** 是否属于"敌对生物"（含史莱姆等 Enemy 接口实现）或末影龙 */

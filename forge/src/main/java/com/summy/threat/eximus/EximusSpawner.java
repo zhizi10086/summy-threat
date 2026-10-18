@@ -3,6 +3,7 @@ package com.summy.threat.eximus;
 import com.summy.threat.Config;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
+import com.summy.threat.scaling.SpawnAudit;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
@@ -30,18 +31,24 @@ public final class EximusSpawner {
 		}
 		// Boss 类不参与自然卓越者；远古守卫者按普通怪处理
 		if (mob instanceof Warden || mob instanceof EnderDragon || mob instanceof WitherBoss) {
+			SpawnAudit.recordFinalize(mob, event.getSpawnType(), false, false, 0.0D, "boss_excluded");
 			return;
 		}
 		if (!isNatural(event.getSpawnType())) {
+			SpawnAudit.recordFinalize(mob, event.getSpawnType(), false, false, 0.0D, "spawn_type_excluded");
 			return;
 		}
 		if (mob.getPersistentData().getBoolean(MonsterScaler.TAG_EXIMUS)) {
+			SpawnAudit.recordFinalize(mob, event.getSpawnType(), true, true, 0.0D, "already_tagged");
 			return;
 		}
 		double chance = Config.EXIMUS_NATURAL_SPAWN_CHANCE.get();
+		boolean tagged = false;
 		if (chance > 0.0D && mob.getRandom().nextDouble() < chance) {
 			mob.getPersistentData().putBoolean(MonsterScaler.TAG_EXIMUS, true);
+			tagged = true;
 		}
+		SpawnAudit.recordFinalize(mob, event.getSpawnType(), true, tagged, chance, "natural");
 	}
 
 	/**

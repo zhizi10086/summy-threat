@@ -11,6 +11,9 @@ import com.summy.threat.eximus.EximusSpawner;
 import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.item.ModItems;
 import com.summy.threat.network.ModNetwork;
+import com.summy.threat.pcf.CdfManager;
+import com.summy.threat.pcf.PcfManager;
+import com.summy.threat.pcf.SpawnRegion;
 import com.summy.threat.scaling.CombatMeter;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
@@ -31,7 +34,8 @@ import org.slf4j.LoggerFactory;
  * 模组入口：Summy Threat。
  *
  * <p>已实现：属性上限抬升、自定义护甲减伤公式、基础数值表（怪物侧 TL 缩放 + 玩家护甲重填）、
- * 生态分档（§5.0）与调试 / 测量命令。技能池（卓越者 / TL / 领袖 / Boss 能力）与 PCF/CDF 尚未实现。
+ * 生态分档（§5.0）、卓越者 / TL 能力 / 8 个卓越者原型与调试 / 测量命令。
+ * PCF/CDF、TL 选择与持久化已实现；领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲与 SR 背叛仍待实现。
  * 配置走 Forge 原生 SERVER 档，Forge 会把服务端的值自动同步给客户端，双端口径天然一致。
  */
 @Mod(SummyThreat.MOD_ID)
@@ -68,6 +72,9 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(EximusShield.class);
 		MinecraftForge.EVENT_BUS.register(EximusArchetypeEffects.class);
 		MinecraftForge.EVENT_BUS.register(EximusSpawner.class);
+		MinecraftForge.EVENT_BUS.register(PcfManager.class);
+		MinecraftForge.EVENT_BUS.register(CdfManager.class);
+		MinecraftForge.EVENT_BUS.register(SpawnRegion.class);
 		MinecraftForge.EVENT_BUS.register(SummyThreatCommand.class);
 		MinecraftForge.EVENT_BUS.register(PlayerArmorRefill.class);
 		// 放在最后注册：与 EximusShield 同为 LOWEST 时后执行，能读到本次护盾吸收量。
@@ -89,13 +96,16 @@ public class SummyThreat {
 	public static void onServerStarted(ServerStartedEvent event) {
 		ScalingState.refresh();
 		ScalingState.Tier tier = ScalingState.tier();
+		int globalTl = ScalingState.globalTl();
 		if (tier == ScalingState.Tier.NONE) {
 			LOGGER.info("[Summy Threat] 生态档位：none（三件套均未装，怪物侧整体短路）；全局 TL {}",
-					ScalingState.globalTl() < 0 ? "关闭" : ScalingState.globalTl());
+					globalTl == -2 ? "关闭" : globalTl == -1 ? "自动 PCF/CDF" : globalTl);
 		} else {
 			LOGGER.info("[Summy Threat] 生态档位：{}（r_hp={}，r_atk={}）；全局 TL {}", tier,
 					ScalingState.rHp(), ScalingState.rAtk(),
-					ScalingState.globalTl() < 0 ? "关闭（可用 /summythreat tl <0-20> 开启）" : ScalingState.globalTl());
+					globalTl == -2 ? "关闭"
+							: globalTl == -1 ? "自动 PCF/CDF"
+							: globalTl + "（手动覆盖）");
 		}
 	}
 

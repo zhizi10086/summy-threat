@@ -2,6 +2,8 @@ package com.summy.threat;
 
 import net.minecraftforge.common.ForgeConfigSpec;
 
+import java.util.List;
+
 /**
  * 模组配置（Forge 原生 SERVER 档）。
  *
@@ -126,8 +128,114 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue HP_SCALE_FULL;
 	public static final ForgeConfigSpec.DoubleValue ATK_SCALE_FULL;
 
-	/** 调试：全局 TL（-1 = 不接管；0~20 = 接管并指定 TL）——运行期也可用 /summythreat tl 改 */
+	/** 调试：全局 TL（-2 = 完全关闭；-1 = 自动 PCF/CDF；0~20 = 手动覆盖） */
 	public static final ForgeConfigSpec.IntValue SCALING_GLOBAL_TL;
+
+	// ================= PCF / CDF（v2.34） =================
+	/** PCF 四项权重 */
+	public static final ForgeConfigSpec.DoubleValue PCF_EQUIPMENT_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue PCF_BOSS_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue PCF_EXPLORATION_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue PCF_RESOURCE_WEIGHT;
+	/** PCF 指数平滑系数 */
+	public static final ForgeConfigSpec.DoubleValue PCF_SMOOTHING;
+	/** 创世纪重置后的锁定天数与上限 */
+	public static final ForgeConfigSpec.IntValue PCF_RESET_LOCK_DAYS;
+	public static final ForgeConfigSpec.DoubleValue PCF_RESET_LOCK_CAP;
+	/** 装备分细则 */
+	public static final ForgeConfigSpec.DoubleValue PCF_ARMOR_PER_POINT;
+	public static final ForgeConfigSpec.DoubleValue PCF_ARMOR_CAP;
+	public static final ForgeConfigSpec.DoubleValue PCF_ATTACK_PER_POINT;
+	public static final ForgeConfigSpec.DoubleValue PCF_ATTACK_CAP;
+	public static final ForgeConfigSpec.DoubleValue PCF_ENCHANT_PER_LEVEL;
+	public static final ForgeConfigSpec.DoubleValue PCF_ENCHANT_CAP;
+	/** Boss 分细则 */
+	public static final ForgeConfigSpec.DoubleValue PCF_BOSS_CAP;
+	public static final ForgeConfigSpec.DoubleValue PCF_BOSS_SCORE_ENDER_DRAGON;
+	public static final ForgeConfigSpec.DoubleValue PCF_BOSS_SCORE_WITHER;
+	public static final ForgeConfigSpec.DoubleValue PCF_BOSS_SCORE_WARDEN;
+	public static final ForgeConfigSpec.DoubleValue PCF_BOSS_SCORE_ELDER_GUARDIAN;
+	public static final ForgeConfigSpec.DoubleValue PCF_BOSS_SCORE_MOD;
+	/** 探索分细则 */
+	public static final ForgeConfigSpec.DoubleValue PCF_NETHER_ENTRY_SCORE;
+	public static final ForgeConfigSpec.DoubleValue PCF_END_ENTRY_SCORE;
+	public static final ForgeConfigSpec.DoubleValue PCF_BIOME_PER_NEW;
+	public static final ForgeConfigSpec.DoubleValue PCF_BIOME_CAP;
+	/** 资源分细则 */
+	public static final ForgeConfigSpec.DoubleValue PCF_DIAMOND_PER_UNIT;
+	public static final ForgeConfigSpec.DoubleValue PCF_DIAMOND_CAP;
+	public static final ForgeConfigSpec.DoubleValue PCF_DEBRIS_PER_UNIT;
+	public static final ForgeConfigSpec.DoubleValue PCF_DEBRIS_CAP;
+	public static final ForgeConfigSpec.DoubleValue PCF_MOD_MATERIAL_PER_UNIT;
+	public static final ForgeConfigSpec.DoubleValue PCF_MOD_MATERIAL_CAP;
+	public static final ForgeConfigSpec.IntValue PCF_DIAMOND_DIMINISH_1;
+	public static final ForgeConfigSpec.IntValue PCF_DIAMOND_DIMINISH_2;
+	public static final ForgeConfigSpec.IntValue PCF_BIOME_DIMINISH_1;
+	public static final ForgeConfigSpec.IntValue PCF_BIOME_DIMINISH_2;
+	/** A5 / A6 可编辑 ID 列表 */
+	public static final ForgeConfigSpec.ConfigValue<List<? extends String>> PCF_MOD_BOSS_IDS;
+	public static final ForgeConfigSpec.ConfigValue<List<? extends String>> PCF_MOD_MATERIAL_IDS;
+
+	/** CDF 每秒上升、击杀加成、死亡惩罚与衰减 */
+	public static final ForgeConfigSpec.DoubleValue CDF_RISE_RATE;
+	public static final ForgeConfigSpec.DoubleValue CDF_KILL_RISE_BONUS;
+	public static final ForgeConfigSpec.DoubleValue CDF_KILL_RISE_MAX_BONUS;
+	public static final ForgeConfigSpec.DoubleValue CDF_DEATH_RISE_PENALTY;
+	public static final ForgeConfigSpec.IntValue CDF_DEATH_PENALTY_DURATION;
+	public static final ForgeConfigSpec.DoubleValue CDF_DECAY_RATE;
+	public static final ForgeConfigSpec.DoubleValue CDF_DECAY_FLOOR_RATIO;
+	public static final ForgeConfigSpec.DoubleValue CDF_LEGACY_CHUNK_INIT_RATIO;
+
+	/** 多人 PCF 选取 */
+	public static final ForgeConfigSpec.ConfigValue<String> MULTIPLAYER_NORMAL_PCF_MODE;
+	public static final ForgeConfigSpec.DoubleValue MULTIPLAYER_WEIGHTED_MIN_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue MULTIPLAYER_ELITE_HIGH_WEIGHT;
+	public static final ForgeConfigSpec.ConfigValue<String> MULTIPLAYER_BOSS_ANCHOR;
+	public static final ForgeConfigSpec.IntValue MULTIPLAYER_PLAYER_DETECTION_RADIUS;
+
+	/** 区域倍率与区域首领 TL 上限 */
+	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_SPAWN_PROTECTION;
+	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_NORMAL_BIOME;
+	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_NETHER_END;
+	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_STRUCTURE;
+	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_SPAWNER;
+	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_SPAWN_PROTECTION;
+	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_NORMAL_BIOME;
+	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_NETHER_END;
+	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_STRUCTURE;
+	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_SPAWNER;
+
+	private static final List<String> DEFAULT_MOD_MATERIAL_IDS = List.of(
+			"summy_reliquary:sin_fragment_pride",
+			"summy_reliquary:sin_fragment_gluttony",
+			"summy_reliquary:sin_fragment_wrath",
+			"summy_reliquary:sin_fragment_envy",
+			"summy_reliquary:sin_fragment_sloth",
+			"summy_reliquary:sin_fragment_lust",
+			"summy_reliquary:sin_fragment_greed",
+			"summy_reliquary_apocrypha:fallen_plume",
+			"summy_reliquary_apocrypha:scourged_heart",
+			"summy_reliquary_apocrypha:withered_brush",
+			"summy_reliquary_apocrypha:final_song");
+
+	private static final List<String> DEFAULT_MOD_BOSS_IDS = List.of(
+			"cataclysm:netherite_monstrosity", "cataclysm:ignis", "cataclysm:the_harbinger",
+			"cataclysm:ender_guardian", "cataclysm:the_leviathan", "cataclysm:ancient_remnant",
+			"cataclysm:maledictus", "cataclysm:scylla",
+			"twilightforest:naga", "twilightforest:lich", "twilightforest:minoshroom",
+			"twilightforest:hydra", "twilightforest:ur_ghast", "twilightforest:snow_queen",
+			"twilightforest:knight_phantom", "twilightforest:alpha_yeti",
+			"aether:slider", "aether:valkyrie_queen", "aether:sun_spirit",
+			"mowziesmobs:ferrous_wroughtnaut", "mowziesmobs:frostmaw", "mowziesmobs:umvuthi",
+			"mutantmonsters:mutant_zombie", "mutantmonsters:mutant_skeleton",
+			"mutantmonsters:mutant_creeper", "mutantmonsters:mutant_enderman",
+			"irons_spellbooks:dead_king", "irons_spellbooks:fire_boss",
+			"iceandfire:fire_dragon", "iceandfire:ice_dragon", "iceandfire:lightning_dragon",
+			"iceandfire:hydra", "iceandfire:sea_serpent", "iceandfire:dread_lich", "iceandfire:dread_queen",
+			"goety:apostle", "goety:vizier", "goety:minister", "goety:hostile_redstone_monstrosity",
+			"meetyourfight:bellringer", "meetyourfight:dame_fortuna", "meetyourfight:swampjaw",
+			"meetyourfight:rosalyne", "bosses_of_mass_destruction:lich",
+			"aquamirae:captain_cornelia", "theinkarena:ink_titan");
 
 	/** 玩家承伤日志开关（效仿 SRA 的 log_trigger） */
 	public static final ForgeConfigSpec.BooleanValue LOG_PLAYER_TAKEN;
@@ -319,11 +427,90 @@ public final class Config {
 		ATK_SCALE_FULL = builder.defineInRange("atk_scale_full", 1.00D, 0.0D, 1.0D);
 		builder.pop();
 
-		builder.comment("调试：全局 TL（-1 = 不接管；0~20 = 接管并指定 TL）。运行期用 /summythreat tl 修改，重启复位。")
+		builder.comment("PCF / CDF（交接文档 §5.0；PCF CDF 定义补全.md）：玩家进度与区块难度共同决定 TL。")
+				.push("player_challenge_factor");
+		PCF_EQUIPMENT_WEIGHT = builder.defineInRange("equipment_weight", 0.30D, 0.0D, 1.0D);
+		PCF_BOSS_WEIGHT = builder.defineInRange("boss_weight", 0.25D, 0.0D, 1.0D);
+		PCF_EXPLORATION_WEIGHT = builder.defineInRange("exploration_weight", 0.20D, 0.0D, 1.0D);
+		PCF_RESOURCE_WEIGHT = builder.defineInRange("resource_weight", 0.25D, 0.0D, 1.0D);
+		PCF_SMOOTHING = builder.defineInRange("pcf_smoothing", 0.30D, 0.0D, 1.0D);
+		PCF_RESET_LOCK_DAYS = builder.defineInRange("reset_lock_days", 3, 0, 1000);
+		PCF_RESET_LOCK_CAP = builder.defineInRange("reset_lock_cap", 3.0D, 0.0D, 20.0D);
+		PCF_ARMOR_PER_POINT = builder.defineInRange("armor_per_point", 0.64D, 0.0D, 100.0D);
+		PCF_ARMOR_CAP = builder.defineInRange("armor_cap", 12.0D, 0.0D, 100.0D);
+		PCF_ATTACK_PER_POINT = builder.defineInRange("attack_per_point", 0.8D, 0.0D, 100.0D);
+		PCF_ATTACK_CAP = builder.defineInRange("attack_cap", 8.0D, 0.0D, 100.0D);
+		PCF_ENCHANT_PER_LEVEL = builder.defineInRange("enchant_per_level", 0.4D, 0.0D, 100.0D);
+		PCF_ENCHANT_CAP = builder.defineInRange("enchant_cap", 4.0D, 0.0D, 100.0D);
+		PCF_BOSS_CAP = builder.defineInRange("boss_cap", 20.0D, 0.0D, 100.0D);
+		PCF_BOSS_SCORE_ENDER_DRAGON = builder.defineInRange("boss_score_ender_dragon", 7.0D, 0.0D, 100.0D);
+		PCF_BOSS_SCORE_WITHER = builder.defineInRange("boss_score_wither", 7.0D, 0.0D, 100.0D);
+		PCF_BOSS_SCORE_WARDEN = builder.defineInRange("boss_score_warden", 4.0D, 0.0D, 100.0D);
+		PCF_BOSS_SCORE_ELDER_GUARDIAN = builder.defineInRange("boss_score_elder_guardian", 2.0D, 0.0D, 100.0D);
+		PCF_BOSS_SCORE_MOD = builder.defineInRange("boss_score_mod", 4.0D, 0.0D, 100.0D);
+		PCF_NETHER_ENTRY_SCORE = builder.defineInRange("nether_entry_score", 4.0D, 0.0D, 100.0D);
+		PCF_END_ENTRY_SCORE = builder.defineInRange("end_entry_score", 4.0D, 0.0D, 100.0D);
+		PCF_BIOME_PER_NEW = builder.defineInRange("biome_per_new", 0.5D, 0.0D, 100.0D);
+		PCF_BIOME_CAP = builder.defineInRange("biome_cap", 8.0D, 0.0D, 100.0D);
+		PCF_DIAMOND_PER_UNIT = builder.defineInRange("diamond_per_unit", 0.3D, 0.0D, 100.0D);
+		PCF_DIAMOND_CAP = builder.defineInRange("diamond_cap", 8.0D, 0.0D, 100.0D);
+		PCF_DEBRIS_PER_UNIT = builder.defineInRange("debris_per_unit", 1.0D, 0.0D, 100.0D);
+		PCF_DEBRIS_CAP = builder.defineInRange("debris_cap", 8.0D, 0.0D, 100.0D);
+		PCF_MOD_MATERIAL_PER_UNIT = builder.defineInRange("mod_material_per_unit", 0.5D, 0.0D, 100.0D);
+		PCF_MOD_MATERIAL_CAP = builder.defineInRange("mod_material_cap", 4.0D, 0.0D, 100.0D);
+		PCF_DIAMOND_DIMINISH_1 = builder.defineInRange("diamond_diminish_1", 10, 1, 100000);
+		PCF_DIAMOND_DIMINISH_2 = builder.defineInRange("diamond_diminish_2", 30, 1, 100000);
+		PCF_BIOME_DIMINISH_1 = builder.defineInRange("biome_diminish_1", 10, 1, 100000);
+		PCF_BIOME_DIMINISH_2 = builder.defineInRange("biome_diminish_2", 20, 1, 100000);
+		PCF_MOD_BOSS_IDS = builder.defineListAllowEmpty("mod_boss_ids", DEFAULT_MOD_BOSS_IDS,
+				element -> element instanceof String);
+		PCF_MOD_MATERIAL_IDS = builder.defineListAllowEmpty("mod_material_ids", DEFAULT_MOD_MATERIAL_IDS,
+				element -> element instanceof String);
+		builder.pop();
+
+		builder.comment("CDF：区块难度因子。每秒上升，玩家离开后按时间戳衰减。")
+				.push("chunk_difficulty_factor");
+		CDF_RISE_RATE = builder.defineInRange("rise_rate", 0.01D, 0.0D, 1.0D);
+		CDF_KILL_RISE_BONUS = builder.defineInRange("kill_rise_bonus", 0.005D, 0.0D, 1.0D);
+		CDF_KILL_RISE_MAX_BONUS = builder.defineInRange("kill_rise_max_bonus", 0.05D, 0.0D, 1.0D);
+		CDF_DEATH_RISE_PENALTY = builder.defineInRange("death_rise_penalty", 0.10D, 0.0D, 1.0D);
+		CDF_DEATH_PENALTY_DURATION = builder.defineInRange("death_penalty_duration", 60, 0, 100000);
+		CDF_DECAY_RATE = builder.defineInRange("decay_rate", 0.0002D, 0.0D, 1.0D);
+		CDF_DECAY_FLOOR_RATIO = builder.defineInRange("decay_floor_ratio", 0.20D, 0.0D, 1.0D);
+		CDF_LEGACY_CHUNK_INIT_RATIO = builder.defineInRange("legacy_chunk_init_ratio", 0.5D, 0.0D, 1.0D);
+		builder.pop();
+
+		builder.comment("多人 PCF 选取（128 格内玩家集合）。")
+				.push("multiplayer");
+		MULTIPLAYER_NORMAL_PCF_MODE = builder.define("normal_pcf_mode", "weighted");
+		MULTIPLAYER_WEIGHTED_MIN_WEIGHT = builder.defineInRange("weighted_min_weight", 0.7D, 0.0D, 1.0D);
+		MULTIPLAYER_ELITE_HIGH_WEIGHT = builder.defineInRange("elite_high_weight", 0.5D, 0.0D, 1.0D);
+		MULTIPLAYER_BOSS_ANCHOR = builder.define("boss_anchor", "highest");
+		MULTIPLAYER_PLAYER_DETECTION_RADIUS = builder.defineInRange("player_detection_radius", 128, 1, 512);
+		builder.pop();
+
+		builder.comment("区域修正倍率与区域首领 TL 上限；普通怪 / 卓越者只受 20 硬上限。")
+				.push("region_multiplier");
+		REGION_MULTIPLIER_SPAWN_PROTECTION = builder.defineInRange("spawn_protection", 0.5D, 0.0D, 100.0D);
+		REGION_MULTIPLIER_NORMAL_BIOME = builder.defineInRange("normal_biome", 1.0D, 0.0D, 100.0D);
+		REGION_MULTIPLIER_NETHER_END = builder.defineInRange("nether_end", 1.2D, 0.0D, 100.0D);
+		REGION_MULTIPLIER_STRUCTURE = builder.defineInRange("structure", 1.5D, 0.0D, 100.0D);
+		REGION_MULTIPLIER_SPAWNER = builder.defineInRange("spawner", 0.3D, 0.0D, 100.0D);
+		builder.pop();
+
+		builder.push("region_tl_cap");
+		REGION_TL_CAP_SPAWN_PROTECTION = builder.defineInRange("spawn_protection", 12, 0, 20);
+		REGION_TL_CAP_NORMAL_BIOME = builder.defineInRange("normal_biome", 12, 0, 20);
+		REGION_TL_CAP_NETHER_END = builder.defineInRange("nether_end", 14, 0, 20);
+		REGION_TL_CAP_STRUCTURE = builder.defineInRange("structure", 15, 0, 20);
+		REGION_TL_CAP_SPAWNER = builder.defineInRange("spawner", 12, 0, 20);
+		builder.pop();
+
+		builder.comment("调试：全局 TL（-2 = 完全关闭；-1 = 自动 PCF/CDF；0~20 = 手动覆盖）。运行期用 /summythreat tl 修改，重启复位。")
 				.push("scaling_debug");
 		SCALING_GLOBAL_TL = builder
-				.comment("启动时的默认全局 TL；-1 表示关闭怪物侧接管")
-				.defineInRange("global_tl", -1, -1, 20);
+				.comment("启动时的默认全局 TL；-2 关闭，-1 自动 PCF/CDF")
+				.defineInRange("global_tl", -1, -2, 20);
 		builder.pop();
 
 		builder.comment("战斗日志（效仿 SRA 的 log_trigger）：只影响日志输出，不影响统计与结算。")
