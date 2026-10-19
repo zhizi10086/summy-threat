@@ -134,6 +134,9 @@ public final class Config {
 	/** 调试：全局 TL（-2 = 完全关闭；-1 = 自动 PCF/CDF；0~20 = 手动覆盖） */
 	public static final ForgeConfigSpec.IntValue SCALING_GLOBAL_TL;
 
+	/** SR 固定伤害的跨模组增伤兼容开关 */
+	public static final ForgeConfigSpec.BooleanValue ENABLE_RELIQUARY_FIXED_DAMAGE_BOOSTS;
+
 	// ================= PCF / CDF（v2.34） =================
 	/** PCF 四项权重 */
 	public static final ForgeConfigSpec.DoubleValue PCF_EQUIPMENT_WEIGHT;
@@ -521,6 +524,15 @@ public final class Config {
 		SCALING_GLOBAL_TL = builder
 				.comment("启动时的默认全局 TL；-2 关闭，-1 自动 PCF/CDF")
 				.defineInRange("global_tl", -1, -2, 20);
+		builder.pop();
+
+		builder.comment(
+				"SR 固定伤害兼容：只处理 7 项写死数值的固定伤害（5 项 isDivine + 2 项 isExactDamage）。",
+				"默认关闭；开启后 5 项补 SR/SE 全伤害增伤，2 项只补 SE 死神祝福，不处理近战/命中专属乘区。")
+				.push("reliquary_compat");
+		ENABLE_RELIQUARY_FIXED_DAMAGE_BOOSTS = builder
+				.comment("启用 SR 固定伤害的全伤害增伤兼容")
+				.define("enable_fixed_damage_boosts", false);
 		builder.pop();
 
 		builder.comment("战斗日志（效仿 SRA 的 log_trigger）：只影响日志输出，不影响统计与结算。")

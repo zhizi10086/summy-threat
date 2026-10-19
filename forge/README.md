@@ -61,9 +61,9 @@ EA = A + (A×T)/15
 当前已实装数值表、PCF/CDF、TL 能力池、卓越护盾、8 个卓越者原型与 5% 自然刷新；
 完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲、SR 背叛仍未实装。
 
-**当前状态（v2.35）**：
+**当前状态（v2.37）**：
 
-- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型、回响下界合金四件、玩家护盾 HUD、承伤日志。
+- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型、回响下界合金四件、玩家护盾 HUD、承伤日志、SR 固定伤害全伤害增伤兼容（默认关闭；5 项 isDivine 补 SR+SE，2 项 isExactDamage 只补 SE）。
 - 未完成：领袖 / Boss / 超级 Boss 能力池、龙 / 凋灵 / 古守攻击接管、
   穿甲削甲、SR 背叛、卓越者精华获取、回响套正式贴图/模型。
 - 历史验证记录保留原样；以后续“当前状态”与内部《缺失项清单》为准。
@@ -191,8 +191,20 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `region_multiplier.*` / `region_tl_cap.*` | double/int | 区域倍率与区域首领 TL 上限 | 见配置文件 |
 | `combat_log.log_player_taken` | boolean | `true` | 无 |
 | `tl_abilities.enable_tl_abilities` | boolean | `true` | 无 |
+| `reliquary_compat.enable_fixed_damage_boosts` | boolean | `false` | 开启后为 7 项 SR 固定伤害补全伤害增伤 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
+
+**SR 固定伤害兼容（v2.37）**：只处理 7 项写死数值的伤害——
+`holy_light_burst`、`golden_razor`、`revelation_light`、`demon_flame`、`abyss_aura`
+补 SR 暴怒/嫉妒/谦逊/最终乘区、思想/咒印发光 +10%、玄秘魔眼注视 ×1.3、恶魔王冠
+`hell_locked` 条件加伤与 SE 死神祝福；`godhead_aura`、`sacrifice` 不重复乘 SR 核心全伤害，
+但同样获得上述 `SpiritAltarSet` 条件层与 SE 死神祝福。
+`holy_light`（基于原攻击伤害）、`hellfire`（按等级变化）、`pact_shatter`、`sacrifice_self` 不在本轮范围。
+兼容层不调用 `SinEffects.modifyOutgoingDamage`，因此不会触发暴怒自伤、色欲脱甲或贪婪惩罚；
+SE 复仇是剑/斧/三叉戟近战专属，不作用于固定伤害。SRA 凋亡的“损伤状态受伤 +N%”与
+额外元素附伤照常作用于 7 项固定伤害，但 SRA 侧会排除 7 项固定伤害的推凋亡条、削抵抗与笞心斩杀副作用。
+SR/SE 未安装或反射接口缺失时按 1.0 处理，不影响正常伤害。
 
 ## 自检入口
 

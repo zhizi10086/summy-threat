@@ -277,6 +277,12 @@ public final class SummyThreatCommand {
 	}
 
 	private static int setTl(CommandContext<CommandSourceStack> ctx, int tl) {
+		// 手动 TL 写回配置：free set 等操作会保存并触发配置重载，
+		// 只改运行期字段会在重载时被 global_tl 默认值覆盖。
+		Config.SCALING_GLOBAL_TL.set(tl);
+		if (Config.SPEC.isLoaded()) {
+			Config.SPEC.save();
+		}
 		ScalingState.setGlobalTl(tl);
 		String suffix = tl == -2
 				? "新刷的敌对生物不会数值化"
