@@ -46,7 +46,8 @@ import java.util.Locale;
  * 调试 / 测量命令：{@code /summythreat ...}（OP 2 级）。
  *
  * <ul>
- *     <li>{@code tier [mode]}：查看或强制生态档位（auto / none / sr / se / sr_apocrypha / se_sr / full）。</li>
+ *     <li>{@code tier [mode]}：查看或强制生态档位（auto / none / sr / se / sr_apocrypha / se_sr / full / free）。</li>
+ *     <li>{@code free list|get|set}：查看或修改 free 档白名单内的成长缩放参数。</li>
  *     <li>{@code tl [0-20|auto|off]}：查看或设置全局 TL（auto = PCF/CDF，off = 完全关闭）。</li>
  *     <li>{@code pcf [玩家]} / {@code pcf set <玩家> <0-20>}：查看或调试 PCF。</li>
  *     <li>{@code cdf} / {@code cdf <0-20>}：查看或调试当前区块 CDF。</li>
@@ -69,6 +70,15 @@ public final class SummyThreatCommand {
 				.requires(source -> source.hasPermission(2))
 				.then(Commands.literal("tier")
 						.executes(SummyThreatCommand::showTier)
+						.then(Commands.literal("free")
+								.executes(ctx -> setTier(ctx, "free"))
+								.then(Commands.argument("hp", DoubleArgumentType.doubleArg(0.0D, 2.0D))
+										.executes(ctx -> setFreeTier(ctx,
+												DoubleArgumentType.getDouble(ctx, "hp"), null))
+										.then(Commands.argument("atk", DoubleArgumentType.doubleArg(0.0D, 2.0D))
+												.executes(ctx -> setFreeTier(ctx,
+														DoubleArgumentType.getDouble(ctx, "hp"),
+														DoubleArgumentType.getDouble(ctx, "atk"))))))
 						.then(Commands.argument("mode", StringArgumentType.word())
 								.executes(ctx -> setTier(ctx, StringArgumentType.getString(ctx, "mode")))))
 				.then(Commands.literal("tl")
@@ -89,6 +99,29 @@ public final class SummyThreatCommand {
 						.executes(SummyThreatCommand::showCdf)
 						.then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0D, 20.0D))
 								.executes(SummyThreatCommand::setCdf)))
+				.then(Commands.literal("free")
+						.executes(ctx -> listFreeGroup(ctx, null))
+						.then(Commands.literal("list")
+								.executes(ctx -> listFreeGroup(ctx, null))
+								.then(Commands.argument("group", StringArgumentType.word())
+										.suggests((ctx, builder) ->
+												net.minecraft.commands.SharedSuggestionProvider.suggest(
+														FreeTierSettings.groups(), builder))
+										.executes(ctx -> listFreeGroup(ctx,
+												StringArgumentType.getString(ctx, "group")))))
+						.then(Commands.literal("get")
+								.then(Commands.argument("key", StringArgumentType.word())
+										.suggests((ctx, builder) ->
+												net.minecraft.commands.SharedSuggestionProvider.suggest(
+														FreeTierSettings.keys(), builder))
+										.executes(SummyThreatCommand::getFree)))
+						.then(Commands.literal("set")
+								.then(Commands.argument("key", StringArgumentType.word())
+										.suggests((ctx, builder) ->
+												net.minecraft.commands.SharedSuggestionProvider.suggest(
+														FreeTierSettings.keys(), builder))
+										.then(Commands.argument("value", StringArgumentType.word())
+												.executes(SummyThreatCommand::setFree)))))
 				.then(Commands.literal("spawnstats")
 						.executes(SummyThreatCommand::showSpawnStats)
 						.then(Commands.literal("reset").executes(SummyThreatCommand::resetSpawnStats))
@@ -158,7 +191,8 @@ public final class SummyThreatCommand {
 			mode = Config.TierMode.valueOf(raw.toUpperCase(Locale.ROOT));
 		} catch (IllegalArgumentException e) {
 			ctx.getSource().sendFailure(Component.literal(
-					"未知档位：%s（可用：auto / none / sr / se / sr_apocrypha / se_sr / full）".formatted(raw)));
+					"未知档位：%s（可用：auto / none / sr / se / sr_apocrypha / se_sr / full / free）"
+							.formatted(raw)));
 			return 0;
 		}
 		Config.ENVIRONMENT_TIER_MODE.set(mode);
@@ -167,6 +201,70 @@ public final class SummyThreatCommand {
 				"[Summy Threat] 档位模式已设为 %s（实际档位 %s，r_hp=%.2f，r_atk=%.2f）".formatted(
 						mode, ScalingState.tier(), ScalingState.rHp(), ScalingState.rAtk())), true);
 		return 1;
+	}
+
+	/** tier free [hp] [atk]：先写 free 系数，再切换档位；两个参数都可省略。 */
+	private static int setFreeTier(CommandContext<CommandSourceStack> ctx, double hp, Double atk) {
+		try {
+			if (atk == null) {
+				FreeTierSettings.set("core.hp", Double.toString(hp));
+			} else {
+				FreeTierSettings.setCore(hp, atk);
+			}
+		} catch (IllegalArgumentException exception) {
+			ctx.getSource().sendFailure(Component.literal("[Summy Threat] " + exception.getMessage()));
+			return 0;
+		}
+		return setTier(ctx, "free");
+	}
+
+	/** free / free list [group]：无分组时列出分组，有分组时列出该组键与当前值。 */
+	private static int listFreeGroup(CommandContext<CommandSourceStack> ctx, String group) {
+		if (group == null) {
+			ctx.getSource().sendSuccess(() -> Component.literal(
+					"[Summy Threat] free 配置分组：" + String.join(" / ", FreeTierSettings.groups())), false);
+			ctx.getSource().sendSuccess(() -> Component.literal(
+					"用法：/summythreat free list <group>；/summythreat free get <key>；/summythreat free set <key> <value>"), false);
+			return 1;
+		}
+		try {
+			ctx.getSource().sendSuccess(() -> Component.literal(
+					"[Summy Threat] free 分组 " + group + "：" + FreeTierSettings.describeGroup(group)), false);
+			for (String line : FreeTierSettings.list(group)) {
+				ctx.getSource().sendSuccess(() -> Component.literal("  " + line), false);
+			}
+			return 1;
+		} catch (IllegalArgumentException exception) {
+			ctx.getSource().sendFailure(Component.literal("[Summy Threat] " + exception.getMessage()));
+			return 0;
+		}
+	}
+
+	private static int getFree(CommandContext<CommandSourceStack> ctx) {
+		String key = StringArgumentType.getString(ctx, "key");
+		try {
+			ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] " + FreeTierSettings.get(key)), false);
+			return 1;
+		} catch (IllegalArgumentException exception) {
+			ctx.getSource().sendFailure(Component.literal("[Summy Threat] " + exception.getMessage()));
+			return 0;
+		}
+	}
+
+	private static int setFree(CommandContext<CommandSourceStack> ctx) {
+		String key = StringArgumentType.getString(ctx, "key");
+		String value = StringArgumentType.getString(ctx, "value");
+		try {
+			String message = FreeTierSettings.set(key, value);
+			String suffix = ScalingState.tier() == ScalingState.Tier.FREE
+					? ""
+					: "（已保存；当前不是 free，切换到 free 后生效）";
+			ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] " + message + suffix), true);
+			return 1;
+		} catch (IllegalArgumentException exception) {
+			ctx.getSource().sendFailure(Component.literal("[Summy Threat] " + exception.getMessage()));
+			return 0;
+		}
 	}
 
 	private static int showTl(CommandContext<CommandSourceStack> ctx) {

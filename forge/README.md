@@ -57,13 +57,13 @@ EA = A + (A×T)/15
 
 ## 已实现③：基础数值表 + 生态分档 + 测量命令
 
-口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.34 的 §4~§8。
+口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.35 的 §4~§8。
 当前已实装数值表、PCF/CDF、TL 能力池、卓越护盾、8 个卓越者原型与 5% 自然刷新；
 完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲、SR 背叛仍未实装。
 
-**当前状态（v2.34）**：
+**当前状态（v2.35）**：
 
-- 已完成：TL 数值、PCF/CDF 与 TL 合成、卓越护盾、TL 能力、8 个卓越者原型、回响下界合金四件、玩家护盾 HUD、承伤日志。
+- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型、回响下界合金四件、玩家护盾 HUD、承伤日志。
 - 未完成：领袖 / Boss / 超级 Boss 能力池、龙 / 凋灵 / 古守攻击接管、
   穿甲削甲、SR 背叛、卓越者精华获取、回响套正式贴图/模型。
 - 历史验证记录保留原样；以后续“当前状态”与内部《缺失项清单》为准。
@@ -78,7 +78,7 @@ EA = A + (A×T)/15
 | 攻击 | A(TL)（1.0 → 16.44，v2.9）× 卓越者 1.25；区域首领 21.93 / 9.40 / 8.0（古守倍率当前无效）；Boss 3.29 / 4.0 / 3.0（末影龙 / 凋灵倍率当前无效） |
 | 移速 / 经验 | 卓越者 +5%；经验 ×2（`LivingExperienceDropEvent`） |
 | Jade 提示（可选） | 装 Jade 11.13+ 时两行显示：`[Summy Threat] TL 20 卓越者·烈焰`（普通单位不显示类型；卓越者追加原型名）/ `迅捷·力量`（能力名按解锁 TL 阶段上色：4-7 白、8-11 蓝、12-15 紫、16-20 金）；未装零影响 |
-| 卓越者原型 | 8 个专属原型（烈焰/冰霜/剧毒/电涌/震荡/守护/吸血/磁力）；前摇/推进柱/云团预警/守护 90% 转移；电涌 48 格跟随 + 路径容差 + 0.5 秒追踪后定身；云团每目标最多一团并优先脚下；震荡瞄准目标、裂地金柱但粒子短收尾；范围技能命中卓越者自身目标，冰霜/守护仅作用于 `Enemy` 友军 |
+| 卓越者原型 | 8 个专属原型（烈焰/冰霜/剧毒/电涌/震荡/守护/吸血/磁力）；前摇/推进柱/云团预警/守护 90% 转移；电涌 3 秒追踪预警 + 1 秒落点锁定、施法者不定身；云团每目标最多一团并优先脚下；震荡瞄准目标、裂地金柱但粒子短收尾；范围技能命中卓越者自身目标，冰霜/守护仅作用于 `Enemy` 友军 |
 | Boss 缩放 | **TL 曲线**（TL0 = 原版、TL20 = 现口径；监守者 TL0/10/20 = 500 / 7,620 / 35,000 血） |
 | PCF / CDF | 玩家四因子 PCF（装备 / Boss / 探索 / 资源，5 秒平滑）+ 区块 CDF（每秒上升、无玩家衰减、区块 NBT 持久化）；区域倍率与区域首领 TL 上限按文档生效 |
 | TL 能力 | 按 TL 区间抽 0/1/2/3/4 个（卓越者 +1），14 个效果；`/summythreat spawn … <ability>` 覆盖、`/summythreat ability` 挂载 |
@@ -90,8 +90,11 @@ EA = A + (A×T)/15
 | 原版领队僵尸 | 剥离原版 `Leader zombie bonus` 的 MAX_HEALTH modifier（避免与 M/E/首领倍率相乘），保留 `spawn_reinforcements` 与破门；TL 关闭时补满当前生命；与区域首领不合并 |
 
 **生态分档（§5.0）**：检测 `summy_enchantment` / `summy_reliquary` / `summy_reliquary_apocrypha`
-（SRA 强制依赖 SR，共 6 档）；两维系数 `r_hp`（生命 / 护甲）与 `r_atk`（攻击 / 特殊伤害）：
-`none` 短路；`sr` 0.35/0.35、`se` 0.55/0.55、`sr_apocrypha` 0.55/**0.35**、`se_sr` 0.75/0.75、`full` 1.00/1.00。
+（SRA 强制依赖 SR，共 6 个预设档 + 1 个手动 `free` 档）；两维系数 `r_hp`（生命 / 护甲）与
+`r_atk`（攻击 / 特殊伤害）：`none` 短路；`sr` 0.35/0.35、`se` 0.55/0.55、
+`sr_apocrypha` 0.55/**0.35**、`se_sr` 0.75/0.75、`full` 1.00/1.00。
+`free` 默认 0.50/0.50，可在 0~2 内自由设置；`AUTO` 在三件套都缺失时仍返回 `none`，
+free 必须由玩家显式选择，即使安装了 SR/SE/SRA 也允许强制使用。
 缩放公式 `v' = 1 + (v − 1) × r`；怪物护甲先把 EA 截断到 100，再压 `有效EA' = 1 + (有效EA − 1) × r_hp`
 （`r_hp = 1` 时与原来的减伤完全等价，设计期计算器的对照不受影响）。
 
@@ -101,7 +104,11 @@ EA = A + (A×T)/15
 **测量命令**（OP 2 级，配合实机校准）：
 
 ```
-/summythreat tier [mode]        查看 / 强制档位（auto / none / sr / se / sr_apocrypha / se_sr / full）
+/summythreat tier [mode]        查看 / 强制档位（auto / none / sr / se / sr_apocrypha / se_sr / full / free）
+/summythreat tier free [hp] [atk]  选择 free，可同时写入 0~2 的 r_hp / r_atk
+/summythreat free list [group] 查看 free 白名单分组或组内当前值
+/summythreat free get <key>    读取一个 free 白名单键
+/summythreat free set <key> <value> 写入一个 free 白名单键（沿用该键原有类型与范围）
 /summythreat tl [0-20|auto|off] 查看 / 设置全局 TL（auto = PCF/CDF，off = 关闭）
 /summythreat pcf [玩家]         查看 PCF 四项分数、平滑值与选中值
 /summythreat pcf set <玩家> <0-20>  调试设置 PCF
@@ -114,6 +121,10 @@ EA = A + (A×T)/15
 /summythreat shield [0-100]                             查看/设置自己的玩家卓越护盾（调试用）
 /summythreat stats [玩家]       查看计量：有效 DPS / 击杀耗时 / 无视护甲占比 / 护盾吸收 / 承伤 / 致死次数
 ```
+
+`free` 命令的分组为 `core / pcf / cdf / multiplayer / region_multiplier / region_tl_cap / leader / boss`；
+它只复用现有全局缩放键，不复制第二套参数；三张 21 级 TL 表、列表键、卓越者/属性上限/战斗日志/能力配置
+不在白名单内。`free set` 成功后会写入存档的 `serverconfig/summy_threat-server.toml` 并保留当前手动 TL。
 
 每次击杀被数值化的怪会在服务端日志输出一行摘要（含有效 DPS 与无视护甲占比），便于 RCON 脚本抓取。
 
@@ -171,8 +182,8 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `boss_health.warden` / `ender_dragon` / `wither` | double | `70` / `175` / `117` | 1.0 ~ 10000.0 |
 | `boss_health.warden_melee_attack` / `ender_dragon_attack` / `wither_attack` | double | `3.29` / `4.0` / `3.0`（龙 / 凋灵当前无效） | 0.0 ~ 1000.0 |
 | `boss_health.default_effective_dps` | double | `700.0` | 1.0 ~ 100000.0 |
-| `environment_tier.mode` | enum | `auto` | auto / none / sr / se / sr_apocrypha / se_sr / full |
-| `environment_tier.hp_scale_*` / `atk_scale_*` | double | `0.35` / `0.55` / `0.55`(**攻击 0.35**) / `0.75` / `1.00` | 0.0 ~ 1.0 |
+| `environment_tier.mode` | enum | `auto` | auto / none / sr / se / sr_apocrypha / se_sr / full / free |
+| `environment_tier.hp_scale_*` / `atk_scale_*` | double | `0.35` / `0.55` / `0.55`(**攻击 0.35**) / `0.75` / `1.00` / **free 0.50** | 预设 0.0 ~ 1.0；free 0.0 ~ 2.0 |
 | `scaling_debug.global_tl` | int | `-1`（自动 PCF/CDF） | -2 ~ 20 |
 | `player_challenge_factor.*` | double/list | 四因子权重、装备/Boss/探索/资源分、`mod_boss_ids`、`mod_material_ids` | 见配置文件 |
 | `chunk_difficulty_factor.*` | double | 上升/衰减/击杀/死亡参数 | 见配置文件 |
@@ -274,7 +285,7 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 
 ## 验证记录
 
-> 以下为各轮次历史记录；旧轮次的“未做 / 未包含”不代表当前状态，当前状态见上方 v2.34 块。
+> 以下为各轮次历史记录；旧轮次的“未做 / 未包含”不代表当前状态，当前状态见上方 v2.35 块。
 
 ### PCF / CDF + TL 合成（2026-10-17，v2.34，构建 / RCON）
 
@@ -292,7 +303,7 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | --- | --- |
 | `gradlew build` + `verifyMixinTargets` | 通过；产物 **772,224 字节**；已复制到 `JAR/summy-threat-forge/` |
 | 多目标索敌 | 每个目标最多一个实例；玩家优先、其次距离；不足槽位随机补位；后续多目标技能复用 |
-| 电涌落雷 | 先 0.5 秒追踪（不根定），再 1 秒预警 + 1.5 秒锁定（定身），落点使用追踪末位置 |
+| 电涌落雷 | 前 3 秒追踪并同步预警（施法者不定身），随后 1 秒落点锁定并落雷；落雷命中除施法者外所有活体 |
 | 云团 | 3 团云优先每个唯一目标脚下一团，不足随机；同目标不会拿到两团 |
 | 震荡 | 施法开始瞄准当前目标；0.4/0.6/0.2 判定不变；激活粒子仅首 1~2 tick 密集发射 |
 | 未做（需你实机） | 电涌追踪观感；多目标云团落点；震荡瞄准与非视线目标的命中；粒子残留是否仍偏长 |
@@ -328,6 +339,7 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | Jade | 第一行 `[Summy Threat] TL 20 卓越者·烈焰`；第二行能力名按解锁阶段上色 |
 | 玩家护盾 HUD | 改为真正的青色条（`RenderGuiEvent.Post` + 自定义同步包），替换原紫色 Boss 条 |
 | 目标口径 | 攻击技能命中卓越者自己的当前目标（僵尸追村民可命中）；冰霜/守护只作用于 `Enemy`，排除当前目标与背叛靶子 |
+| 10 倍伤害 | 仅 8 个原型技能；玩家与玩家友军 1×，其他非玩家原始伤害 10×；电涌落雷命中除施法者外所有活体 |
 | RCON 实测 | 剧毒 100→95、烈焰 100→55、冰盾 25、守护转移 54（自身再 −40%）、震荡 20、电涌 step +0.5（基础 0.6 → 1.1） |
 | 猪灵蛮兵口径发现 | 属性 **13.0**（含金斧），TL20 属性 **122.2**，困难命中再 ×1.5；旧“7.0 / 65.8”为空手推算，已校正 |
 | 回归 | `rcon_eximus_test`、`rcon_ability_test`、`rcon_armor_check`、`rcon_damage_test`、`rcon_scaling_test` 全绿 |

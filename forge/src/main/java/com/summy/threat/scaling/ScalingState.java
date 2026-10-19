@@ -8,7 +8,7 @@ import net.minecraftforge.fml.ModList;
  *
  * <p>口径见内部《Summy Threat — 核心数值系统交接文档》：
  * <ul>
- *     <li>§5.0 生态分档：none / sr / se / sr_apocrypha / se_sr / full；none 档怪物侧整体短路。</li>
+ *     <li>§5.0 生态分档：none / sr / se / sr_apocrypha / se_sr / full / free；none 档怪物侧整体短路。</li>
  *     <li>缩放公式 {@code v' = 1 + (v − 1) × r}；TL 0 恒为原版（M(0) = A(0) = 1.0）。</li>
  *     <li>§4 怪物护甲表（按 TL）——数值稳定，直接以常量保存。</li>
  * </ul>
@@ -17,8 +17,8 @@ import net.minecraftforge.fml.ModList;
  * {@code 0~20} 为手动覆盖（调试 / 测试）。
  */
 public final class ScalingState {
-	/** 三件套档位；SRA 强制依赖 SR，故"仅 SRA"不存在 */
-	public enum Tier { NONE, SR, SE, SR_APOCRYPHA, SE_SR, FULL }
+	/** 预设档位 + 手动自由档；SRA 强制依赖 SR，故"仅 SRA"不存在。 */
+	public enum Tier { NONE, SR, SE, SR_APOCRYPHA, SE_SR, FULL, FREE }
 
 	/** 怪物护甲表（交接文档 §4）：索引 = TL，[0] = A，[1] = T */
 	private static final double[][] MONSTER_ARMOR = {
@@ -65,6 +65,10 @@ public final class ScalingState {
 				rHp = Config.HP_SCALE_FULL.get();
 				rAtk = Config.ATK_SCALE_FULL.get();
 			}
+			case FREE -> {
+				rHp = Config.HP_SCALE_FREE.get();
+				rAtk = Config.ATK_SCALE_FREE.get();
+			}
 			case NONE -> {
 				// 短路档：系数不参与计算（保持 1.0，避免误用）
 				rHp = 1.0D;
@@ -73,6 +77,18 @@ public final class ScalingState {
 		}
 		globalTl = Config.SCALING_GLOBAL_TL.get();
 		initialized = true;
+	}
+
+	/**
+	 * 只刷新档位与两维系数，保留运行期用 /summythreat tl 设置的全局 TL。
+	 * 供 free 参数写入使用，避免改一个 PCF 数值就把当前 TL 覆盖回配置默认值。
+	 */
+	public static void refreshPreservingTl() {
+		int previous = globalTl;
+		refresh();
+		if (initialized) {
+			globalTl = previous;
+		}
 	}
 
 	/** 事件里调用；配置尚未加载时先补一次（例如世界加载早于 ServerStartedEvent） */

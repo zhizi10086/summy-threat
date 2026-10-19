@@ -111,8 +111,8 @@ public final class Config {
 	/** Mod Boss 反推用的默认目标 TTK（秒；后续 Mod Boss 支持落地后启用） */
 	public static final ForgeConfigSpec.DoubleValue DEFAULT_TARGET_TTK;
 
-	/** 生态档位模式 */
-	public enum TierMode { AUTO, NONE, SR, SE, SR_APOCRYPHA, SE_SR, FULL }
+	/** 生态档位模式；FREE 为手动自由档，AUTO 在无三件套时仍落到 NONE。 */
+	public enum TierMode { AUTO, NONE, SR, SE, SR_APOCRYPHA, SE_SR, FULL, FREE }
 
 	/** 生态档位：auto = 自动检测三件套，其余为强制档 */
 	public static final ForgeConfigSpec.EnumValue<TierMode> ENVIRONMENT_TIER_MODE;
@@ -127,6 +127,9 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue ATK_SCALE_SE_SR;
 	public static final ForgeConfigSpec.DoubleValue HP_SCALE_FULL;
 	public static final ForgeConfigSpec.DoubleValue ATK_SCALE_FULL;
+	/** 自由档：由玩家自行填写，允许 0~2 以适配其它模组的战力。 */
+	public static final ForgeConfigSpec.DoubleValue HP_SCALE_FREE;
+	public static final ForgeConfigSpec.DoubleValue ATK_SCALE_FREE;
 
 	/** 调试：全局 TL（-2 = 完全关闭；-1 = 自动 PCF/CDF；0~20 = 手动覆盖） */
 	public static final ForgeConfigSpec.IntValue SCALING_GLOBAL_TL;
@@ -409,8 +412,9 @@ public final class Config {
 
 		builder.comment(
 				"生态分档（交接文档 §5.0）：auto 检测 summy_enchantment / summy_reliquary / summy_reliquary_apocrypha，",
-				"SRA 强制依赖 SR，故共 6 档；none 档怪物侧整体短路（不接管、不缩放）。",
-				"r_hp 管怪物生命 / 护甲，r_atk 管怪物攻击与特殊伤害；缩放公式 v' = 1 + (v − 1) × r。")
+				"SRA 强制依赖 SR，故为 6 个预设档 + 1 个手动 free 档；none 档怪物侧整体短路（不接管、不缩放）。",
+				"r_hp 管怪物生命 / 护甲，r_atk 管怪物攻击与特殊伤害；缩放公式 v' = 1 + (v − 1) × r。",
+				"free 为手动自由档：AUTO 不会自动选择它；玩家需显式使用 /summythreat tier free。")
 				.push("environment_tier");
 		ENVIRONMENT_TIER_MODE = builder
 				.comment("档位模式：auto = 自动检测；其余为强制档（供整合包 / 测试覆盖）")
@@ -425,6 +429,12 @@ public final class Config {
 		ATK_SCALE_SE_SR = builder.defineInRange("atk_scale_se_sr", 0.75D, 0.0D, 1.0D);
 		HP_SCALE_FULL = builder.defineInRange("hp_scale_full", 1.00D, 0.0D, 1.0D);
 		ATK_SCALE_FULL = builder.defineInRange("atk_scale_full", 1.00D, 0.0D, 1.0D);
+		HP_SCALE_FREE = builder
+				.comment("自由档 r_hp；仅 mode=free 时生效，允许 0~2 以适配其它模组")
+				.defineInRange("hp_scale_free", 0.50D, 0.0D, 2.0D);
+		ATK_SCALE_FREE = builder
+				.comment("自由档 r_atk；仅 mode=free 时生效，允许 0~2 以适配其它模组")
+				.defineInRange("atk_scale_free", 0.50D, 0.0D, 2.0D);
 		builder.pop();
 
 		builder.comment("PCF / CDF（交接文档 §5.0；PCF CDF 定义补全.md）：玩家进度与区块难度共同决定 TL。")
