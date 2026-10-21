@@ -24,8 +24,10 @@ import top.theillusivec4.curios.api.CuriosApi;
 import top.theillusivec4.curios.api.type.inventory.ICurioStacksHandler;
 import top.theillusivec4.curios.api.type.inventory.IDynamicStackHandler;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Dev-only：其余 7 个原型的核心行为。
@@ -44,6 +46,9 @@ public final class ArchetypeRuleDevCheck {
 	private static ServerPlayer player;
 	private static Zombie owner;
 	private static Zombie ally;
+	private static long flameCooldownSpan = -1L;
+	private static long shockCooldownSpan = -1L;
+	private static long cloudCooldownSpan = -1L;
 
 	private ArchetypeRuleDevCheck() {
 	}
@@ -57,6 +62,7 @@ public final class ArchetypeRuleDevCheck {
 		player = event.getServer().getPlayerList().getPlayers().get(0);
 		tick++;
 		try {
+			observeCooldowns();
 			switch (tick) {
 				case 20 -> prepare();
 				case 40 -> spawnFlame();
@@ -70,10 +76,10 @@ public final class ArchetypeRuleDevCheck {
 				case 460 -> spawnGuardian();
 				case 520 -> checkGuardian();
 				case 540 -> spawnVampire();
-				case 660 -> checkVampire();
-				case 680 -> spawnMagnet();
-				case 760 -> checkMagnet();
-				case 780 -> finish("完成");
+				case 680 -> checkVampire();
+				case 700 -> spawnMagnet();
+				case 780 -> checkMagnet();
+				case 800 -> finish("完成");
 				default -> {
 				}
 			}
@@ -108,6 +114,7 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void spawnFlame() {
 		beginCase();
+		flameCooldownSpan = -1L;
 		owner = spawnEximus("flame", 306.0D);
 		owner.setTarget(player);
 		log("烈焰已生成");
@@ -115,6 +122,7 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void checkFlame() {
 		checkPlayerDamaged("烈焰火圈命中玩家", 0.1F);
+		checkCooldown("烈焰冷却 180 tick", flameCooldownSpan, 180L);
 		endCase();
 	}
 
@@ -132,6 +140,7 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void spawnShock() {
 		beginCase();
+		shockCooldownSpan = -1L;
 		owner = spawnEximus("shock", 305.0D);
 		owner.setTarget(player);
 		log("震荡已生成");
@@ -139,6 +148,7 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void checkShock() {
 		checkPlayerDamaged("震荡冲击柱命中玩家", 0.1F);
+		checkCooldown("震荡冷却 160 tick", shockCooldownSpan, 160L);
 		endCase();
 	}
 
@@ -153,6 +163,18 @@ public final class ArchetypeRuleDevCheck {
 		double shield = ally.getPersistentData().getDouble("summy_threat:frost_shield");
 		check("冰霜：友军获得 25% 最大生命护盾", shield >= 200.0D,
 				"shield=%.1f max=%.1f".formatted(shield, ally.getMaxHealth()));
+		float healthBefore = ally.getHealth();
+		double shieldBefore = ally.getPersistentData().getDouble("summy_threat:frost_shield");
+		// 不用玩家来源，避免 FULL 环境把 SR/SE 的玩家增伤乘进固定测试金额。
+		ally.hurt(owner.damageSources().mobAttack(owner), 100.0F);
+		double shieldAfter = ally.getPersistentData().getDouble("summy_threat:frost_shield");
+		check("冰霜：100 物理伤害先被 50% 减伤，再由冰盾吸收",
+				Math.abs(ally.getHealth() - healthBefore) < 0.01F
+						&& Math.abs(shieldAfter - (shieldBefore - 50.0D)) < 1.0D,
+				"health %.1f→%.1f shield %.1f→%.1f".formatted(
+						healthBefore, ally.getHealth(), shieldBefore, shieldAfter));
+		check("冰霜：已有冰盾不会刷新", shieldAfter < shieldBefore,
+				"shield %.1f→%.1f".formatted(shieldBefore, shieldAfter));
 		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
 		boolean slowed = speed != null && speed.getModifiers().stream()
 				.anyMatch(modifier -> "summy_threat:frost_slow_speed".equals(modifier.getName()));
@@ -184,6 +206,7 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void spawnVampire() {
 		beginCase();
+		cloudCooldownSpan = -1L;
 		owner = spawnEximus("vampire", 304.0D);
 		owner.setHealth(1000.0F);
 		owner.setTarget(player);
@@ -194,6 +217,15 @@ public final class ArchetypeRuleDevCheck {
 		checkPlayerDamaged("吸血云团命中玩家", 0.1F);
 		check("吸血：主人回复生命", owner.getHealth() > 1000.0F,
 				"owner health=%.1f".formatted(owner.getHealth()));
+		Object clouds = mapValue("CLOUDS", owner.getUUID());
+		List<?> list = clouds instanceof List<?> raw ? raw : List.of();
+		boolean windowOk = !list.isEmpty();
+		for (Object cloud : list) {
+			windowOk &= ((long) field(cloud, "end") - (long) field(cloud, "armUntil")) == 200L;
+		}
+		check("云团：预警 1.5 秒后生效 10 秒（200 tick）", windowOk,
+				"clouds=" + list.size());
+		checkCooldown("云团生成间隔 160 tick", cloudCooldownSpan, 160L);
 		endCase();
 	}
 
@@ -266,6 +298,61 @@ public final class ArchetypeRuleDevCheck {
 			FAILURES.add(label);
 		}
 		log((ok ? "OK  " : "FAIL") + " " + label + "｜" + detail);
+	}
+
+	private static void checkCooldown(String label, long actual, long expected) {
+		check(label, actual == expected, "actual=" + actual + " expected=" + expected);
+	}
+
+	/** 在状态首次出现时记录“开始 → ready”的真实跨度，避免固定 tick 推断受服务器相位影响。 */
+	private static void observeCooldowns() {
+		if (owner == null) {
+			return;
+		}
+		if (flameCooldownSpan < 0L) {
+			Object cast = mapValue("FLAME", owner.getUUID());
+			Object ready = mapValue("FLAME_READY", owner.getUUID());
+			if (cast != null && ready instanceof Long readyAt) {
+				flameCooldownSpan = readyAt - (long) field(cast, "start");
+			}
+		}
+		if (shockCooldownSpan < 0L) {
+			Object cast = mapValue("SHOCK", owner.getUUID());
+			Object ready = mapValue("SHOCK_READY", owner.getUUID());
+			if (cast != null && ready instanceof Long readyAt) {
+				shockCooldownSpan = readyAt - (long) field(cast, "start");
+			}
+		}
+		if (cloudCooldownSpan < 0L) {
+			Object rawClouds = mapValue("CLOUDS", owner.getUUID());
+			Object ready = mapValue("NEXT_CLOUD", owner.getUUID());
+			if (rawClouds instanceof List<?> clouds && !clouds.isEmpty() && ready instanceof Long readyAt) {
+				long armUntil = (long) field(clouds.get(0), "armUntil");
+				long spawnedAt = armUntil - 30L;
+				cloudCooldownSpan = readyAt - spawnedAt;
+			}
+		}
+	}
+
+	private static Object mapValue(String fieldName, Object key) {
+		try {
+			Field field = com.summy.threat.eximus.EximusArchetypeEffects.class.getDeclaredField(fieldName);
+			field.setAccessible(true);
+			Object raw = field.get(null);
+			return raw instanceof Map<?, ?> map ? map.get(key) : null;
+		} catch (ReflectiveOperationException exception) {
+			throw new IllegalStateException("读取 " + fieldName + " 失败", exception);
+		}
+	}
+
+	private static Object field(Object target, String name) {
+		try {
+			Field field = target.getClass().getDeclaredField(name);
+			field.setAccessible(true);
+			return field.get(target);
+		} catch (ReflectiveOperationException exception) {
+			throw new IllegalStateException("读取字段 " + name + " 失败", exception);
+		}
 	}
 
 	private static void clearPlayer(ServerPlayer player) {

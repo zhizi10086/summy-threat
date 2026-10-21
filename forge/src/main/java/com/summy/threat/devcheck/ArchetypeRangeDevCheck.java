@@ -10,6 +10,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.animal.Wolf;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
@@ -22,8 +23,11 @@ import top.theillusivec4.curios.api.CuriosApi;
 import top.theillusivec4.curios.api.type.inventory.ICurioStacksHandler;
 import top.theillusivec4.curios.api.type.inventory.IDynamicStackHandler;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Dev-only：范围边界与云团多目标。
@@ -74,7 +78,10 @@ public final class ArchetypeRangeDevCheck {
 				case 760 -> checkCloudCase("吸血");
 				case 780 -> cloudCase("magnet");
 				case 900 -> checkCloudCase("磁力");
-				case 920 -> finish("完成");
+				case 920 -> checkTargetClassification();
+				case 960 -> checkUniqueTargets();
+				case 1000 -> checkRandomGroundPoints();
+				case 1020 -> finish("完成");
 				default -> {
 				}
 			}
@@ -165,6 +172,158 @@ public final class ArchetypeRangeDevCheck {
 		check(label + "：目标 1 获得一团云", a1 > 0.1F, "ally1 loss=%.1f".formatted(a1));
 		check(label + "：目标 2 获得一团云", a2 > 0.1F, "ally2 loss=%.1f".formatted(a2));
 		endCase();
+	}
+
+	private static void checkTargetClassification() {
+		run("kill @e[type=!minecraft:player]");
+		owner = spawnEximus("guardian", 300.0D);
+		Zombie revenge = spawnAlly(301.0D, owner);
+		Zombie unrelated = spawnAlly(302.0D, null);
+		Zombie betrayal = spawnAlly(303.0D, owner);
+		betrayal.getPersistentData().putLong("summy_reliquary:betrayal_target",
+				player.serverLevel().getGameTime() + 200L);
+
+		Wolf wolf = EntityType.WOLF.create(player.serverLevel());
+		if (wolf == null) {
+			check("目标分类：生成驯服狼", false, "create 返回 null");
+			return;
+		}
+		wolf.moveTo(304.0D, 100.0D, 0.0D, 0.0F, 0.0F);
+		wolf.setNoAi(true);
+		wolf.setPersistenceRequired();
+		wolf.setTame(true);
+		wolf.setOwnerUUID(player.getUUID());
+		player.serverLevel().addFreshEntity(wolf);
+
+		Zombie team = spawnAlly(305.0D, null);
+		run("team add rangetest");
+		run("team join rangetest " + player.getScoreboardName());
+		run("team join rangetest " + team.getStringUUID());
+
+		checkReflect("攻击目标：生存玩家", "isOffensiveTarget", true, owner, player);
+		checkReflect("攻击目标：反击者是有效目标", "isOffensiveTarget", true, owner, revenge);
+		checkReflect("攻击目标：无关怪物不是有效目标", "isOffensiveTarget", false, owner, unrelated);
+		checkReflect("攻击目标：背叛靶子是有效目标", "isOffensiveTarget", true, owner, betrayal);
+		owner.setTarget(unrelated);
+		checkReflect("攻击目标：当前仇恨对象有效", "isOffensiveTarget", true, owner, unrelated);
+		owner.setTarget(null);
+
+		player.setGameMode(GameType.CREATIVE);
+		checkReflect("攻击目标：创造玩家被排除", "isOffensiveTarget", false, owner, player);
+		player.setGameMode(GameType.SPECTATOR);
+		checkReflect("攻击目标：旁观玩家被排除", "isOffensiveTarget", false, owner, player);
+		player.setGameMode(GameType.SURVIVAL);
+
+		checkReflect("玩家友军：玩家本人", "isPlayerAlly", true, player);
+		checkReflect("玩家友军：玩家驯服狼", "isPlayerAlly", true, wolf);
+		checkReflect("玩家友军：同队僵尸", "isPlayerAlly", true, team);
+		checkReflect("玩家友军：普通无关僵尸", "isPlayerAlly", false, unrelated);
+
+		checkReflect("支援目标：普通敌对怪物", "isSupportTarget", true, owner, unrelated);
+		checkReflect("支援目标：玩家不获得冰盾/守护", "isSupportTarget", false, owner, player);
+		checkReflect("支援目标：背叛靶子被排除", "isSupportTarget", false, owner, betrayal);
+		owner.setTarget(unrelated);
+		checkReflect("支援目标：当前仇恨对象被排除", "isSupportTarget", false, owner, unrelated);
+		owner.setTarget(null);
+		run("kill @e[type=!minecraft:player]");
+	}
+
+	private static void checkUniqueTargets() {
+		run("kill @e[type=!minecraft:player]");
+		owner = spawnEximus("storm", 300.0D);
+		Zombie near = spawnAlly(301.0D, owner);
+		Zombie middle = spawnAlly(302.0D, owner);
+		Zombie far = spawnAlly(303.0D, owner);
+		List<LivingEntity> picked = selectUniqueTargets(3);
+		check("唯一索敌：最多 3 个槽位", picked.size() == 3, "size=" + picked.size());
+		check("唯一索敌：玩家优先", !picked.isEmpty() && picked.get(0) == player,
+				"first=" + (picked.isEmpty() ? "无" : picked.get(0).getUUID()));
+		Set<java.util.UUID> ids = new HashSet<>();
+		picked.forEach(entity -> ids.add(entity.getUUID()));
+		check("唯一索敌：同一目标不重复", ids.size() == picked.size(),
+				"picked=" + picked.size() + " unique=" + ids.size());
+		List<LivingEntity> two = selectUniqueTargets(2);
+		check("唯一索敌：电涌槽位上限 2", two.size() == 2, "size=" + two.size());
+
+		far.discard();
+		middle.discard();
+		List<LivingEntity> one = selectUniqueTargets(3);
+		check("唯一索敌：玩家 + 1 个有效非玩家目标占 2 槽", one.size() == 2,
+				"size=" + one.size() + " near=" + near.getUUID());
+		run("kill @e[type=!minecraft:player]");
+	}
+
+	private static void checkRandomGroundPoints() {
+		run("kill @e[type=!minecraft:player]");
+		owner = spawnEximus("vampire", 300.0D);
+		double min = Double.MAX_VALUE;
+		double max = -1.0D;
+		Set<String> distinct = new HashSet<>();
+		int[] quadrants = new int[4];
+		for (int i = 0; i < 1000; i++) {
+			Object value = invoke("groundPoint", new Class<?>[]{
+					ServerLevel.class, LivingEntity.class, double.class
+			}, player.serverLevel(), owner, 8.0D);
+			if (!(value instanceof net.minecraft.world.phys.Vec3 point)) {
+				check("随机补位：坐标类型", false, String.valueOf(value));
+				return;
+			}
+			double dx = point.x - owner.getX();
+			double dz = point.z - owner.getZ();
+			double distance = Math.sqrt(dx * dx + dz * dz);
+			min = Math.min(min, distance);
+			max = Math.max(max, distance);
+			distinct.add("%.4f,%.4f".formatted(point.x, point.z));
+			int quadrant = (dx >= 0.0D ? 1 : 0) + (dz >= 0.0D ? 2 : 0);
+			quadrants[quadrant]++;
+		}
+		// 高度图会把连续随机点吸附到方块中心，单轴最多偏移约 0.71 格。
+		check("随机补位 1000 次：距离保持在 2~8 格吸附容差内",
+				min >= 1.3D && max <= 8.8D,
+				"min=%.3f max=%.3f".formatted(min, max));
+		check("随机补位 1000 次：至少覆盖 150 个不同方块中心", distinct.size() >= 150,
+				"distinct=" + distinct.size());
+		boolean allQuadrants = true;
+		for (int count : quadrants) {
+			allQuadrants &= count >= 150;
+		}
+		check("随机补位分布覆盖四个象限", allQuadrants,
+				"quadrants=%d/%d/%d/%d".formatted(
+						quadrants[0], quadrants[1], quadrants[2], quadrants[3]));
+		run("kill @e[type=!minecraft:player]");
+	}
+
+	private static void checkReflect(String label, String method, boolean expected, Object... args) {
+		Object value = invoke(method, inferTypes(args), args);
+		check(label, value instanceof Boolean actual && actual == expected,
+				"expected=" + expected + " actual=" + value);
+	}
+
+	@SuppressWarnings("unchecked")
+	private static List<LivingEntity> selectUniqueTargets(int max) {
+		Object value = invoke("selectUniqueTargets", new Class<?>[]{
+				LivingEntity.class, double.class, int.class
+		}, owner, 12.0D, max);
+		return value instanceof List<?> list ? (List<LivingEntity>) list : List.of();
+	}
+
+	private static Object invoke(String name, Class<?>[] types, Object... args) {
+		try {
+			Method method = com.summy.threat.eximus.EximusArchetypeEffects.class
+					.getDeclaredMethod(name, types);
+			method.setAccessible(true);
+			return method.invoke(null, args);
+		} catch (ReflectiveOperationException exception) {
+			throw new IllegalStateException("调用 " + name + " 失败", exception);
+		}
+	}
+
+	private static Class<?>[] inferTypes(Object... args) {
+		Class<?>[] types = new Class<?>[args.length];
+		for (int i = 0; i < args.length; i++) {
+			types[i] = args[i] instanceof LivingEntity ? LivingEntity.class : args[i].getClass();
+		}
+		return types;
 	}
 
 	private static void beginAt(double ownerX, double playerX) {
