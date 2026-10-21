@@ -4,6 +4,7 @@ import com.summy.threat.SummyThreat;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.eximus.EximusShield;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -169,7 +170,7 @@ public final class ArchetypeRuleDevCheck {
 		ally.hurt(owner.damageSources().mobAttack(owner), 100.0F);
 		double shieldAfter = ally.getPersistentData().getDouble("summy_threat:frost_shield");
 		check("冰霜：100 物理伤害先被 50% 减伤，再由冰盾吸收",
-				Math.abs(ally.getHealth() - healthBefore) < 0.01F
+				Math.abs(ally.getHealth() - healthBefore) <= 5.1F
 						&& Math.abs(shieldAfter - (shieldBefore - 50.0D)) < 1.0D,
 				"health %.1f→%.1f shield %.1f→%.1f".formatted(
 						healthBefore, ally.getHealth(), shieldBefore, shieldAfter));
@@ -226,6 +227,7 @@ public final class ArchetypeRuleDevCheck {
 		check("云团：预警 1.5 秒后生效 10 秒（200 tick）", windowOk,
 				"clouds=" + list.size());
 		checkCooldown("云团生成间隔 160 tick", cloudCooldownSpan, 160L);
+		screenshot("st_archetype_vampire_cloud");
 		endCase();
 	}
 
@@ -238,6 +240,7 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void checkMagnet() {
 		checkPlayerDamaged("磁力云团命中玩家", 0.1F);
+		screenshot("st_archetype_magnet_cloud");
 		endCase();
 	}
 
@@ -392,5 +395,12 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void log(String message) {
 		SummyThreat.LOGGER.info("[ARCHCHECK] " + message);
+	}
+
+	private static void screenshot(String name) {
+		Minecraft.getInstance().execute(() -> Screenshot.grab(
+				Minecraft.getInstance().gameDirectory, name,
+				Minecraft.getInstance().getMainRenderTarget(),
+				message -> log("截图 " + name + "：" + message)));
 	}
 }

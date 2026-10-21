@@ -972,9 +972,8 @@ public final class EximusArchetypeEffects {
 				for (Vec3 pos : positions) {
 					// 1.5 秒预警 + 10 秒生效；场上最多 3 团。
 					clouds.add(new Cloud(pos.x, pos.y, pos.z, now + 30L, now + 230L, now + 30L));
-					level.sendParticles(archetype == EximusArchetype.VAMPIRE
-									? ParticleTypes.DAMAGE_INDICATOR : ParticleTypes.PORTAL,
-							pos.x, pos.y + 0.2D, pos.z, 8, 0.8D, 0.4D, 0.8D, 0.01D);
+					level.sendParticles(new DustParticleOptions(cloudColor(archetype), 0.9F),
+							pos.x, pos.y + 0.16D, pos.z, 8, 0.75D, 0.08D, 0.75D, 0.0D);
 				}
 			}
 		}
@@ -983,14 +982,14 @@ public final class EximusArchetypeEffects {
 			if (now < cloud.armUntil) {
 				warning = true;
 				if (owner.level() instanceof ServerLevel level) {
-					level.sendParticles(archetype == EximusArchetype.VAMPIRE
-									? ParticleTypes.DAMAGE_INDICATOR : ParticleTypes.PORTAL,
-							cloud.x, cloud.y + 0.2D, cloud.z, 2, 0.5D, 0.2D, 0.5D, 0.01D);
-					Vector3f color = archetype == EximusArchetype.VAMPIRE
-							? new Vector3f(0.7F, 0.0F, 0.1F) : new Vector3f(0.71F, 0.36F, 1.0F);
-					cloudRing(level, cloud, color);
+					cloudWarningFx(level, cloud, archetype);
 				}
 				continue;
+			}
+			if (owner.level() instanceof ServerLevel level) {
+				// 生效期必须持续显示云团本体，不能只在命中目标时闪一下；
+				// 否则玩家会误以为云只存在 1.5 秒，而伤害实际持续 10 秒。
+				cloudActiveFx(level, cloud, archetype, now);
 			}
 			for (LivingEntity target : targetsAt(owner, new Vec3(cloud.x, cloud.y, cloud.z), 2.0D)) {
 				if (archetype == EximusArchetype.MAGNET && !isBossLike(target)) {
@@ -1020,6 +1019,41 @@ public final class EximusArchetypeEffects {
 			}
 		}
 		root(owner, warning);
+	}
+
+	private static void cloudWarningFx(ServerLevel level, Cloud cloud, EximusArchetype archetype) {
+		level.sendParticles(new DustParticleOptions(cloudColor(archetype), 0.8F),
+				cloud.x, cloud.y + 0.18D, cloud.z, 2, 0.48D, 0.04D, 0.48D, 0.0D);
+		cloudRing(level, cloud, cloudColor(archetype));
+	}
+
+	/** 生效期持续 10 秒：贴地旋转云体，每 4 tick 重画一次 2 格边界。 */
+	private static void cloudActiveFx(ServerLevel level, Cloud cloud, EximusArchetype archetype, long now) {
+		Vector3f color = cloudColor(archetype);
+		DustParticleOptions dust = new DustParticleOptions(color, 0.9F);
+		// 只在贴地高度做缓慢旋转的雾团，避免上升类粒子累积成竖直光柱。
+		for (int i = 0; i < 4; i++) {
+			double angle = now * 0.16D + i * Math.PI * 0.5D;
+			double radius = i % 2 == 0 ? 0.45D : 0.68D;
+			level.sendParticles(dust,
+					cloud.x + Math.cos(angle) * radius,
+					cloud.y + 0.14D + (i % 2) * 0.05D,
+					cloud.z + Math.sin(angle) * radius,
+					1, 0.03D, 0.02D, 0.03D, 0.0D);
+		}
+		if ((now & 1L) == 0L) {
+			level.sendParticles(new DustParticleOptions(color, 0.7F),
+					cloud.x, cloud.y + 0.32D, cloud.z,
+					1, 0.32D, 0.04D, 0.32D, 0.0D);
+		}
+		if ((now & 3L) == 0L) {
+			cloudRing(level, cloud, color);
+		}
+	}
+
+	private static Vector3f cloudColor(EximusArchetype archetype) {
+		return archetype == EximusArchetype.VAMPIRE
+				? new Vector3f(0.7F, 0.0F, 0.1F) : new Vector3f(0.71F, 0.36F, 1.0F);
 	}
 
 	private static void cloudRing(ServerLevel level, Cloud cloud, Vector3f color) {
@@ -1170,8 +1204,9 @@ public final class EximusArchetypeEffects {
 				// 常驻金色地面圈，提示 8 格守护光环范围。
 				groundRing(entity, 8.0D, color(archetype));
 			}
-			case VAMPIRE -> level.sendParticles(ParticleTypes.DAMAGE_INDICATOR, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
-			case MAGNET -> level.sendParticles(ParticleTypes.PORTAL, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
+			case VAMPIRE, MAGNET -> {
+				// 云团本身由贴地尘埃与边界环表达，避免上升粒子堆成光柱。
+			}
 		}
 	}
 
