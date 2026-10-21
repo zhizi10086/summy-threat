@@ -13,11 +13,15 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.InteractionHand;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -117,9 +121,9 @@ public final class ReliquaryCompatDevCheck {
 							+ ReliquaryFixedDamageCompat.needsSrAllDamage(id));
 		}
 		for (String id : EXACT_ONLY) {
-			ThreatDevCheck.checkDetailed("SR 兼容：%s 只补 SE".formatted(id),
+			ThreatDevCheck.checkDetailed("SR 1.8.7：%s 也需补 SR 核心乘区".formatted(id),
 					ReliquaryFixedDamageCompat.isTrackedDamage(id)
-							&& !ReliquaryFixedDamageCompat.needsSrAllDamage(id), "needsSr="
+							&& ReliquaryFixedDamageCompat.needsSrAllDamage(id), "needsSr="
 							+ ReliquaryFixedDamageCompat.needsSrAllDamage(id));
 		}
 		for (String id : EXCLUDED) {
@@ -141,6 +145,9 @@ public final class ReliquaryCompatDevCheck {
 		} else {
 			ThreatDevCheck.logDetailed("[DEVCHECK] 未安装 SE，跳过死神祝福反射桥断言");
 		}
+
+		// 2.5 SR 1.8.7：攻速上限必须在 MULTIPLY_TOTAL 之后精确夹到 cap。
+		checkAttackSpeedCap(player);
 
 		// 3. 没有任何七罪/饰品时，7 项都应是 1.0。
 		for (String id : trackable()) {
@@ -191,12 +198,13 @@ public final class ReliquaryCompatDevCheck {
 		for (String id : EXACT_ONLY) {
 			ensureEnvyArmor(victim);
 			double factor = ReliquaryFixedDamageCompat.boostFactor(id, player, victim);
-			ThreatDevCheck.checkDetailed("SR 兼容：%s 不重复补 SR（满血时 1.0）".formatted(id),
-					Math.abs(factor - 1.0D) < 1.0E-6D, "factor=" + factor);
+			ThreatDevCheck.checkDetailed("SR 1.8.7：%s 补 SR 暴怒/嫉妒".formatted(id),
+					factor >= 0.74D && factor <= 3.01D && Math.abs(factor - 1.0D) > 1.0E-4D,
+					"factor=" + factor);
 			ensureEnvyArmor(victim);
 			float afterSr = srAmount(id, player, victim, 100.0F);
-			ThreatDevCheck.checkDetailed("SR 运行时对照：%s 已被 SR 乘过".formatted(id),
-					Math.abs(afterSr - 100.0F) > 1.0E-3F, "amount=" + afterSr);
+			ThreatDevCheck.checkDetailed("SR 1.8.7 运行时对照：%s 也被 SR 跳过".formatted(id),
+					Math.abs(afterSr - 100.0F) < 1.0E-4F, "amount=" + afterSr);
 		}
 
 		// 6. SE 死神祝福：关闭七罪/清空饰品，确保只剩 SE 乘区；
@@ -301,6 +309,73 @@ public final class ReliquaryCompatDevCheck {
 		player.setHealth(player.getMaxHealth());
 		victim.setGlowingTag(false);
 		clearCurios(player);
+	}
+
+	/**
+	 * SR 1.8.7 / 2.14：复现恶魔毕业攻速场面，断言上限在乘法之后精确夹到 4.0。
+	 *
+	 * <p>与 SR 官方 DevCheck 的算式一致：base 4.0、武器 −2.0、迅捷 +0.5、王冠 +0.4、
+	 * 契约 ×1.66；摘掉契约倍率后应回到 2.9（低于 cap，不应被夹取）。
+	 */
+	private static void checkAttackSpeedCap(ServerPlayer player) {
+		AttributeInstance instance = player.getAttribute(Attributes.ATTACK_SPEED);
+		if (instance == null) {
+			ThreatDevCheck.checkDetailed("SR 1.8.7：攻击速度属性存在", false, "missing attack_speed");
+			return;
+		}
+		ItemStack mainHand = player.getMainHandItem().copy();
+		player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+		clearCurios(player);
+		// setItemInHand 的服务端属性重算可能延迟到下一 tick；先把当前主手的
+		// "Weapon modifier" 从测试属性里剔除，避免把旧武器的 -2.4 带进算式。
+		for (AttributeModifier modifier : new java.util.ArrayList<>(instance.getModifiers())) {
+			if ("Weapon modifier".equals(modifier.getName())) {
+				instance.removeModifier(modifier);
+			}
+		}
+
+		java.util.UUID weaponId = java.util.UUID.randomUUID();
+		java.util.UUID quickId = java.util.UUID.randomUUID();
+		java.util.UUID crownId = java.util.UUID.randomUUID();
+		java.util.UUID pactId = java.util.UUID.randomUUID();
+		AttributeModifier weapon = new AttributeModifier(weaponId, "st_test_speed_weapon",
+				-2.0D, AttributeModifier.Operation.ADDITION);
+		AttributeModifier quick = new AttributeModifier(quickId, "st_test_speed_quick",
+				0.5D, AttributeModifier.Operation.ADDITION);
+		AttributeModifier crown = new AttributeModifier(crownId, "st_test_speed_crown",
+				0.4D, AttributeModifier.Operation.ADDITION);
+		AttributeModifier pact = new AttributeModifier(pactId, "st_test_speed_pact",
+				0.66D, AttributeModifier.Operation.MULTIPLY_TOTAL);
+		instance.addTransientModifier(weapon);
+		instance.addTransientModifier(quick);
+		instance.addTransientModifier(crown);
+		instance.addTransientModifier(pact);
+		ThreatDevCheck.logDetailed("[DEVCHECK] 攻速测试前 modifiers=" + instance.getModifiers());
+
+		applySrAttributes(player);
+		ThreatDevCheck.logDetailed("[DEVCHECK] 攻速测试后 modifiers=" + instance.getModifiers());
+		double cap = srConfigNumber("maxAttackSpeed");
+		double base = instance.getBaseValue();
+		double capped = player.getAttributeValue(Attributes.ATTACK_SPEED);
+		double expected = Math.min(cap, (base - 2.0D + 0.5D + 0.4D) * 1.66D);
+		ThreatDevCheck.checkDetailed("SR 1.8.7：恶魔场面攻速 = 4.0",
+				Math.abs(capped - expected) < 1.0E-5D,
+				"base=" + base + " capped=" + capped + " expected=" + expected + " cap=" + cap);
+
+		instance.removeModifier(pactId);
+		applySrAttributes(player);
+		double lower = player.getAttributeValue(Attributes.ATTACK_SPEED);
+		double lowerExpected = base - 2.0D + 0.5D + 0.4D;
+		ThreatDevCheck.checkDetailed("SR 1.8.7：摘掉契约倍率后回到 2.9（不吃 cap）",
+				Math.abs(lower - lowerExpected) < 1.0E-5D,
+				"lower=" + lower + " expected=" + lowerExpected);
+
+		instance.removeModifier(weaponId);
+		instance.removeModifier(quickId);
+		instance.removeModifier(crownId);
+		instance.removeModifier(pactId);
+		applySrAttributes(player);
+		player.setItemInHand(InteractionHand.MAIN_HAND, mainHand);
 	}
 
 	/**

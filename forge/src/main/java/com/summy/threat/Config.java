@@ -528,7 +528,8 @@ public final class Config {
 
 		builder.comment(
 				"SR 固定伤害兼容：只处理 7 项写死数值的固定伤害（5 项 isDivine + 2 项 isExactDamage）。",
-				"默认关闭；开启后 5 项补 SR/SE 全伤害增伤，2 项只补 SE 死神祝福，不处理近战/命中专属乘区。")
+				"默认关闭；SR 1.8.7 对 isDivine / isExactDamage 都跳过全伤害乘区，开启后 7 项统一补 SR/SE，"
+						+ "不处理近战/命中专属乘区。")
 				.push("reliquary_compat");
 		ENABLE_RELIQUARY_FIXED_DAMAGE_BOOSTS = builder
 				.comment("启用 SR 固定伤害的全伤害增伤兼容")

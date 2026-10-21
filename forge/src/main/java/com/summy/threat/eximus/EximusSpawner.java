@@ -9,6 +9,7 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.monster.warden.Warden;
+import net.minecraft.util.RandomSource;
 import net.minecraftforge.event.entity.living.MobSpawnEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -44,11 +45,16 @@ public final class EximusSpawner {
 		}
 		double chance = Config.EXIMUS_NATURAL_SPAWN_CHANCE.get();
 		boolean tagged = false;
-		if (chance > 0.0D && mob.getRandom().nextDouble() < chance) {
+		if (roll(mob.getRandom(), chance)) {
 			mob.getPersistentData().putBoolean(MonsterScaler.TAG_EXIMUS, true);
 			tagged = true;
 		}
 		SpawnAudit.recordFinalize(mob, event.getSpawnType(), true, tagged, chance, "natural");
+	}
+
+	/** 纯掷骰函数：自检用大样本验证 5% 概率，正式链路也复用它。 */
+	public static boolean roll(RandomSource random, double chance) {
+		return chance > 0.0D && random.nextDouble() < chance;
 	}
 
 	/**

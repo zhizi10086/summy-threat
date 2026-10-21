@@ -23,8 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>SR 将本模组的若干特效/真伤标成“不参与自身增伤”，但这些伤害在设定上仍属于
  * “全部伤害类型”增伤的对象。这里只在 ST 侧补一次，不修改 SR：
  * <ul>
- *     <li>5 项 isDivine 固定伤害：补 SR 七罪/七德/最终全伤害乘区和 SE 死神祝福；</li>
- *     <li>godhead_aura / sacrifice：SR 当前已吃到全伤害乘区，只补 SE 死神祝福，避免重复。</li>
+ *     <li>7 项固定伤害（5 项 isDivine + 2 项 isExactDamage）：SR 1.8.7 起两者都会被
+ *     {@code ReliquaryEvents} 跳过，因此统一补 SR 七罪/七德/最终全伤害乘区和 SE 死神祝福；</li>
  *     <li>全部 7 项固定伤害：补 SR {@code SpiritAltarSet} 的三条条件乘区——
  *     思想/咒印对发光目标 +10%、玄秘魔眼对注视目标 ×1.3、恶魔王冠在 hell_locked 下的
  *     已损失生命分档加伤。</li>
@@ -41,10 +41,8 @@ public final class ReliquaryFixedDamageCompat {
 	public enum BoostKind {
 		/** 不在本轮 7 项名单内，完全不处理。 */
 		NONE,
-		/** SR 的 isDivine 已跳过全伤害乘区：ST 补 SR + SE。 */
-		SR_AND_SE,
-		/** SR 的 isExactDamage 已经乘过全伤害：ST 只补 SE，避免重复。 */
-		SE_ONLY
+		/** SR 的 isDivine / isExactDamage 都跳过全伤害乘区：ST 补 SR + SE。 */
+		SR_AND_SE
 	}
 
 	private static final Set<String> FIXED_IDS = Set.of(
@@ -53,12 +51,6 @@ public final class ReliquaryFixedDamageCompat {
 			"summy-reliquary.revelation_light",
 			"summy-reliquary.demon_flame",
 			"summy-reliquary.abyss_aura",
-			"summy-reliquary.godhead_aura",
-			"summy-reliquary.sacrifice"
-	);
-
-	/** 只属于 isExactDamage、未被 SR 的 isDivine 排除的伤害：SR 已经乘过全伤害。 */
-	private static final Set<String> SR_ALREADY_APPLIED = Set.of(
 			"summy-reliquary.godhead_aura",
 			"summy-reliquary.sacrifice"
 	);
@@ -185,7 +177,9 @@ public final class ReliquaryFixedDamageCompat {
 		if (!FIXED_IDS.contains(id)) {
 			return BoostKind.NONE;
 		}
-		return SR_ALREADY_APPLIED.contains(id) ? BoostKind.SE_ONLY : BoostKind.SR_AND_SE;
+		// SR 1.8.7：ReliquaryEvents 对 isDivine ∪ isExactDamage 都跳过；
+		// 因此 2 项 isExactDamage 也需要 ST 补核心乘区，不能再标成“SR 已乘”。
+		return BoostKind.SR_AND_SE;
 	}
 
 	/** 按 SR 的“全伤害”乘区复算；不含近战专属、贪婪惩罚与暴怒自伤。 */

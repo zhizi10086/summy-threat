@@ -46,7 +46,8 @@ public final class PlayerShieldHud {
 		GuiGraphics graphics = event.getGuiGraphics();
 		int screenHeight = event.getWindow().getGuiScaledHeight();
 		int x = MARGIN;
-		int y = Math.max(4, (screenHeight - BAR_HEIGHT) / 2);
+		// 左侧聊天框会占住屏幕下半部分；整体上移 60px，让底部文字落在聊天框上方。
+		int y = Math.max(4, (screenHeight - BAR_HEIGHT) / 2 - 60);
 		// 1px 青色外框 + 深色轨道；填充从下往上增长。
 		graphics.fill(x - 1, y - 1, x + BAR_WIDTH + 1, y + BAR_HEIGHT + 1, BORDER);
 		graphics.fill(x, y, x + BAR_WIDTH, y + BAR_HEIGHT, TRACK);

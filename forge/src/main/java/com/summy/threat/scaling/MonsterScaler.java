@@ -99,6 +99,9 @@ public final class MonsterScaler {
 		CompoundTag data = mob.getPersistentData();
 		if (data.contains(TAG_SCALED)) {
 			if (data.getLong(TAG_SESSION) == sessionToken) {
+				// 本会话已数值化（/summythreat spawn 等命令路径）：仍记录一次最终分类，
+				// 让刷怪审计能看到命令生成的 TL / PCF / 能力 / 原型。
+				auditJoin(mob, (ServerLevel) event.getLevel());
 				return; // 本会话已数值化（重复 join 不重复处理）
 			}
 			// 跨存档 / 跨会话的残留实体：运行期属性修正已丢失、但标记仍在（此前会一直保持原版数值）。
@@ -118,6 +121,9 @@ public final class MonsterScaler {
 			if (hasVanillaLeaderHealthBonus(mob)) {
 				mob.setHealth(mob.getMaxHealth());
 			}
+			// 自检审计：TL 关闭时也记录最终分类，便于 /summon 等命令样本核对；
+			// 此时 tl=0、abilities 为空，不代表实体被数值化。
+			auditJoin(mob, (ServerLevel) event.getLevel());
 			return;
 		}
 		scaleNow(mob, TlSelector.select((ServerLevel) event.getLevel(), mob, kindOf(mob)));

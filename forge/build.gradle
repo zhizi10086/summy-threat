@@ -76,6 +76,46 @@ minecraft {
             if (project.hasProperty('devcheck')) {
                 property 'summy_threat.devcheck', 'true'
             }
+            if (project.hasProperty('stormcheck')) {
+                property 'summy_threat.stormcheck', 'true'
+            }
+            if (project.hasProperty('archetypecheck')) {
+                property 'summy_threat.archetypecheck', 'true'
+            }
+            if (project.hasProperty('rangecheck')) {
+                property 'summy_threat.rangecheck', 'true'
+            }
+            // A11 玩家攻击测试环境：只准备木桩与装备，不自动退出。
+            if (project.hasProperty('attacktest') || project.hasProperty('attacktest.stats')
+                    || project.hasProperty('attacktest.auto') || project.hasProperty('attacktest.demon')
+                    || project.hasProperty('attacktest.mid') || project.hasProperty('attacktest.mid.angel')
+                    || project.hasProperty('attacktest.mid.demon')
+					|| project.hasProperty('attacktest.autostart')
+					|| project.hasProperty('attacktest.compat')) {
+                property 'summy_threat.attacktest', 'true'
+            }
+            if (project.hasProperty('attacktest.stats')) {
+                property 'summy_threat.attacktest.stats', 'true'
+            }
+            if (project.hasProperty('attacktest.auto')) {
+                property 'summy_threat.attacktest.auto', 'true'
+            }
+            if (project.hasProperty('attacktest.autostart')) {
+                property 'summy_threat.attacktest.autostart', 'true'
+            }
+			if (project.hasProperty('attacktest.compat')) {
+				property 'summy_threat.attacktest.compat', 'true'
+			}
+            if (project.hasProperty('attacktest.demon') || project.hasProperty('attacktest.mid.demon')) {
+                property 'summy_threat.attacktest.demon', 'true'
+            }
+            if (project.hasProperty('attacktest.mid') || project.hasProperty('attacktest.mid.angel')
+                    || project.hasProperty('attacktest.mid.demon')) {
+                property 'summy_threat.attacktest.mid', 'true'
+            }
+            // A11 攻击环境必须按被测档位生成木桩；缺省保持 full，避免影响既有毕业测试。
+            property 'summy_threat.attacktest.tier',
+                    project.findProperty('attacktier') ?: 'full'
         }
         server {
             workingDirectory project.file('run')
@@ -163,6 +203,8 @@ dependencies {
 
     // Jade 可选依赖：只编译期引用其 API；@WailaPlugin 由 Jade 在运行时扫描加载
     compileOnly fg.deobf('jade:jade:11.13.3')
+    // 仅 devcheck 的 AttackTestHarness 用于清空 Curios 栏位；正式 jar 不含 devcheck。
+    compileOnly files('libs/curios-forge-5.14.1.jar')
 }
 
 // 把 gradle.properties 的版本号写进 mods.toml
@@ -266,7 +308,8 @@ tasks.named('check') {
 jar {
     // refmap 既在 resources 里（供 dev 运行），又被 MixinGradle 加进 jar，去重即可
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    if (!project.hasProperty('devcheck')) {
+    if (!project.hasProperty('devcheck') && !project.hasProperty('stormcheck')
+            && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')) {
         exclude 'com/summy/threat/devcheck/**'
     }
     manifest {
@@ -288,7 +331,8 @@ jar {
 
 // JarJar 会重新打包主 jar；同样把 devcheck 排除在正式产物之外。
 tasks.named('jarJar') {
-    if (!project.hasProperty('devcheck')) {
+    if (!project.hasProperty('devcheck') && !project.hasProperty('stormcheck')
+            && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')) {
         exclude 'com/summy/threat/devcheck/**'
     }
 }
