@@ -1,6 +1,7 @@
 package com.summy.threat.devcheck;
 
 import com.summy.threat.SummyThreat;
+import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.client.Minecraft;
@@ -128,7 +129,7 @@ public final class StormRuleDevCheck {
 		if (wolf == null) {
 			throw new IllegalStateException("无法生成测试狼");
 		}
-		wolf.moveTo(301.0D, 100.0D, 0.0D, 0.0F, 0.0F);
+		wolf.moveTo(299.0D, 100.0D, 0.0D, 0.0F, 0.0F);
 		wolf.setNoAi(true);
 		wolf.setPersistenceRequired();
 		wolf.setTame(true);
@@ -154,12 +155,12 @@ public final class StormRuleDevCheck {
 		owner.getPersistentData().putString(MonsterScaler.TAG_ARCHETYPE, "storm");
 		level.addFreshEntity(owner);
 		MonsterScaler.scaleNow(owner, 20, MonsterScaler.Kind.EXIMUS);
+		AbilityEffects.setAbilities(owner, 20, "");
 		owner.setNoAi(true);
 		owner.setPersistenceRequired();
 		owner.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0.0D);
 		owner.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(0.0D);
 		owner.setTarget(player);
-		normal.setTarget(owner);
 		slotTarget.setTarget(owner);
 		log("测试实体已生成：owner/normal/slot/wolf/team");
 	}
@@ -204,7 +205,7 @@ public final class StormRuleDevCheck {
 		Method method = EximusArchetypeEffects.class.getDeclaredMethod(
 				"skillDamage", LivingEntity.class, LivingEntity.class, double.class);
 		method.setAccessible(true);
-		for (double d20 : new double[]{45.0D, 5.0D, 30.0D, 20.0D, 6.0D, 4.0D}) {
+		for (double d20 : new double[]{70.0D, 9.0D, 50.0D, 30.0D, 18.0D, 15.0D}) {
 			float playerDamage = (float) method.invoke(null, owner, player, d20);
 			float normalDamage = (float) method.invoke(null, owner, normal, d20);
 			float wolfDamage = (float) method.invoke(null, owner, wolf, d20);
@@ -223,9 +224,15 @@ public final class StormRuleDevCheck {
 
 	private static void checkStormResult() {
 		checkDodged("玩家", player);
-		checkHealth("普通僵尸", normal, 700.0F);
+		// 电涌可能同时受到随机补位落点的环境余波，血量只做单次落雷区间断言；
+		// 精确 50/500 倍率由 checkFormula 覆盖。
+		float normalLoss = 1000.0F - normal.getHealth();
+		check("电涌：普通僵尸受到约 500", normalLoss >= 450.0F && normalLoss <= 550.0F,
+				"loss=%.1f".formatted(normalLoss));
 		checkDodged("玩家驯服狼", wolf);
-		checkHealth("同队僵尸", teamZombie, 970.0F);
+		float teamLoss = 1000.0F - teamZombie.getHealth();
+		check("电涌：同队僵尸受到约 50", teamLoss >= 45.0F && teamLoss <= 55.0F,
+				"loss=%.1f".formatted(teamLoss));
 		checkHealth("施法者自身", owner, 2112.0F);
 		check("电涌：冻结落点独立命中普通僵尸", markerChecked,
 				"markerChecked=" + markerChecked);
@@ -249,6 +256,8 @@ public final class StormRuleDevCheck {
 			long nextCast = (long) field(state, "nextCast");
 			check("电涌：技能间隔 160 tick", nextCast - castStart == 160L,
 					"next-cast=" + (nextCast - castStart));
+			check("电涌：每次施法 3 个锁定点", lockSlots().size() == 3,
+					"slots=" + lockSlots().size());
 			check("电涌：跟随范围提升到 48", owner.getAttributeValue(Attributes.FOLLOW_RANGE) >= 47.999D,
 					"follow=" + owner.getAttributeValue(Attributes.FOLLOW_RANGE));
 			trackingPoint = stormPoint(player.getUUID());

@@ -1,6 +1,7 @@
 package com.summy.threat.devcheck;
 
 import com.summy.threat.SummyThreat;
+import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.eximus.EximusShield;
 import net.minecraft.client.Minecraft;
@@ -19,6 +20,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import top.theillusivec4.curios.api.CuriosApi;
@@ -27,8 +29,10 @@ import top.theillusivec4.curios.api.type.inventory.IDynamicStackHandler;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Dev-only：其余 7 个原型的核心行为。
@@ -50,6 +54,8 @@ public final class ArchetypeRuleDevCheck {
 	private static long flameCooldownSpan = -1L;
 	private static long shockCooldownSpan = -1L;
 	private static long cloudCooldownSpan = -1L;
+	private static boolean vampireSlowSeen;
+	private static final Set<String> DAMAGE_TYPES = new HashSet<>();
 
 	private ArchetypeRuleDevCheck() {
 	}
@@ -63,6 +69,7 @@ public final class ArchetypeRuleDevCheck {
 		player = event.getServer().getPlayerList().getPlayers().get(0);
 		tick++;
 		try {
+			observeVampireSlow();
 			observeCooldowns();
 			switch (tick) {
 				case 20 -> prepare();
@@ -123,7 +130,8 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void checkFlame() {
 		checkPlayerDamaged("烈焰火圈命中玩家", 0.1F);
-		checkCooldown("烈焰冷却 180 tick", flameCooldownSpan, 180L);
+		checkDamageType("烈焰直接伤害类型", "minecraft:mob_attack");
+		checkCooldown("烈焰冷却 160 tick", flameCooldownSpan, 160L);
 		endCase();
 	}
 
@@ -136,6 +144,7 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void checkPoison() {
 		checkPlayerDamaged("剧毒光环命中玩家", 0.1F);
+		checkDamageType("剧毒伤害类型", "minecraft:indirect_magic");
 		endCase();
 	}
 
@@ -149,6 +158,7 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void checkShock() {
 		checkPlayerDamaged("震荡冲击柱命中玩家", 0.1F);
+		checkDamageType("震荡伤害类型", "minecraft:mob_attack");
 		checkCooldown("震荡冷却 160 tick", shockCooldownSpan, 160L);
 		endCase();
 	}
@@ -208,6 +218,7 @@ public final class ArchetypeRuleDevCheck {
 	private static void spawnVampire() {
 		beginCase();
 		cloudCooldownSpan = -1L;
+		vampireSlowSeen = false;
 		owner = spawnEximus("vampire", 304.0D);
 		owner.setHealth(1000.0F);
 		owner.setTarget(player);
@@ -216,8 +227,14 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void checkVampire() {
 		checkPlayerDamaged("吸血云团命中玩家", 0.1F);
+		checkDamageType("吸血云团伤害类型", "minecraft:indirect_magic");
 		check("吸血：主人回复生命", owner.getHealth() > 1000.0F,
 				"owner health=%.1f".formatted(owner.getHealth()));
+		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+		boolean fallbackSlow = speed != null && speed.getModifiers().stream()
+				.anyMatch(modifier -> "summy_threat:vampire_slow_speed".equals(modifier.getName()));
+		check("吸血：命中附加等价缓慢 I（−15% 移速）", vampireSlowSeen,
+				"seen=" + vampireSlowSeen + " current=" + fallbackSlow);
 		Object clouds = mapValue("CLOUDS", owner.getUUID());
 		List<?> list = clouds instanceof List<?> raw ? raw : List.of();
 		boolean windowOk = !list.isEmpty();
@@ -240,12 +257,19 @@ public final class ArchetypeRuleDevCheck {
 
 	private static void checkMagnet() {
 		checkPlayerDamaged("磁力云团命中玩家", 0.1F);
+		checkDamageType("磁力云团伤害类型", "minecraft:indirect_magic");
+		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+		boolean slowRemaining = speed != null && speed.getModifiers().stream()
+				.anyMatch(modifier -> "summy_threat:vampire_slow_speed".equals(modifier.getName()));
+		check("吸血：离开云后减速在 2 秒内移除", !slowRemaining,
+				"slowRemaining=" + slowRemaining);
 		screenshot("st_archetype_magnet_cloud");
 		endCase();
 	}
 
 	private static void beginCase() {
 		run("kill @e[type=!minecraft:player]");
+		DAMAGE_TYPES.clear();
 		player.teleportTo(player.serverLevel(), 300.0D, 100.0D, 0.0D, 0.0F, 0.0F);
 		player.setHealth(1000.0F);
 		player.removeAllEffects();
@@ -267,6 +291,7 @@ public final class ArchetypeRuleDevCheck {
 		eximus.getPersistentData().putString(MonsterScaler.TAG_ARCHETYPE, archetype);
 		level.addFreshEntity(eximus);
 		MonsterScaler.scaleNow(eximus, 20, MonsterScaler.Kind.EXIMUS);
+		AbilityEffects.setAbilities(eximus, 20, "");
 		eximus.setNoAi(true);
 		eximus.setPersistenceRequired();
 		eximus.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0.0D);
@@ -293,6 +318,19 @@ public final class ArchetypeRuleDevCheck {
 	private static void checkPlayerDamaged(String label, float minDamage) {
 		float damage = 1000.0F - player.getHealth();
 		check(label, damage > minDamage, "player loss=%.1f".formatted(damage));
+	}
+
+	private static void checkDamageType(String label, String expected) {
+		check(label, DAMAGE_TYPES.contains(expected), "types=" + DAMAGE_TYPES);
+	}
+
+	@SubscribeEvent
+	public static void onPlayerHurt(LivingHurtEvent event) {
+		if (ENABLED && player != null && event.getEntity() == player && !event.isCanceled()) {
+			event.getSource().typeHolder().unwrapKey()
+					.map(key -> key.location().toString())
+					.ifPresent(DAMAGE_TYPES::add);
+		}
 	}
 
 	private static void check(String label, boolean ok, String detail) {
@@ -334,6 +372,17 @@ public final class ArchetypeRuleDevCheck {
 				long spawnedAt = armUntil - 30L;
 				cloudCooldownSpan = readyAt - spawnedAt;
 			}
+		}
+	}
+
+	private static void observeVampireSlow() {
+		if (owner == null || player == null) {
+			return;
+		}
+		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+		if (speed != null && speed.getModifiers().stream()
+				.anyMatch(modifier -> "summy_threat:vampire_slow_speed".equals(modifier.getName()))) {
+			vampireSlowSeen = true;
 		}
 	}
 

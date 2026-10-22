@@ -1,6 +1,7 @@
 package com.summy.threat.devcheck;
 
 import com.summy.threat.SummyThreat;
+import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -9,6 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.Wolf;
 import net.minecraft.world.entity.monster.Zombie;
@@ -32,7 +34,7 @@ import java.util.Set;
 /**
  * Dev-only：范围边界与云团多目标。
  *
- * <p>只通过 {@code -Prangecheck} 启用；验证烈焰 9 格、剧毒 3 格、震荡 12 格边界，
+ * <p>只通过 {@code -Prangecheck} 启用；验证烈焰 10 格、剧毒 3 格、震荡 14 格边界，
  * 以及吸血/磁力三目标各自一团云。
  */
 @Mod.EventBusSubscriber(modid = SummyThreat.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE,
@@ -47,6 +49,9 @@ public final class ArchetypeRangeDevCheck {
 	private static Zombie owner;
 	private static Zombie ally1;
 	private static Zombie ally2;
+	private static boolean vampireSlowSeen;
+	private static float lastVampireHealth = -1.0F;
+	private static float maxVampireHealStep;
 
 	private ArchetypeRangeDevCheck() {
 	}
@@ -60,20 +65,22 @@ public final class ArchetypeRangeDevCheck {
 		player = event.getServer().getPlayerList().getPlayers().get(0);
 		tick++;
 		try {
+			observeVampireSlow();
+			observeVampireHeal();
 			switch (tick) {
 				case 20 -> prepare();
 				case 40 -> flameNear();
-				case 100 -> checkPlayerHit("烈焰 8.5 格命中", true);
+				case 100 -> checkPlayerHit("烈焰 9.5 格命中", true);
 				case 120 -> flameFar();
-				case 180 -> checkPlayerHit("烈焰 9.5 格不命中", false);
+				case 180 -> checkPlayerHit("烈焰 10.5 格不命中", false);
 				case 200 -> poisonNear();
 				case 260 -> checkPlayerHit("剧毒 2.5 格命中", true);
 				case 280 -> poisonFar();
 				case 340 -> checkPlayerHit("剧毒 3.5 格不命中", false);
 				case 360 -> shockNear();
-				case 480 -> checkPlayerHit("震荡 10 格命中", true);
+				case 480 -> checkPlayerHit("震荡 13 格命中", true);
 				case 500 -> shockFar();
-				case 620 -> checkPlayerHit("震荡 14 格不命中", false);
+				case 620 -> checkPlayerHit("震荡 14.5 格不命中", false);
 				case 640 -> cloudCase("vampire");
 				case 760 -> checkCloudCase("吸血");
 				case 780 -> cloudCase("magnet");
@@ -114,13 +121,13 @@ public final class ArchetypeRangeDevCheck {
 	}
 
 	private static void flameNear() {
-		beginAt(300.0D, 308.5D);
+		beginAt(300.0D, 309.5D);
 		owner = spawnEximus("flame", 300.0D);
 		owner.setTarget(player);
 	}
 
 	private static void flameFar() {
-		beginAt(300.0D, 309.5D);
+		beginAt(300.0D, 310.5D);
 		owner = spawnEximus("flame", 300.0D);
 		owner.setTarget(player);
 	}
@@ -138,22 +145,30 @@ public final class ArchetypeRangeDevCheck {
 	}
 
 	private static void shockNear() {
-		beginAt(300.0D, 310.0D);
+		beginAt(300.0D, 313.0D);
 		owner = spawnEximus("shock", 300.0D);
 		owner.setTarget(player);
 	}
 
 	private static void shockFar() {
-		// 最后一根柱在 12 格、半径 1.1；13 格仍可能擦到，14 格才是明确外圈。
-		beginAt(300.0D, 314.0D);
+		// 起手索敌上限为 14 格；14.5 格必须保持不施法。
+		beginAt(300.0D, 314.5D);
 		owner = spawnEximus("shock", 300.0D);
 		owner.setTarget(player);
 	}
 
 	private static void cloudCase(String archetype) {
 		beginAt(304.0D, 300.0D);
+		if ("vampire".equals(archetype)) {
+			vampireSlowSeen = false;
+		}
 		owner = spawnEximus(archetype, 304.0D);
 		owner.setTarget(player);
+		if ("vampire".equals(archetype)) {
+			owner.setHealth(owner.getMaxHealth() * 0.5F);
+			lastVampireHealth = owner.getHealth();
+			maxVampireHealStep = 0.0F;
+		}
 		ally1 = spawnAlly(301.0D, owner);
 		ally2 = spawnAlly(302.0D, owner);
 	}
@@ -171,6 +186,14 @@ public final class ArchetypeRangeDevCheck {
 		check(label + "：玩家获得一团云", p > 0.1F, "player loss=%.1f".formatted(p));
 		check(label + "：目标 1 获得一团云", a1 > 0.1F, "ally1 loss=%.1f".formatted(a1));
 		check(label + "：目标 2 获得一团云", a2 > 0.1F, "ally2 loss=%.1f".formatted(a2));
+		if ("吸血".equals(label)) {
+			check("吸血：命中附加等价缓慢 I（−15% 移速）", vampireSlowSeen,
+					"seen=" + vampireSlowSeen);
+			float expectedStep = owner.getMaxHealth() * 0.15F;
+			check("吸血：3 个不同目标同 tick 叠加回复 15% 最大生命",
+					Math.abs(maxVampireHealStep - expectedStep) < 2.0F,
+					"maxStep=%.1f expected=%.1f".formatted(maxVampireHealStep, expectedStep));
+		}
 		endCase();
 	}
 
@@ -225,6 +248,18 @@ public final class ArchetypeRangeDevCheck {
 		owner.setTarget(unrelated);
 		checkReflect("支援目标：当前仇恨对象被排除", "isSupportTarget", false, owner, unrelated);
 		owner.setTarget(null);
+
+		player.teleportTo(player.serverLevel(), 309.5D, 100.0D, 0.0D, 0.0F, 0.0F);
+		owner.setTarget(player);
+		checkReflect("索敌：烈焰 9.5 格可起手", "currentTargetInRange", true, owner, 10.0D);
+		player.teleportTo(player.serverLevel(), 310.5D, 100.0D, 0.0D, 0.0F, 0.0F);
+		checkReflect("索敌：烈焰 10.5 格不可起手", "currentTargetInRange", false, owner, 10.0D);
+		player.teleportTo(player.serverLevel(), 313.5D, 100.0D, 0.0D, 0.0F, 0.0F);
+		checkReflect("索敌：震荡 13.5 格可起手", "currentTargetInRange", true, owner, 14.0D);
+		player.teleportTo(player.serverLevel(), 314.5D, 100.0D, 0.0D, 0.0F, 0.0F);
+		checkReflect("索敌：震荡 14.5 格不可起手", "currentTargetInRange", false, owner, 14.0D);
+		owner.setTarget(null);
+		player.teleportTo(player.serverLevel(), 300.0D, 100.0D, 0.0D, 0.0F, 0.0F);
 		run("kill @e[type=!minecraft:player]");
 	}
 
@@ -263,7 +298,7 @@ public final class ArchetypeRangeDevCheck {
 		for (int i = 0; i < 1000; i++) {
 			Object value = invoke("groundPoint", new Class<?>[]{
 					ServerLevel.class, LivingEntity.class, double.class
-			}, player.serverLevel(), owner, 8.0D);
+			}, player.serverLevel(), owner, 12.0D);
 			if (!(value instanceof net.minecraft.world.phys.Vec3 point)) {
 				check("随机补位：坐标类型", false, String.valueOf(value));
 				return;
@@ -278,8 +313,8 @@ public final class ArchetypeRangeDevCheck {
 			quadrants[quadrant]++;
 		}
 		// 高度图会把连续随机点吸附到方块中心，单轴最多偏移约 0.71 格。
-		check("随机补位 1000 次：距离保持在 2~8 格吸附容差内",
-				min >= 1.3D && max <= 8.8D,
+		check("随机补位 1000 次：距离保持在 2~12 格吸附容差内",
+				min >= 1.3D && max <= 12.8D,
 				"min=%.3f max=%.3f".formatted(min, max));
 		check("随机补位 1000 次：至少覆盖 150 个不同方块中心", distinct.size() >= 150,
 				"distinct=" + distinct.size());
@@ -299,11 +334,34 @@ public final class ArchetypeRangeDevCheck {
 				"expected=" + expected + " actual=" + value);
 	}
 
+	private static void observeVampireSlow() {
+		if (player == null) {
+			return;
+		}
+		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+		if (speed != null && speed.getModifiers().stream()
+				.anyMatch(modifier -> "summy_threat:vampire_slow_speed".equals(modifier.getName()))) {
+			vampireSlowSeen = true;
+		}
+	}
+
+	private static void observeVampireHeal() {
+		if (owner == null || !"vampire".equals(
+				owner.getPersistentData().getString(MonsterScaler.TAG_ARCHETYPE))) {
+			return;
+		}
+		float now = owner.getHealth();
+		if (lastVampireHealth >= 0.0F) {
+			maxVampireHealStep = Math.max(maxVampireHealStep, now - lastVampireHealth);
+		}
+		lastVampireHealth = now;
+	}
+
 	@SuppressWarnings("unchecked")
 	private static List<LivingEntity> selectUniqueTargets(int max) {
 		Object value = invoke("selectUniqueTargets", new Class<?>[]{
 				LivingEntity.class, double.class, int.class
-		}, owner, 12.0D, max);
+		}, owner, 14.0D, max);
 		return value instanceof List<?> list ? (List<LivingEntity>) list : List.of();
 	}
 
@@ -321,7 +379,17 @@ public final class ArchetypeRangeDevCheck {
 	private static Class<?>[] inferTypes(Object... args) {
 		Class<?>[] types = new Class<?>[args.length];
 		for (int i = 0; i < args.length; i++) {
-			types[i] = args[i] instanceof LivingEntity ? LivingEntity.class : args[i].getClass();
+			if (args[i] instanceof LivingEntity) {
+				types[i] = LivingEntity.class;
+			} else if (args[i] instanceof Double) {
+				types[i] = double.class;
+			} else if (args[i] instanceof Integer) {
+				types[i] = int.class;
+			} else if (args[i] instanceof Boolean) {
+				types[i] = boolean.class;
+			} else {
+				types[i] = args[i].getClass();
+			}
 		}
 		return types;
 	}
@@ -345,6 +413,7 @@ public final class ArchetypeRangeDevCheck {
 		eximus.getPersistentData().putString(MonsterScaler.TAG_ARCHETYPE, archetype);
 		level.addFreshEntity(eximus);
 		MonsterScaler.scaleNow(eximus, 20, MonsterScaler.Kind.EXIMUS);
+		AbilityEffects.setAbilities(eximus, 20, "");
 		eximus.setNoAi(true);
 		eximus.setPersistenceRequired();
 		eximus.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0.0D);

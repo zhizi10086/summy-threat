@@ -32,6 +32,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.ForgeMod;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
@@ -63,6 +64,7 @@ public final class EximusArchetypeEffects {
 	private static final UUID FROST_SLOW_SPEED = UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000403");
 	private static final UUID FROST_SLOW_ATTACK = UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000404");
 	private static final UUID CAST_ROOT = UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000405");
+	private static final UUID VAMPIRE_SLOW_SPEED = UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000407");
 	private static final String BETRAYAL_TARGET = "summy_reliquary:betrayal_target";
 	private static final String TAG_FROST_SHIELD = "summy_threat:frost_shield";
 	private static final String TAG_FROST_SHIELD_MAX = "summy_threat:frost_shield_max";
@@ -72,6 +74,19 @@ public final class EximusArchetypeEffects {
 	private static final float STORM_WAYPOINT_TOLERANCE = 2.0F;
 	private static final int STORM_STUCK_LIMIT = 10;
 	private static final int STORM_STUCK_REST = 40;
+	private static final double FLAME_RADIUS = 10.0D;
+	private static final long FLAME_COOLDOWN = 160L;
+	private static final int FLAME_BURN_SECONDS = 4;
+	private static final double POISON_RADIUS = 3.0D;
+	private static final double STORM_TARGET_RANGE = 14.0D;
+	private static final double STORM_STRIKE_RADIUS = 3.0D;
+	private static final int STORM_LOCK_SLOTS = 3;
+	private static final double SHOCK_RANGE = 14.0D;
+	private static final double SHOCK_COLUMN_SPACING = SHOCK_RANGE / 8.0D;
+	private static final double SHOCK_COLUMN_RADIUS = 1.3D;
+	private static final double CLOUD_RELEASE_RADIUS = 12.0D;
+	private static final double CLOUD_EFFECT_RADIUS = 3.0D;
+	private static final double MAGNET_PULL_STRENGTH = 0.25D;
 
 	private static final Map<UUID, FlameCast> FLAME = new HashMap<>();
 	private static final Map<UUID, Long> FLAME_READY = new HashMap<>();
@@ -80,18 +95,31 @@ public final class EximusArchetypeEffects {
 	private static final Map<UUID, FrostShield> FROST_SHIELDS = new HashMap<>();
 	private static final Set<UUID> FROST_GRANTED = new HashSet<>();
 	private static final Map<UUID, Long> FROST_SLOW = new HashMap<>();
+	private static final Map<UUID, Long> VAMPIRE_SLOW = new HashMap<>();
 	private static final Map<UUID, StormState> STORM = new HashMap<>();
 	private static final Map<UUID, ShockState> SHOCK = new HashMap<>();
 	private static final Map<UUID, Long> SHOCK_READY = new HashMap<>();
 	private static final Map<UUID, List<Cloud>> CLOUDS = new HashMap<>();
 	private static final Map<UUID, Long> NEXT_CLOUD = new HashMap<>();
 	private static final Map<UUID, Long> CLOUD_HIT = new HashMap<>();
-	private static final Map<UUID, Long> CLOUD_HEAL = new HashMap<>();
 	private static final Set<UUID> CREEPER_FUSING = new HashSet<>();
 	/** 当前被前摇定身的实体，避免对全部非卓越者每 tick 做属性查询。 */
 	private static final Set<UUID> ROOTED = new HashSet<>();
 
 	private EximusArchetypeEffects() {
+	}
+
+	@SubscribeEvent
+	public static void onServerTick(TickEvent.ServerTickEvent event) {
+		if (event.phase != TickEvent.Phase.END) {
+			return;
+		}
+		long now = event.getServer().overworld().getGameTime();
+		if ((now & 15L) == 0L) {
+			// 减速清理不能依赖施法者存活，否则卓越者提前死亡时修饰符可能残留。
+			cleanupFrostSlow(now);
+			cleanupVampireSlow(now);
+		}
 	}
 
 	@SubscribeEvent
@@ -129,9 +157,6 @@ public final class EximusArchetypeEffects {
 			}
 			case VAMPIRE, MAGNET -> tickClouds(entity, archetype, now);
 		}
-		if (entity.tickCount % 20 == 0) {
-			cleanupFrostSlow(now);
-		}
 	}
 
 	private static EximusArchetype archetype(LivingEntity entity) {
@@ -144,6 +169,11 @@ public final class EximusArchetypeEffects {
 
 	private static LivingEntity currentTarget(LivingEntity owner) {
 		return owner instanceof Mob mob ? mob.getTarget() : null;
+	}
+
+	private static boolean currentTargetInRange(LivingEntity owner, double range) {
+		LivingEntity target = currentTarget(owner);
+		return target != null && owner.distanceTo(target) <= range;
 	}
 
 	private static boolean isOffensiveTarget(LivingEntity owner, LivingEntity target) {
@@ -233,9 +263,9 @@ public final class EximusArchetypeEffects {
 		return out;
 	}
 
-	private static void hurt(LivingEntity target, net.minecraft.world.damagesource.DamageSource source, float amount) {
+	private static boolean hurt(LivingEntity target, net.minecraft.world.damagesource.DamageSource source, float amount) {
 		target.invulnerableTime = 0;
-		target.hurt(source, amount);
+		return target.hurt(source, amount);
 	}
 
 	private static Vec3 flatLook(LivingEntity entity) {
@@ -364,9 +394,10 @@ public final class EximusArchetypeEffects {
 	private static void tickFlame(LivingEntity owner, long now) {
 		FlameCast cast = FLAME.get(owner.getUUID());
 		if (cast == null) {
-			if (now >= FLAME_READY.getOrDefault(owner.getUUID(), 0L) && currentTarget(owner) != null) {
+			if (now >= FLAME_READY.getOrDefault(owner.getUUID(), 0L)
+					&& currentTargetInRange(owner, FLAME_RADIUS)) {
 				FLAME.put(owner.getUUID(), new FlameCast(now));
-				FLAME_READY.put(owner.getUUID(), now + 180L);
+				FLAME_READY.put(owner.getUUID(), now + FLAME_COOLDOWN);
 				if (owner.level() instanceof ServerLevel level) {
 					level.playSound(null, owner.getX(), owner.getY(), owner.getZ(),
 							SoundEvents.BLAZE_SHOOT, SoundSource.HOSTILE, 0.8F, 0.8F);
@@ -381,16 +412,16 @@ public final class EximusArchetypeEffects {
 			return;
 		}
 		if (elapsed <= 50L) {
-			double radius = 9.0D * (elapsed - 20L) / 30.0D;
+			double radius = FLAME_RADIUS * (elapsed - 20L) / 30.0D;
 			ringParticles(owner, radius, ParticleTypes.FLAME);
-			for (LivingEntity target : targets(owner, 9.0D, true)) {
+			for (LivingEntity target : targets(owner, FLAME_RADIUS, true)) {
 				double distance = target.distanceTo(owner);
 				if (distance < radius - 0.75D || distance > radius + 0.75D
 						|| !cast.hit.add(target.getUUID())) {
 					continue;
 				}
-				hurt(target, owner.damageSources().mobAttack(owner), skillDamage(owner, target, 45.0D));
-				target.setSecondsOnFire(3);
+				hurt(target, owner.damageSources().mobAttack(owner), skillDamage(owner, target, 70.0D));
+				target.setSecondsOnFire(FLAME_BURN_SECONDS);
 				Vec3 away = target.position().subtract(owner.position());
 				if (away.lengthSqr() > 1.0E-4D) {
 					Vec3 dir = away.normalize();
@@ -565,14 +596,53 @@ public final class EximusArchetypeEffects {
 		}
 	}
 
+	/** 缓慢 I 的环境兜底：-15% 移速，30 tick 后移除。 */
+	private static void applyVampireSlow(LivingEntity target, long until) {
+		AttributeInstance speed = target.getAttribute(Attributes.MOVEMENT_SPEED);
+		if (speed != null) {
+			speed.removeModifier(VAMPIRE_SLOW_SPEED);
+			speed.addTransientModifier(new AttributeModifier(VAMPIRE_SLOW_SPEED,
+					"summy_threat:vampire_slow_speed", -0.15D,
+					AttributeModifier.Operation.MULTIPLY_TOTAL));
+		}
+		VAMPIRE_SLOW.put(target.getUUID(), until);
+	}
+
+	private static void cleanupVampireSlow(long now) {
+		Iterator<Map.Entry<UUID, Long>> iterator = VAMPIRE_SLOW.entrySet().iterator();
+		while (iterator.hasNext()) {
+			Map.Entry<UUID, Long> entry = iterator.next();
+			if (entry.getValue() > now) {
+				continue;
+			}
+			Entity entity = null;
+			var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+			if (server != null) {
+				for (ServerLevel level : server.getAllLevels()) {
+					entity = level.getEntity(entry.getKey());
+					if (entity != null) {
+						break;
+					}
+				}
+			}
+			if (entity instanceof LivingEntity living) {
+				AttributeInstance speed = living.getAttribute(Attributes.MOVEMENT_SPEED);
+				if (speed != null) {
+					speed.removeModifier(VAMPIRE_SLOW_SPEED);
+				}
+			}
+			iterator.remove();
+		}
+	}
+
 	// ==================== 剧毒 ====================
 
 	private static void tickPoison(LivingEntity owner) {
 		if (owner.tickCount % 20 != 0 || !(owner.level() instanceof ServerLevel level)) {
 			return;
 		}
-		for (LivingEntity target : targets(owner, 3.0D, true)) {
-			hurt(target, owner.damageSources().indirectMagic(owner, owner), skillDamage(owner, target, 5.0D));
+		for (LivingEntity target : targets(owner, POISON_RADIUS, true)) {
+			hurt(target, owner.damageSources().indirectMagic(owner, owner), skillDamage(owner, target, 9.0D));
 			level.sendParticles(ParticleTypes.SPORE_BLOSSOM_AIR, target.getX(),
 					target.getY() + target.getBbHeight() * 0.5D, target.getZ(), 4, 0.4D, 0.4D, 0.4D, 0.01D);
 		}
@@ -643,11 +713,11 @@ public final class EximusArchetypeEffects {
 		if (state.castStart < 0L && !sprinting && hasTarget && now >= state.nextCast) {
 			if (owner.level() instanceof ServerLevel level) {
 				List<LockSlot> slots = new ArrayList<>();
-				for (LivingEntity target : selectUniqueTargets(owner, 12.0D, 2)) {
+				for (LivingEntity target : selectUniqueTargets(owner, STORM_TARGET_RANGE, STORM_LOCK_SLOTS)) {
 					slots.add(new LockSlot(target.getUUID(), groundPointAt(level, target)));
 				}
-				while (slots.size() < 2) {
-					slots.add(new LockSlot(null, groundPoint(level, owner, 12.0D)));
+				while (slots.size() < STORM_LOCK_SLOTS) {
+					slots.add(new LockSlot(null, groundPoint(level, owner, STORM_TARGET_RANGE)));
 				}
 				state.lockSlots = slots;
 				state.castStart = now;
@@ -674,7 +744,7 @@ public final class EximusArchetypeEffects {
 			for (Vec3 point : state.points) {
 				if (elapsed < 80L && owner.level() instanceof ServerLevel level) {
 					// 1 秒锁定期：落点固定，用收缩的电弧圈提示玩家离开 2.5 格范围。
-					double radius = 2.5D * (1.0D - (elapsed - 60L) / 20.0D) + 0.2D;
+					double radius = STORM_STRIKE_RADIUS * (1.0D - (elapsed - 60L) / 20.0D) + 0.2D;
 					DustParticleOptions dust = new DustParticleOptions(new Vector3f(1.0F, 0.88F, 0.4F), 0.9F);
 					for (int i = 0; i < 16; i++) {
 						double angle = Math.PI * 2.0D * i / 16.0D;
@@ -716,7 +786,7 @@ public final class EximusArchetypeEffects {
 			}
 			Entity entity = level.getEntity(slot.targetId);
 			if (entity instanceof LivingEntity target && target.isAlive()
-					&& target.distanceTo(owner) <= 12.0D) {
+					&& target.distanceTo(owner) <= STORM_TARGET_RANGE) {
 				slot.point = groundPointAt(level, target);
 			} else {
 				slot.fixed = true;
@@ -751,9 +821,9 @@ public final class EximusArchetypeEffects {
 			bolt.setVisualOnly(true);
 			level.addFreshEntity(bolt);
 		}
-		for (LivingEntity target : allTargetsAtExcept(owner, point, 2.5D)) {
+		for (LivingEntity target : allTargetsAtExcept(owner, point, STORM_STRIKE_RADIUS)) {
 			hurt(target, owner.damageSources().indirectMagic(owner, owner),
-					skillDamage(owner, target, 30.0D));
+					skillDamage(owner, target, 50.0D));
 		}
 	}
 
@@ -822,7 +892,8 @@ public final class EximusArchetypeEffects {
 	private static void tickShock(LivingEntity owner, long now) {
 		ShockState state = SHOCK.get(owner.getUUID());
 		if (state == null) {
-			if (currentTarget(owner) != null && now >= SHOCK_READY.getOrDefault(owner.getUUID(), 0L)) {
+			if (currentTargetInRange(owner, SHOCK_RANGE)
+					&& now >= SHOCK_READY.getOrDefault(owner.getUUID(), 0L)) {
 				state = new ShockState(now, aimDirection(owner));
 				SHOCK.put(owner.getUUID(), state);
 				SHOCK_READY.put(owner.getUUID(), now + 160L);
@@ -840,7 +911,7 @@ public final class EximusArchetypeEffects {
 			if (owner.level() instanceof ServerLevel level) {
 				DustParticleOptions dust = new DustParticleOptions(new Vector3f(1.0F, 0.69F, 0.0F), 0.9F);
 				for (int i = 0; i <= 24; i++) {
-					Vec3 point = owner.position().add(state.direction.scale(12.0D * i / 24.0D));
+					Vec3 point = owner.position().add(state.direction.scale(SHOCK_RANGE * i / 24.0D));
 					level.sendParticles(dust, point.x, owner.getY() + 0.1D, point.z, 1,
 							0.02D, 0.0D, 0.02D, 0.0D);
 					if (i % 4 == 0) {
@@ -860,7 +931,7 @@ public final class EximusArchetypeEffects {
 			if (elapsed < columnStart || elapsed > columnStart + 20L) {
 				continue;
 			}
-			double distance = 1.5D * (i + 1);
+			double distance = SHOCK_COLUMN_SPACING * (i + 1);
 			Vec3 point = owner.position().add(state.direction.scale(distance));
 			if (elapsed < columnStart + 8L) {
 				if (owner.level() instanceof ServerLevel level) {
@@ -877,11 +948,11 @@ public final class EximusArchetypeEffects {
 					shockColumnActive(level, owner, point);
 				}
 			}
-			for (LivingEntity target : targetsAt(owner, point, 1.1D)) {
+			for (LivingEntity target : targetsAt(owner, point, SHOCK_COLUMN_RADIUS)) {
 				if (!state.hit.add(target.getUUID() + "#" + i)) {
 					continue;
 				}
-			hurt(target, owner.damageSources().mobAttack(owner), skillDamage(owner, target, 20.0D));
+				hurt(target, owner.damageSources().mobAttack(owner), skillDamage(owner, target, 30.0D));
 				Vec3 away = target.position().subtract(owner.position());
 				if (away.lengthSqr() > 1.0E-4D) {
 					Vec3 dir = away.normalize();
@@ -963,11 +1034,11 @@ public final class EximusArchetypeEffects {
 			if (owner.level() instanceof ServerLevel level) {
 				List<Vec3> positions = new ArrayList<>();
 				// 每个目标最多匹配一团；不足 3 团时随机补位。
-				for (LivingEntity target : selectUniqueTargets(owner, 8.0D, 3)) {
+				for (LivingEntity target : selectUniqueTargets(owner, CLOUD_RELEASE_RADIUS, 3)) {
 					positions.add(groundPointAt(level, target));
 				}
 				while (positions.size() < 3) {
-					positions.add(groundPoint(level, owner, 8.0D));
+					positions.add(groundPoint(level, owner, CLOUD_RELEASE_RADIUS));
 				}
 				for (Vec3 pos : positions) {
 					// 1.5 秒预警 + 10 秒生效；场上最多 3 团。
@@ -991,7 +1062,7 @@ public final class EximusArchetypeEffects {
 				// 否则玩家会误以为云只存在 1.5 秒，而伤害实际持续 10 秒。
 				cloudActiveFx(level, cloud, archetype, now);
 			}
-			for (LivingEntity target : targetsAt(owner, new Vec3(cloud.x, cloud.y, cloud.z), 2.0D)) {
+			for (LivingEntity target : targetsAt(owner, new Vec3(cloud.x, cloud.y, cloud.z), CLOUD_EFFECT_RADIUS)) {
 				if (archetype == EximusArchetype.MAGNET && !isBossLike(target)) {
 					pull(target, cloud);
 				}
@@ -999,8 +1070,8 @@ public final class EximusArchetypeEffects {
 					continue;
 				}
 				CLOUD_HIT.put(target.getUUID(), now);
-				hurt(target, owner.damageSources().indirectMagic(owner, owner),
-						skillDamage(owner, target, archetype == EximusArchetype.VAMPIRE ? 6.0D : 4.0D));
+				boolean landed = hurt(target, owner.damageSources().indirectMagic(owner, owner),
+						skillDamage(owner, target, archetype == EximusArchetype.VAMPIRE ? 18.0D : 15.0D));
 				if (owner.level() instanceof ServerLevel level) {
 					Vector3f color = archetype == EximusArchetype.VAMPIRE
 							? new Vector3f(0.7F, 0.0F, 0.1F) : new Vector3f(0.71F, 0.36F, 1.0F);
@@ -1008,10 +1079,11 @@ public final class EximusArchetypeEffects {
 							target.getY() + target.getBbHeight() * 0.5D, target.getZ(),
 							6, 0.4D, 0.3D, 0.4D, 0.01D);
 				}
-				if (archetype == EximusArchetype.VAMPIRE
-						&& now - CLOUD_HEAL.getOrDefault(owner.getUUID(), -100L) >= 20L) {
-					CLOUD_HEAL.put(owner.getUUID(), now);
+				if (archetype == EximusArchetype.VAMPIRE && landed) {
+					// 不同目标分别回血；同一目标已由 CLOUD_HIT 限制为每秒一次。
 					owner.heal(owner.getMaxHealth() * 0.05F);
+					// 使用 ST 自己的等价缓慢 I，避免原版负面效果被其它模组清理后失效。
+					applyVampireSlow(target, now + 30L);
 				}
 			}
 			if (now >= cloud.nextTick) {
@@ -1060,8 +1132,8 @@ public final class EximusArchetypeEffects {
 		DustParticleOptions dust = new DustParticleOptions(color, 0.9F);
 		for (int i = 0; i < 12; i++) {
 			double angle = Math.PI * 2.0D * i / 12.0D;
-			level.sendParticles(dust, cloud.x + Math.cos(angle) * 2.0D, cloud.y + 0.1D,
-					cloud.z + Math.sin(angle) * 2.0D, 1, 0.02D, 0.0D, 0.02D, 0.0D);
+			level.sendParticles(dust, cloud.x + Math.cos(angle) * CLOUD_EFFECT_RADIUS, cloud.y + 0.1D,
+					cloud.z + Math.sin(angle) * CLOUD_EFFECT_RADIUS, 1, 0.02D, 0.0D, 0.02D, 0.0D);
 		}
 	}
 
@@ -1091,7 +1163,7 @@ public final class EximusArchetypeEffects {
 		// 拉拽按击退抗性削减；击退抗性 1.0 时完全免疫。
 		double resistance = Math.max(0.0D, Math.min(1.0D,
 				target.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE)));
-		double strength = 0.15D * (1.0D - resistance);
+		double strength = MAGNET_PULL_STRENGTH * (1.0D - resistance);
 		target.push(dir.x * strength, 0.0D, dir.z * strength);
 		target.hurtMarked = true;
 	}
@@ -1237,7 +1309,6 @@ public final class EximusArchetypeEffects {
 		CLOUDS.remove(id);
 		NEXT_CLOUD.remove(id);
 		CLOUD_HIT.remove(id);
-		CLOUD_HEAL.remove(id);
 		CREEPER_FUSING.remove(id);
 		ROOTED.remove(id);
 		FROST_SHIELDS.remove(id);
@@ -1246,6 +1317,7 @@ public final class EximusArchetypeEffects {
 		entity.getPersistentData().remove(TAG_FROST_SHIELD_MAX);
 		entity.getPersistentData().remove(TAG_FROST_GRANTED);
 		removeFrostSlow(entity);
+		removeVampireSlow(entity);
 	}
 
 	private static void removeFrostSlow(LivingEntity entity) {
@@ -1260,6 +1332,14 @@ public final class EximusArchetypeEffects {
 		}
 	}
 
+	private static void removeVampireSlow(LivingEntity entity) {
+		VAMPIRE_SLOW.remove(entity.getUUID());
+		AttributeInstance speed = entity.getAttribute(Attributes.MOVEMENT_SPEED);
+		if (speed != null) {
+			speed.removeModifier(VAMPIRE_SLOW_SPEED);
+		}
+	}
+
 	@SubscribeEvent
 	public static void onServerStopped(ServerStoppedEvent event) {
 		FLAME.clear();
@@ -1269,13 +1349,13 @@ public final class EximusArchetypeEffects {
 		FROST_SHIELDS.clear();
 		FROST_GRANTED.clear();
 		FROST_SLOW.clear();
+		VAMPIRE_SLOW.clear();
 		STORM.clear();
 		SHOCK.clear();
 		SHOCK_READY.clear();
 		CLOUDS.clear();
 		NEXT_CLOUD.clear();
 		CLOUD_HIT.clear();
-		CLOUD_HEAL.clear();
 		CREEPER_FUSING.clear();
 		ROOTED.clear();
 	}
