@@ -365,7 +365,7 @@ public final class Config {
 
 		builder.comment("区域首领（领袖）：生命 = 基础生命 × 固定倍率 × (基数 + PCF / 除数)",
 				"攻击口径（v2.8）：困难难度对玩家 ×1.5；满配一口血 168.5，目标 6 次致死；",
-				"猪灵蛮兵原版攻击属性实为 7.0（旧文档按 13.0 推算有误，已校正）。")
+				"猪灵蛮兵正常环境持金斧，攻击属性为 13.0。")
 				.push("regional_boss_health");
 		LEADER_ZOMBIE_MULTIPLIER = builder.defineInRange("leader_zombie", 1050.0D, 1.0D, 100_000.0D);
 		LEADER_PIGLIN_BRUTE_MULTIPLIER = builder.defineInRange("piglin_brute", 420.0D, 1.0D, 100_000.0D);
@@ -374,11 +374,11 @@ public final class Config {
 				.comment("领袖僵尸攻击倍率（v2.8：属性 3.0 × 21.93 × 1.5 ≈ 一击 98.7，满配 6 次致死）")
 				.defineInRange("leader_zombie_attack", 21.93D, 0.0D, 10_000.0D);
 		LEADER_PIGLIN_BRUTE_ATTACK = builder
-				.comment("猪灵蛮兵攻击倍率（v2.8：属性 7.0 × 9.40 × 1.5 ≈ 一击 98.7，满配 6 次致死）")
+				.comment("猪灵蛮兵攻击倍率（带金斧属性 13.0 × 9.40，困难命中再 ×1.5）")
 				.defineInRange("piglin_brute_attack", 9.40D, 0.0D, 10_000.0D);
 		LEADER_ELDER_GUARDIAN_ATTACK = builder
-				.comment("远古守卫者攻击倍率——**当前无效**：古守伤害为硬编码（thorns 2.0 接触 + 激光），",
-						"不吃 ATTACK_DAMAGE 属性；数值暂留占位，待「攻击接管」轮启用。")
+				.comment("远古守卫者攻击倍率：属性攻击直接生效；",
+						"激光固定魔法段与 thorns 2.0 由 A15 接管，继承生成时的最终攻击倍率。")
 				.defineInRange("elder_guardian_attack", 8.0D, 0.0D, 10_000.0D);
 		LEADER_PCF_BASE_FACTOR = builder
 				.comment("PCF 缩放的基数（默认 0.3）")
@@ -390,8 +390,8 @@ public final class Config {
 
 		builder.comment("原版 Boss：生命 = 基础生命 × 固定倍率（不随 PCF 缩放）",
 				"攻击口径（v2.8）：监守者目标 4 次致死（属性 30 × 3.29 × 1.5 ≈ 一击 148.1）；",
-				"末影龙（啃咬硬编码 10f/5f）与凋灵（爆炸 + 头颅投射物）伤害**不走 ATTACK_DAMAGE**，",
-				"对应倍率当前无效、数值暂留占位，待「攻击接管」轮启用。")
+				"末影龙啃咬 10f/5f、凋灵爆炸与头颅投射物由 A15 接管，",
+				"继承 Boss 生成时已写入的攻击倍率。")
 				.push("boss_health");
 		BOSS_WARDEN_MULTIPLIER = builder.defineInRange("warden", 70.0D, 1.0D, 100_000.0D);
 		BOSS_ENDER_DRAGON_MULTIPLIER = builder.defineInRange("ender_dragon", 175.0D, 1.0D, 100_000.0D);
@@ -400,10 +400,10 @@ public final class Config {
 				.comment("监守者近战攻击倍率（v2.8：属性 30 × 3.29 × 1.5 ≈ 一击 148.1，满配 4 次致死）")
 				.defineInRange("warden_melee_attack", 3.29D, 0.0D, 1000.0D);
 		BOSS_ENDER_DRAGON_ATTACK = builder
-				.comment("末影龙攻击倍率——**当前无效**（啃咬伤害硬编码 10f/5f，无 ATTACK_DAMAGE 属性）")
+				.comment("末影龙攻击倍率：接管啃咬 10f/5f 的硬编码伤害（无 ATTACK_DAMAGE 属性）")
 				.defineInRange("ender_dragon_attack", 4.0D, 0.0D, 1000.0D);
 		BOSS_WITHER_ATTACK = builder
-				.comment("凋灵攻击倍率——**对实际伤害无效**（伤害来自爆炸与头颅投射物；属性存在但默认 2.0，源码不读它）")
+				.comment("凋灵攻击倍率：接管生成爆炸、头颅直击 8f 与头颅爆炸")
 				.defineInRange("wither_attack", 3.0D, 0.0D, 1000.0D);
 		DEFAULT_EFFECTIVE_DPS = builder
 				.comment("Mod Boss 反推公式用的默认有效 DPS（v2.7 校准常数：Boss 档实测 ≈700；Mod Boss 支持落地后启用）")

@@ -6,7 +6,7 @@ Forge 1.20.1 的"属性与怪物机制改造"模组，承载四块内容：
 2. **护甲减伤公式替换**（已实现）
 3. **基础数值表**：怪物侧 TL 缩放（护甲 / 生命 / 攻击）、区域首领与 Boss 倍率、生态分档、
    玩家护甲重填、测量命令（已实现，2026-10-16）；**TL 数值、PCF/CDF、TL 能力、卓越者与 8 个原型已实装；
-   完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲仍未实装**
+   Boss 硬编码攻击接管已实装；完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲仍未实装**
 4. **回响下界合金（强化下界合金）**：锻造台升级的 4 件护甲 + 卓越者精华（已实现，2026-10-17；
    贴图/模型复用原版下界合金；四件独特能力已实装）
 
@@ -61,10 +61,10 @@ EA = A + (A×T)/15
 当前已实装数值表、PCF/CDF、TL 能力池、卓越护盾、8 个卓越者原型与 5% 自然刷新；
 完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲、SR 背叛仍未实装。
 
-**当前状态（v2.39）**：
+**当前状态（v2.41）**：
 
-- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、回响下界合金四件、玩家护盾 HUD、承伤日志、SR 固定伤害全伤害增伤兼容（默认关闭；5 项 isDivine 补 SR+SE，2 项 isExactDamage 只补 SE）。
-- 未完成：领袖 / Boss / 超级 Boss 能力池、龙 / 凋灵 / 古守攻击接管、
+- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、末影龙 / 凋灵 / 古守硬编码攻击接管、回响下界合金四件、玩家护盾 HUD、承伤日志、SR 固定伤害全伤害增伤兼容（默认关闭；5 项 isDivine 补 SR+SE，2 项 isExactDamage 只补 SE）。
+- 未完成：领袖 / Boss / 超级 Boss 能力池、
   穿甲削甲、SR 背叛、卓越者精华获取、回响套正式贴图/模型。
 - 历史验证记录保留原样；以后续“当前状态”与内部《缺失项清单》为准。
 
@@ -75,7 +75,7 @@ EA = A + (A×T)/15
 | --- | --- |
 | 护甲 / 韧性 | 怪物护甲表（TL0 = 0/0 … TL20 = 38/28）；卓越者再 +15 / +10；区域首领 60/40、Boss 100/50 |
 | 生命 | M(TL)（1.0 → 48.0，v2.7）× E(TL)（1.20 → 2.20，卓越者）× 首领 / Boss 固定倍率 |
-| 攻击 | A(TL)（1.0 → 16.44，v2.9）× 卓越者 1.25；区域首领 21.93 / 9.40 / 8.0（古守倍率当前无效）；Boss 3.29 / 4.0 / 3.0（末影龙 / 凋灵倍率当前无效） |
+| 攻击 | A(TL)（1.0 → 16.44，v2.9）× 卓越者 1.25；区域首领 21.93 / 9.40 / 8.0；Boss 3.29 / 4.0 / 3.0。末影龙 10/5、凋灵头颅与爆炸、古守激光固定段与 thorns 继承生成时攻击倍率 |
 | 移速 / 经验 | 卓越者 +5%；经验 ×2（`LivingExperienceDropEvent`） |
 | Jade 提示（可选） | 装 Jade 11.13+ 时两行显示：`[Summy Threat] TL 20 卓越者·烈焰`（普通单位不显示类型；卓越者追加原型名）/ `迅捷·力量`（能力名按解锁 TL 阶段上色：4-7 白、8-11 蓝、12-15 紫、16-20 金）；未装零影响 |
 | 卓越者原型 | 8 个专属原型；高风险平衡档：烈焰 70/10 格、剧毒 9/秒、电涌 50×3 落点、震荡 30/柱、吸血 18/秒并提供多目标叠加回血与缓慢 I、磁力 15/秒并拉拽 0.25/tick；冰霜与守护保持现有强度。电涌 3 秒追踪 + 1 秒锁定，云团 1.5 秒预警 + 完整 10 秒生效显示 |
@@ -177,10 +177,10 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `eximus.eximus_shield_tl20_ratio` | double | `0.75`（TL20 卓越护盾占最大生命） | 0.0 ~ 10.0 |
 | `eximus.natural_spawn_chance` | double | `0.05`（自然卓越者概率） | 0.0 ~ 1.0 |
 | `regional_boss_health.leader_zombie` / `piglin_brute` / `elder_guardian` | double | `1050` / `420` / `263` | 1.0 ~ 10000.0 |
-| `regional_boss_health.*_attack` | double | `21.93` / `9.40` / `8.0`（古守当前无效） | 0.0 ~ 10000.0 |
+| `regional_boss_health.*_attack` | double | `21.93` / `9.40` / `8.0`（含古守硬编码攻击接管） | 0.0 ~ 10000.0 |
 | `regional_boss_health.pcf_base_factor` / `pcf_scale_divisor` | double | `0.3` / `28.0` | 见配置文件 |
 | `boss_health.warden` / `ender_dragon` / `wither` | double | `70` / `175` / `117` | 1.0 ~ 10000.0 |
-| `boss_health.warden_melee_attack` / `ender_dragon_attack` / `wither_attack` | double | `3.29` / `4.0` / `3.0`（龙 / 凋灵当前无效） | 0.0 ~ 1000.0 |
+| `boss_health.warden_melee_attack` / `ender_dragon_attack` / `wither_attack` | double | `3.29` / `4.0` / `3.0`（龙 / 凋灵的硬编码攻击已接管） | 0.0 ~ 1000.0 |
 | `boss_health.default_effective_dps` | double | `700.0` | 1.0 ~ 100000.0 |
 | `environment_tier.mode` | enum | `auto` | auto / none / sr / se / sr_apocrypha / se_sr / full / free |
 | `environment_tier.hp_scale_*` / `atk_scale_*` | double | `0.35` / `0.55` / `0.55`(**攻击 0.35**) / `0.75` / `1.00` / **free 0.50** | 预设 0.0 ~ 1.0；free 0.0 ~ 2.0 |

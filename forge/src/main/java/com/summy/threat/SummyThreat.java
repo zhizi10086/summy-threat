@@ -6,6 +6,7 @@ import com.summy.threat.command.SummyThreatCommand;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.armor.EchoArmorEffects;
 import com.summy.threat.armor.PlayerEximusShield;
+import com.summy.threat.combat.BossHardcodedDamageScaling;
 import com.summy.threat.compat.ReliquaryFixedDamageCompat;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.eximus.EximusSpawner;
@@ -35,7 +36,7 @@ import org.slf4j.LoggerFactory;
  * 模组入口：Summy Threat。
  *
  * <p>已实现：属性上限抬升、自定义护甲减伤公式、基础数值表（怪物侧 TL 缩放 + 玩家护甲重填）、
- * 生态分档（§5.0）、卓越者 / TL 能力 / 8 个卓越者原型与调试 / 测量命令。
+ * 生态分档（§5.0）、卓越者 / TL 能力 / 8 个卓越者原型、Boss 硬编码攻击接管与调试 / 测量命令。
  * PCF/CDF、TL 选择与持久化已实现；领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲与 SR 背叛仍待实现。
  * 配置走 Forge 原生 SERVER 档，Forge 会把服务端的值自动同步给客户端，双端口径天然一致。
  */
@@ -78,6 +79,7 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(SpawnRegion.class);
 		MinecraftForge.EVENT_BUS.register(SummyThreatCommand.class);
 		MinecraftForge.EVENT_BUS.register(PlayerArmorRefill.class);
+		MinecraftForge.EVENT_BUS.register(BossHardcodedDamageScaling.class);
 		// SR 固定伤害兼容：LOW 优先级，排在 SR 常规倍率之后、SR LOWEST 伤害池之前。
 		MinecraftForge.EVENT_BUS.register(ReliquaryFixedDamageCompat.class);
 		// 放在最后注册：与 EximusShield 同为 LOWEST 时后执行，能读到本次护盾吸收量。

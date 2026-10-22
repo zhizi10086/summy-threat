@@ -46,6 +46,9 @@ public final class MonsterScaler {
 	public static final String TAG_SCALED = "summy_threat:scaled";
 	/** 该实体的 TL（计量与显示用） */
 	public static final String TAG_TL = "summy_threat:tl";
+	/** 生成时最终使用的攻击倍率；供不走 ATTACK_DAMAGE 的硬编码 Boss 伤害继承。 */
+	public static final String TAG_HARDCODED_ATTACK_MULTIPLIER =
+			"summy_threat:hardcoded_attack_multiplier";
 	/** 卓越者标记（本轮只由命令强制） */
 	public static final String TAG_EXIMUS = "summy_threat:eximus";
 	/** 区域首领标记（本轮只由命令强制） */
@@ -185,7 +188,6 @@ public final class MonsterScaler {
 		double armorTarget;
 		double toughnessTarget;
 		double healthMultiplier;
-		double attackMultiplier;
 		double speedBonus = 0.0D;
 
 		switch (kind) {
@@ -195,7 +197,6 @@ public final class MonsterScaler {
 				toughnessTarget = 40.0D;
 				healthMultiplier = ScalingState.scale(leaderMultiplier(entity), rHp)
 						* (Config.LEADER_PCF_BASE_FACTOR.get() + pcfOf(entity) / Config.LEADER_PCF_SCALE_DIVISOR.get());
-				attackMultiplier = ScalingState.scale(leaderAttack(entity), rAtk);
 			}
 			case BOSS -> {
 				// Boss：护甲固定 100 / 50；生命与攻击走 TL 曲线（锚点 TL0 = 原版、TL20 = 配置倍率）
@@ -203,8 +204,6 @@ public final class MonsterScaler {
 				toughnessTarget = 50.0D;
 				healthMultiplier = ScalingState.scale(
 						bossTlCurve(tl, bossMultiplier(entity), Config.HEALTH_MULTIPLIER_PER_TL), rHp);
-				attackMultiplier = ScalingState.scale(
-						bossTlCurve(tl, bossAttack(entity), Config.ATTACK_MULTIPLIER_PER_TL), rAtk);
 			}
 			default -> {
 				boolean eximus = kind == Kind.EXIMUS;
@@ -212,11 +211,10 @@ public final class MonsterScaler {
 				toughnessTarget = ScalingState.toughnessValue(tl) + (eximus ? Config.EXIMUS_TOUGHNESS_BONUS.get() : 0.0D);
 				healthMultiplier = ScalingState.healthMultiplier(tl)
 						* (eximus ? ScalingState.eximusMultiplier(tl) : 1.0D);
-				attackMultiplier = ScalingState.attackMultiplier(tl)
-						* (eximus ? Config.EXIMUS_DAMAGE_MULTIPLIER.get() : 1.0D);
 				speedBonus = eximus ? Config.EXIMUS_SPEED_BONUS.get() : 0.0D;
 			}
 		}
+		double attackMultiplier = attackMultiplierFor(entity, kind, tl);
 
 		// 护甲 / 韧性：以"表值 − 当前基础值"的加法把它抬到目标值
 		setAddition(entity, Attributes.ARMOR, ID_ARMOR, armorTarget);
@@ -233,6 +231,7 @@ public final class MonsterScaler {
 		CompoundTag data = entity.getPersistentData();
 		data.putBoolean(TAG_SCALED, true);
 		data.putInt(TAG_TL, tl);
+		data.putDouble(TAG_HARDCODED_ATTACK_MULTIPLIER, attackMultiplier);
 		data.putLong(TAG_SESSION, sessionToken);
 		if (kind == Kind.EXIMUS) {
 			// 命令可在 scaleNow 之前写入指定原型；没有合法标签时随机补一个。
@@ -268,6 +267,38 @@ public final class MonsterScaler {
 					data.getString(TAG_ABILITIES).isEmpty() ? "无" : data.getString(TAG_ABILITIES));
 		}
 		return true;
+	}
+
+	/**
+	 * 返回该实体生成时实际使用的攻击倍率。
+	 *
+	 * <p>普通属性攻击已把倍率写入 ATTACK_DAMAGE；末影龙、凋灵等硬编码伤害读取本值，
+	 * 因此不会因为之后切换档位而改变已生成 Boss 的伤害。旧存档缺少标签时按保存的
+	 * TL 与分类补算一次，再写回复用。
+	 */
+	public static double hardcodedAttackMultiplier(LivingEntity entity) {
+		CompoundTag data = entity.getPersistentData();
+		if (!data.getBoolean(TAG_SCALED) || ScalingState.tier() == ScalingState.Tier.NONE) {
+			return 1.0D;
+		}
+		if (data.contains(TAG_HARDCODED_ATTACK_MULTIPLIER)) {
+			return Math.max(0.0D, data.getDouble(TAG_HARDCODED_ATTACK_MULTIPLIER));
+		}
+		int storedTl = data.contains(TAG_TL) ? data.getInt(TAG_TL) : 0;
+		double computed = attackMultiplierFor(entity, kindOf(entity), storedTl);
+		data.putDouble(TAG_HARDCODED_ATTACK_MULTIPLIER, computed);
+		return computed;
+	}
+
+	private static double attackMultiplierFor(LivingEntity entity, Kind kind, int tl) {
+		double rAtk = ScalingState.rAtk();
+		return switch (kind) {
+			case LEADER -> ScalingState.scale(leaderAttack(entity), rAtk);
+			case BOSS -> ScalingState.scale(
+					bossTlCurve(tl, bossAttack(entity), Config.ATTACK_MULTIPLIER_PER_TL), rAtk);
+			default -> ScalingState.attackMultiplier(tl)
+					* (kind == Kind.EXIMUS ? Config.EXIMUS_DAMAGE_MULTIPLIER.get() : 1.0D);
+		};
 	}
 
 	/** 显示名（命令用）：生命 ×M ×E 等口径的中文摘要 */

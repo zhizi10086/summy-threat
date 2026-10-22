@@ -106,6 +106,7 @@ public final class ThreatDevCheck {
 				case 280 -> checkRandomness(player);
 				case 285 -> checkRegionMultipliers(player);
 				case 290 -> ReliquaryCompatDevCheck.run(player);
+				case 292 -> FAILURES.addAll(BossHardcodedDamageDevCheck.run(player));
 				case 350 -> prepareNaturalSpawn(player, 1.0D, "100%");
 				case 750 -> checkNatural100(player);
 				case 770 -> prepareNaturalSpawn(player, 0.05D, "5%");
