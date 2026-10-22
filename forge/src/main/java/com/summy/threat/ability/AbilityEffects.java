@@ -1,6 +1,7 @@
 package com.summy.threat.ability;
 
 import com.summy.threat.Config;
+import com.summy.threat.combat.ArmorShred;
 import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
@@ -57,15 +58,12 @@ public final class AbilityEffects {
 	private static final UUID ID_SWIFT = UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000101");
 	private static final UUID ID_STRENGTH = UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000102");
 	private static final UUID ID_FRENZY = UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000103");
-	private static final UUID ID_CORROSION = UUID.fromString("6f5c1a2e-0009-4a0b-9d1e-000000000104");
 
 	private static final String MODIFIER_NAME = "summy_threat:tl_ability";
 
 	/** 追加段递归深度：>0 时表示正在结算追加段 */
 	private static int extraDepth;
 
-	/** 腐蚀：目标 UUID → 3 层各自的到期 tick（0 = 未叠） */
-	private static final Map<UUID, long[]> CORROSION = new HashMap<>();
 	/** 相位冷却：实体 UUID → 可再次触发的 tick */
 	private static final Map<UUID, Long> PHASE_COOLDOWN = new HashMap<>();
 	/** 亡灵增援：召唤者 UUID → 召唤体 UUID */
@@ -278,7 +276,7 @@ public final class AbilityEffects {
 				damageExtra(victim, attacker.damageSources().onFire(), nominal * 0.10F, false);
 			}
 			if (has(attacker, AbilityId.CORROSION) && !EximusShield.isActive(victim)) {
-				applyCorrosion(victim);
+				ArmorShred.applyCorrosion(victim);
 			}
 		}
 
@@ -361,9 +359,7 @@ public final class AbilityEffects {
 		if (entity.level().isClientSide) {
 			return;
 		}
-		if (CORROSION.containsKey(entity.getUUID())) {
-			updateCorrosion(entity);
-		}
+		ArmorShred.tick(entity);
 		if (!enabled() || entity.tickCount % 10 != 0) {
 			return;
 		}
@@ -412,62 +408,9 @@ public final class AbilityEffects {
 		}
 	}
 
-	private static void applyCorrosion(LivingEntity victim) {
-		long now = victim.level().getGameTime();
-		long[] stacks = CORROSION.computeIfAbsent(victim.getUUID(), id -> new long[3]);
-		int slot = 0;
-		for (int i = 0; i < stacks.length; i++) {
-			if (stacks[i] <= now) {
-				slot = i;
-				break;
-			}
-			if (stacks[i] < stacks[slot]) {
-				slot = i;
-			}
-		}
-		stacks[slot] = now + 120L;
-		refreshCorrosionModifier(victim, now);
-	}
-
 	/** 卓越护盾获得时清除已有腐蚀，保证属性快照基线干净。 */
 	public static void clearCorrosion(LivingEntity entity) {
-		CORROSION.remove(entity.getUUID());
-		AttributeInstance armor = entity.getAttribute(Attributes.ARMOR);
-		if (armor != null) {
-			armor.removeModifier(ID_CORROSION);
-		}
-	}
-
-	private static void updateCorrosion(LivingEntity victim) {
-		long[] stacks = CORROSION.get(victim.getUUID());
-		if (stacks == null) {
-			return;
-		}
-		refreshCorrosionModifier(victim, victim.level().getGameTime());
-	}
-
-	private static void refreshCorrosionModifier(LivingEntity victim, long now) {
-		long[] stacks = CORROSION.get(victim.getUUID());
-		if (stacks == null) {
-			return;
-		}
-		int active = 0;
-		for (long expiry : stacks) {
-			if (expiry > now) {
-				active++;
-			}
-		}
-		AttributeInstance armor = victim.getAttribute(Attributes.ARMOR);
-		if (armor != null) {
-			armor.removeModifier(ID_CORROSION);
-			if (active > 0) {
-				armor.addTransientModifier(new AttributeModifier(ID_CORROSION, MODIFIER_NAME + "/corrosion",
-						-0.10D * active, AttributeModifier.Operation.MULTIPLY_TOTAL));
-			}
-		}
-		if (active == 0) {
-			CORROSION.remove(victim.getUUID());
-		}
+		ArmorShred.clearCorrosion(entity);
 	}
 
 	private static void summonReinforcement(LivingEntity owner, ServerLevel level) {
@@ -498,7 +441,7 @@ public final class AbilityEffects {
 
 	private static void cleanup(LivingEntity entity) {
 		UUID id = entity.getUUID();
-		CORROSION.remove(id);
+		ArmorShred.cleanup(entity);
 		PHASE_COOLDOWN.remove(id);
 		SUMMONS.remove(id);
 		NOMINAL.remove(id);

@@ -49,6 +49,12 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue MONSTER_MAX;
 	/** 怪物侧参与减伤计算的有效 EA 上限（属性本身不受这个限制） */
 	public static final ForgeConfigSpec.DoubleValue MONSTER_EFFECTIVE_EA_CAP;
+	/** TL 腐蚀每层削减的后台护甲百分比 */
+	public static final ForgeConfigSpec.DoubleValue CORROSION_PER_STACK_PERCENT;
+	/** TL 腐蚀最大层数 */
+	public static final ForgeConfigSpec.IntValue CORROSION_MAX_STACKS;
+	/** TL 腐蚀持续时间（秒） */
+	public static final ForgeConfigSpec.IntValue CORROSION_DURATION_SECONDS;
 
 	// ================= 玩家护甲重填 =================
 	/** 是否按交接文档 §3.1 的逐件表重写原版护甲件（皮革 ~ 下界合金基础） */
@@ -297,6 +303,15 @@ public final class Config {
 		MONSTER_EFFECTIVE_EA_CAP = builder
 				.comment("怪物侧参与减伤计算的有效 EA 上限（怪物实际护甲可以更高，用于配合基于护甲的效果）")
 				.defineInRange("monster_effective_ea_cap", 100.0D, 0.0D, 10_000.0D);
+		CORROSION_PER_STACK_PERCENT = builder
+				.comment("TL 腐蚀每层从后台护甲 A 削减的百分比；多层按加法汇总")
+				.defineInRange("corrosion_per_stack_percent", 10.0D, 0.0D, 100.0D);
+		CORROSION_MAX_STACKS = builder
+				.comment("TL 腐蚀最多层数；重复命中刷新最旧层")
+				.defineInRange("corrosion_max_stacks", 3, 1, 10);
+		CORROSION_DURATION_SECONDS = builder
+				.comment("TL 腐蚀每层持续时间（秒）")
+				.defineInRange("corrosion_duration_seconds", 6, 1, 60);
 		builder.pop();
 
 		builder.comment(

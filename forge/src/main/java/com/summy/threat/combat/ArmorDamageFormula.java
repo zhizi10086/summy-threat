@@ -2,6 +2,7 @@ package com.summy.threat.combat;
 
 import com.summy.threat.Config;
 import com.summy.threat.scaling.ScalingState;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -93,8 +94,15 @@ public final class ArmorDamageFormula {
 
 	/** 用实体自身的属性值算最终伤害：amount * (1 - 减伤) */
 	public static double armorAbsorb(LivingEntity entity, double amount) {
+		return armorAbsorb(entity, null, amount);
+	}
+
+	/** 带本次命中穿甲的最终伤害；削甲已通过后台 ARMOR 属性提前生效。 */
+	public static double armorAbsorb(LivingEntity entity, DamageSource source, double amount) {
 		double armor = attributeValue(entity, Attributes.ARMOR);
 		double toughness = attributeValue(entity, Attributes.ARMOR_TOUGHNESS);
+		double penetrated = armor * (1.0D - ArmorPenetration.percentFor(entity, source));
+		armor = Math.max(0.0D, penetrated);
 		return amount * (1.0D - reductionFor(entity, armor, toughness));
 	}
 

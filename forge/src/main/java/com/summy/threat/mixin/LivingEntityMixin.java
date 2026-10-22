@@ -35,6 +35,6 @@ public abstract class LivingEntityMixin {
 			return original;
 		}
 		LivingEntity self = (LivingEntity) (Object) this;
-		return (float) ArmorDamageFormula.armorAbsorb(self, amount);
+		return (float) ArmorDamageFormula.armorAbsorb(self, source, amount);
 	}
 }

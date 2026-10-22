@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>已实现：属性上限抬升、自定义护甲减伤公式、基础数值表（怪物侧 TL 缩放 + 玩家护甲重填）、
  * 生态分档（§5.0）、卓越者 / TL 能力 / 8 个卓越者原型、Boss 硬编码攻击接管与调试 / 测量命令。
- * PCF/CDF、TL 选择与持久化已实现；领袖 / Boss / 超级 Boss 专属能力池、穿甲削甲与 SR 背叛仍待实现。
+ * PCF/CDF、TL 选择与持久化、单次穿甲与临时削甲已实现；领袖 / Boss / 超级 Boss 专属能力池与 SR 背叛仍待实现。
  * 配置走 Forge 原生 SERVER 档，Forge 会把服务端的值自动同步给客户端，双端口径天然一致。
  */
 @Mod(SummyThreat.MOD_ID)

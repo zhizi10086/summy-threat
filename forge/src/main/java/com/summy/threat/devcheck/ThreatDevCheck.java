@@ -107,6 +107,9 @@ public final class ThreatDevCheck {
 				case 285 -> checkRegionMultipliers(player);
 				case 290 -> ReliquaryCompatDevCheck.run(player);
 				case 292 -> FAILURES.addAll(BossHardcodedDamageDevCheck.run(player));
+				case 294 -> FAILURES.addAll(ArmorPenetrationDevCheck.start(player));
+				case 340 -> FAILURES.addAll(ArmorPenetrationDevCheck.checkShortWindow());
+				case 430 -> FAILURES.addAll(ArmorPenetrationDevCheck.finish());
 				case 350 -> prepareNaturalSpawn(player, 1.0D, "100%");
 				case 750 -> checkNatural100(player);
 				case 770 -> prepareNaturalSpawn(player, 0.05D, "5%");
