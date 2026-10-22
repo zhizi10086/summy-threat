@@ -27,6 +27,9 @@ final class AutoAttackDriver {
 	private static final Method HOLY_LIGHT_COUNT = findMethod(HOLY_LIGHT, "triggerCount");
 	private static final Method HOLY_LIGHT_TICK = findMethod(HOLY_LIGHT, "tickServer", MinecraftServer.class);
 	private static final Method HOLY_LIGHT_CLEAR = findMethod(HOLY_LIGHT, "clearColumns");
+	private static final Class<?> SE_COMBAT_FORMULAS = findClassQuietly("com.summy.enchantment.combat.CombatFormulas");
+	private static final Method SE_STRENGTH_MULTIPLIER =
+			findMethodQuietly(SE_COMBAT_FORMULAS, "strengthMultiplier", LivingEntity.class);
 	private static boolean holyLightErrorLogged;
 
 	private AutoAttackDriver() {
@@ -85,6 +88,19 @@ final class AutoAttackDriver {
 		invoke(HOLY_LIGHT_CLEAR);
 	}
 
+	/** 读取 SE 命中时实际使用的力量倍率；未安装 SE 时返回 1。 */
+	static float seStrengthMultiplier(LivingEntity entity) {
+		if (SE_STRENGTH_MULTIPLIER == null) {
+			return 1.0F;
+		}
+		try {
+			return ((Number) SE_STRENGTH_MULTIPLIER.invoke(null, entity)).floatValue();
+		} catch (Throwable throwable) {
+			SummyThreat.LOGGER.warn("[A11] 无法读取 SE 力量倍率", throwable);
+			return 1.0F;
+		}
+	}
+
 	private static void invoke(Method method) {
 		if (method == null) {
 			return;
@@ -124,6 +140,14 @@ final class AutoAttackDriver {
 		}
 	}
 
+	private static Class<?> findClassQuietly(String name) {
+		try {
+			return Class.forName(name);
+		} catch (Throwable ignored) {
+			return null;
+		}
+	}
+
 	private static Method findMethod(Class<?> type, String name, Class<?>... parameterTypes) {
 		if (type == null) {
 			return null;
@@ -132,6 +156,17 @@ final class AutoAttackDriver {
 			return type.getMethod(name, parameterTypes);
 		} catch (Throwable throwable) {
 			SummyThreat.LOGGER.warn("[A11] 找不到 {}.{}，圣光计数器跳过", type.getName(), name);
+			return null;
+		}
+	}
+
+	private static Method findMethodQuietly(Class<?> type, String name, Class<?>... parameterTypes) {
+		if (type == null) {
+			return null;
+		}
+		try {
+			return type.getMethod(name, parameterTypes);
+		} catch (Throwable ignored) {
 			return null;
 		}
 	}

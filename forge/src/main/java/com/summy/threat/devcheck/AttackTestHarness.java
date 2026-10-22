@@ -18,6 +18,8 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.Blocks;
 import top.theillusivec4.curios.api.CuriosApi;
@@ -26,12 +28,17 @@ import top.theillusivec4.curios.api.type.inventory.IDynamicStackHandler;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.ServerChatEvent;
+import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A11 玩家攻击测试环境（dev-only）。
@@ -71,7 +78,7 @@ public final class AttackTestHarness {
 			{"virtues", "the_halo", "holy_light", "holy_mantle", "pentagram"};
 	private static final String[] MID_DEMON_CURIOS =
 			{"satanic_bible", "devil_crown", "vengeful_spirit", "the_mark", "pentagram"};
-	private static final int AUTO_ATTACKS = 20_000;
+	private static final int AUTO_ATTACKS = Math.max(1, Integer.getInteger("summy_threat.attacktest.attacks", 20_000));
 	// SE 的 [SE-SR] 调试日志每 tick 最多 8 条；8/tick 保证 20,000 次全部入日志。
 	private static final int AUTO_BATCH = 8;
 	/** 狱火：hellfire_damage_per_level_per_second = 1.0，上限 10 级 → 10 DPS。 */
@@ -89,6 +96,12 @@ public final class AttackTestHarness {
 	private static int autoAttempts;
 	private static int autoSuccess;
 	private static double autoTotalDamage;
+	private static int debugHurtLogs;
+	private static int debugDamageEvents;
+	private static double debugDamageTotal;
+	private static double debugDamageMin = Double.MAX_VALUE;
+	private static double debugDamageMax;
+	private static final Map<String, Double> DEBUG_DAMAGE_BY_SOURCE = new HashMap<>();
 
 	private AttackTestHarness() {
 	}
@@ -154,6 +167,39 @@ public final class AttackTestHarness {
 		}
 		autoRequested = true;
 		player.sendSystemMessage(Component.literal("§b[A11] 收到启动指令，准备自动攻击..."));
+	}
+
+	/** 诊断前 10 次木桩结算，分别记录减伤前与最终落地金额。 */
+	@SubscribeEvent(priority = EventPriority.LOWEST)
+	public static void onTargetHurt(LivingHurtEvent event) {
+		logTargetDamage("HURT", event.getEntity(), event.getAmount(), event.getSource().getMsgId());
+	}
+
+	@SubscribeEvent(priority = EventPriority.LOWEST)
+	public static void onTargetDamage(LivingDamageEvent event) {
+		logTargetDamage("DAMAGE", event.getEntity(), event.getAmount(), event.getSource().getMsgId());
+	}
+
+	private static void logTargetDamage(String phase, net.minecraft.world.entity.LivingEntity target, float amount,
+			String sourceId) {
+		if (!ENABLED || !autoStarted || !target.getTags().contains("a11_target_stats")) {
+			return;
+		}
+		if ("DAMAGE".equals(phase)) {
+			debugDamageEvents++;
+			debugDamageTotal += amount;
+			debugDamageMin = Math.min(debugDamageMin, amount);
+			debugDamageMax = Math.max(debugDamageMax, amount);
+			DEBUG_DAMAGE_BY_SOURCE.merge(sourceId, (double) amount, Double::sum);
+		}
+		if (debugHurtLogs >= 10) {
+			return;
+		}
+		SummyThreat.LOGGER.info("[A11] {} amount={} health={}/{}",
+				phase, amount, target.getHealth(), target.getMaxHealth());
+		if ("DAMAGE".equals(phase)) {
+			debugHurtLogs++;
+		}
 	}
 
 	private static void prepareWorld(ServerPlayer player) {
@@ -376,8 +422,9 @@ public final class AttackTestHarness {
 		if (weapon == null) {
 			weapon = Items.DIAMOND_SWORD;
 		}
-		player.getInventory().setItem(0,
-				enchanted(weapon, "minecraft:sharpness", "3"));
+		ItemStack weaponStack = enchanted(weapon, "minecraft:sharpness", "3");
+		weaponStack.getOrCreateTag().putBoolean("Unbreakable", true);
+		player.getInventory().setItem(0, weaponStack);
 		player.getInventory().selected = 0;
 	}
 
@@ -408,12 +455,19 @@ public final class AttackTestHarness {
 	}
 
 	private static void giveTestWeapon(ServerPlayer player, String name, String weaponId) {
-		// 毕业武器：带完整的 SE 附魔，避免发成白板；本轮起移除斩杀。
-		run(player, "give " + name + " summy-reliquary:" + weaponId + "{Enchantments:["
-				+ "{id:\"summy_enchantment:sharpness_plus\",lvl:5s},"
-				+ "{id:\"summy_enchantment:spellblade\",lvl:5s},"
-				+ "{id:\"summy_enchantment:quick_strike\",lvl:5s},"
-				+ "{id:\"summy_enchantment:surprise\",lvl:3s}]}");
+		// 毕业武器：带完整的 SE 附魔，并设为不可损坏，保证 20k 过程中不会中途断剑。
+		Item weapon = ForgeRegistries.ITEMS.getValue(new ResourceLocation("summy-reliquary", weaponId));
+		if (weapon == null) {
+			SummyThreat.LOGGER.error("[A11] 未找到测试武器 summy-reliquary:{}", weaponId);
+			return;
+		}
+		ItemStack stack = enchanted(weapon,
+				"summy_enchantment:sharpness_plus", "5",
+				"summy_enchantment:spellblade", "5",
+				"summy_enchantment:quick_strike", "5",
+				"summy_enchantment:surprise", "3");
+		stack.getOrCreateTag().putBoolean("Unbreakable", true);
+		player.getInventory().add(stack);
 	}
 
 	/** 清空主背包、护甲、副手与 Curios，避免上一轮遗留影响本轮配置。 */
@@ -441,14 +495,16 @@ public final class AttackTestHarness {
 
 	private static ItemStack enchanted(Item item, String... idLevelPairs) {
 		ItemStack stack = new ItemStack(item);
-		ListTag list = new ListTag();
 		for (int i = 0; i + 1 < idLevelPairs.length; i += 2) {
-			CompoundTag enchantment = new CompoundTag();
-			enchantment.putString("id", idLevelPairs[i]);
-			enchantment.putShort("lvl", Short.parseShort(idLevelPairs[i + 1]));
-			list.add(enchantment);
+			ResourceLocation id = ResourceLocation.tryParse(idLevelPairs[i]);
+			var enchantment = id == null ? null : ForgeRegistries.ENCHANTMENTS.getValue(id);
+			if (enchantment != null) {
+				// 通过注册表正式附魔，避免手写 NBT 在 1.20.1/Forge 下未被 EnchantmentHelper 识别。
+				stack.enchant(enchantment, Short.parseShort(idLevelPairs[i + 1]));
+			} else {
+				SummyThreat.LOGGER.warn("[A11] 未找到附魔 {}，测试装备将缺少该附魔", idLevelPairs[i]);
+			}
 		}
-		stack.getOrCreateTag().put("Enchantments", list);
 		return stack;
 	}
 
@@ -514,6 +570,14 @@ public final class AttackTestHarness {
 			return false;
 		}
 		int weaponSlot = findWeaponSlot(player);
+		if (weaponSlot < 0 && MID && !srPresent()) {
+			// 仅 SE 环境没有 SR 武器；自动启动前再落一次，避免物品同步时序丢失。
+			ItemStack sword = enchanted(Items.DIAMOND_SWORD, "minecraft:sharpness", "3");
+			player.setItemSlot(EquipmentSlot.MAINHAND, sword);
+			player.getInventory().setItem(0, sword);
+			player.getInventory().selected = 0;
+			weaponSlot = 0;
+		}
 		if (weaponSlot < 0) {
 			player.sendSystemMessage(Component.literal("§c[A11] 背包里没有"
 					+ weaponName() + "，自动攻击取消"));
@@ -536,6 +600,7 @@ public final class AttackTestHarness {
 			player.getInventory().setItem(weaponSlot, displaced);
 		}
 		player.getInventory().selected = 0;
+		normalizeMidAttributes(player);
 		player.teleportTo(player.serverLevel(), AUTO_X, AUTO_Y, AUTO_PLAYER_Z, 0.0F, 0.0F);
 		// 冲刺状态禁用横扫，避免一次 Player.attack 命中木桩两次。
 		player.setSprinting(true);
@@ -555,10 +620,13 @@ public final class AttackTestHarness {
 		autoAttempts = 0;
 		autoSuccess = 0;
 		autoTotalDamage = 0.0D;
+		debugHurtLogs = 0;
+		resetDebugDamage();
 		AutoAttackDriver.resetHolyLight();
 		SummyThreat.LOGGER.info(
-				"[A11] AUTO START route={} weapon={} fixedDamageCompat={} attempts={} attackSpeed={} playerHealth={}/{} targetMaxHealth={} targetArmor={} targetToughness={} holyLightAvailable={}",
-				routeName(), weaponId(), COMPAT,
+				"[A11] AUTO START route={} weapon={} mainhand={} attackDamage={} seStrength={} fixedDamageCompat={} attempts={} attackSpeed={} playerHealth={}/{} targetMaxHealth={} targetArmor={} targetToughness={} holyLightAvailable={}",
+				routeName(), weaponId(), mainHandId(player), player.getAttributeValue(Attributes.ATTACK_DAMAGE),
+				AutoAttackDriver.seStrengthMultiplier(player), COMPAT,
 				AUTO_ATTACKS, player.getAttributeValue(Attributes.ATTACK_SPEED),
 				player.getHealth(), player.getMaxHealth(), target.getMaxHealth(),
 				target.getArmorValue(), target.getAttributeValue(Attributes.ARMOR_TOUGHNESS),
@@ -575,6 +643,7 @@ public final class AttackTestHarness {
 			return;
 		}
 		for (int index = 0; index < AUTO_BATCH && autoAttempts < AUTO_ATTACKS; index++) {
+			normalizeMidAttributes(player);
 			target.setHealth(target.getMaxHealth());
 			target.invulnerableTime = 0;
 			target.setPos(AUTO_X, AUTO_Y, AUTO_TARGET_Z);
@@ -627,6 +696,16 @@ public final class AttackTestHarness {
 				routeName(), autoAttempts, autoSuccess, autoTotalDamage, avgDamage,
 				attackSpeed, derivedDps, hellfireDps, totalDps,
 				holyLightProcs, holyLightRawRate);
+		SummyThreat.LOGGER.info(
+				"[A11] END GEAR mainhand={} attackDamage={} attackSpeed={} sharpness={}",
+				mainHandId(player), player.getAttributeValue(Attributes.ATTACK_DAMAGE), attackSpeed,
+				EnchantmentHelper.getItemEnchantmentLevel(
+						Enchantments.SHARPNESS, player.getMainHandItem()));
+		SummyThreat.LOGGER.info(
+				"[A11] DAMAGE SUMMARY events={} total={} min={} max={} bySource={}",
+				debugDamageEvents, debugDamageTotal,
+				debugDamageEvents > 0 ? debugDamageMin : 0.0D, debugDamageMax,
+				DEBUG_DAMAGE_BY_SOURCE);
 		player.sendSystemMessage(Component.literal(String.format(
 				"§a[A11] 自动攻击完成：%d/%d 成功，总伤 %.0f，均伤 %.2f，攻速 %.3f，直接 DPS %.2f + 狱火 %.2f = %.2f，圣光 %d（原始 %.2f%%）",
 				autoSuccess, autoAttempts, autoTotalDamage, avgDamage, attackSpeed, derivedDps,
@@ -689,6 +768,9 @@ public final class AttackTestHarness {
 
 	private static String routeName() {
 		if (MID) {
+			if (!srPresent()) {
+				return "MID_SE";
+			}
 			return DEMON ? "MID_DEMON" : "MID_ANGEL";
 		}
 		return DEMON ? "DEMON" : "ANGEL";
@@ -696,6 +778,9 @@ public final class AttackTestHarness {
 
 	private static String weaponId() {
 		if (MID) {
+			if (!srPresent()) {
+				return "minecraft:diamond_sword";
+			}
 			return DEMON ? "summy-reliquary:sacrificial_dagger" : "summy-reliquary:holy_spear";
 		}
 		return DEMON ? "summy-reliquary:dark_arts" : "summy-reliquary:seraph_spear";
@@ -703,9 +788,65 @@ public final class AttackTestHarness {
 
 	private static String weaponName() {
 		if (MID) {
+			if (!srPresent()) {
+				return "钻石剑";
+			}
 			return DEMON ? "献祭匕首" : "圣光短矛";
 		}
 		return DEMON ? "暗仪刺刀" : "炽天使之枪";
+	}
+
+	private static String mainHandId(ServerPlayer player) {
+		ResourceLocation id = ForgeRegistries.ITEMS.getKey(player.getMainHandItem().getItem());
+		return id == null ? "minecraft:air" : id.toString();
+	}
+
+	private static void normalizeMidAttributes(ServerPlayer player) {
+		if (!MID) {
+			return;
+		}
+		ItemStack currentWeapon = player.getInventory().getItem(0);
+		if (!currentWeapon.isEmpty() && currentWeapon.isDamageableItem()) {
+			// 自动攻击直接调用 Player.attack 时耐久仍会消耗；所有中期基准均固定为无损测试。
+			currentWeapon.setDamageValue(0);
+			currentWeapon.getOrCreateTag().putBoolean("Unbreakable", true);
+		}
+		// 测试服会重复挂载装备/上限修饰符；每击重建完整规范面板，避免跨 tick 累计。
+		clearAttributeModifiers(player, Attributes.ATTACK_DAMAGE);
+		clearAttributeModifiers(player, Attributes.ATTACK_SPEED);
+		double attackDamageValue;
+		double attackSpeedValue;
+		if (srPresent()) {
+			if (DEMON) {
+				attackDamageValue = 17.0D;
+				attackSpeedValue = 2.8D;
+			} else {
+				attackDamageValue = 18.0D;
+				attackSpeedValue = 1.54D;
+			}
+		} else {
+			attackDamageValue = 4.0D;
+			attackSpeedValue = 1.6D;
+		}
+		var attackDamage = player.getAttribute(Attributes.ATTACK_DAMAGE);
+		if (attackDamage != null) {
+			attackDamage.setBaseValue(attackDamageValue);
+		}
+		var attackSpeed = player.getAttribute(Attributes.ATTACK_SPEED);
+		if (attackSpeed != null) {
+			attackSpeed.setBaseValue(attackSpeedValue);
+		}
+	}
+
+	private static void clearAttributeModifiers(ServerPlayer player,
+			net.minecraft.world.entity.ai.attributes.Attribute attribute) {
+		var instance = player.getAttribute(attribute);
+		if (instance == null) {
+			return;
+		}
+		for (var modifier : new ArrayList<>(instance.getModifiers())) {
+			instance.removeModifier(modifier);
+		}
 	}
 
 	private static boolean hasEnchant(ItemStack stack, String enchantmentId) {
@@ -729,6 +870,16 @@ public final class AttackTestHarness {
 		autoAttempts = 0;
 		autoSuccess = 0;
 		autoTotalDamage = 0.0D;
+		debugHurtLogs = 0;
+		resetDebugDamage();
+	}
+
+	private static void resetDebugDamage() {
+		debugDamageEvents = 0;
+		debugDamageTotal = 0.0D;
+		debugDamageMin = Double.MAX_VALUE;
+		debugDamageMax = 0.0D;
+		DEBUG_DAMAGE_BY_SOURCE.clear();
 	}
 
 	private static void hint(ServerPlayer player) {

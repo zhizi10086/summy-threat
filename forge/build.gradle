@@ -100,6 +100,9 @@ minecraft {
             if (project.hasProperty('attacktest.auto')) {
                 property 'summy_threat.attacktest.auto', 'true'
             }
+            if (project.hasProperty('attacktest.attacks')) {
+                property 'summy_threat.attacktest.attacks', project.property('attacktest.attacks')
+            }
             if (project.hasProperty('attacktest.autostart')) {
                 property 'summy_threat.attacktest.autostart', 'true'
             }
