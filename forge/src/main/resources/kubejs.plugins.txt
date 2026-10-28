@@ -1,0 +1,1 @@
+com.summy.threat.compat.kubejs.SummyThreatKubeJSPlugin

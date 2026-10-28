@@ -12,7 +12,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  * 本模组的最小网络层：只同步“玩家卓越护盾”当前值，供客户端青色 HUD 使用。
  */
 public final class ModNetwork {
-	private static final String PROTOCOL = "1";
+	private static final String PROTOCOL = "2";
 	public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
 			.named(new ResourceLocation(SummyThreat.MOD_ID, "main"))
 			.networkProtocolVersion(() -> PROTOCOL)
@@ -30,11 +30,28 @@ public final class ModNetwork {
 				.decoder(ShieldSyncPacket::decode)
 				.consumerMainThread(ShieldSyncPacket::handle)
 				.add();
+		CHANNEL.messageBuilder(RegistrySyncPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+				.encoder(RegistrySyncPacket::encode)
+				.decoder(RegistrySyncPacket::decode)
+				.consumerMainThread(RegistrySyncPacket::handle)
+				.add();
 	}
 
 	public static void sendShield(ServerPlayer player, double value) {
 		if (player != null) {
 			CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ShieldSyncPacket(value));
+		}
+	}
+
+	public static void sendRegistry(ServerPlayer player) {
+		if (player != null) {
+			CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), RegistrySyncPacket.current());
+		}
+	}
+
+	public static void broadcastRegistry(net.minecraft.server.MinecraftServer server) {
+		if (server != null && !server.getPlayerList().getPlayers().isEmpty()) {
+			CHANNEL.send(PacketDistributor.ALL.noArg(), RegistrySyncPacket.current());
 		}
 	}
 }

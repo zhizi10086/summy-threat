@@ -4,6 +4,9 @@ import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityTexts;
+import com.summy.threat.api.event.ThreatArchetypeChangedEvent;
+import com.summy.threat.api.event.ThreatScalePostEvent;
+import com.summy.threat.api.event.ThreatScalePreEvent;
 import com.summy.threat.eximus.EximusArchetype;
 import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.pcf.CdfManager;
@@ -29,6 +32,7 @@ import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.common.ForgeConfigSpec;
+import net.minecraftforge.common.MinecraftForge;
 
 import java.util.ArrayList;
 import java.util.UUID;
@@ -180,6 +184,13 @@ public final class MonsterScaler {
 	 */
 	public static boolean scaleNow(LivingEntity entity, int tl, Kind kind, boolean allowNecro) {
 		tl = ScalingState.clampTl(tl);
+		ThreatScalePreEvent pre = new ThreatScalePreEvent(entity, tl, kind);
+		MinecraftForge.EVENT_BUS.post(pre);
+		if (pre.isCanceled()) {
+			return false;
+		}
+		tl = ScalingState.clampTl(pre.getTl());
+		kind = pre.getKind();
 		// 原版领队的 MAX_HEALTH 是 MULTIPLY_TOTAL；不剥离会与 M/E/首领倍率相乘（2–5 倍污染）
 		stripVanillaLeaderHealthBonus(entity);
 		double rHp = ScalingState.rHp();
@@ -233,6 +244,7 @@ public final class MonsterScaler {
 		data.putInt(TAG_TL, tl);
 		data.putDouble(TAG_HARDCODED_ATTACK_MULTIPLIER, attackMultiplier);
 		data.putLong(TAG_SESSION, sessionToken);
+		String oldArchetype = data.getString(TAG_ARCHETYPE);
 		if (kind == Kind.EXIMUS) {
 			// 命令可在 scaleNow 之前写入指定原型；没有合法标签时随机补一个。
 			if (EximusArchetype.byId(data.getString(TAG_ARCHETYPE)) == null) {
@@ -240,6 +252,11 @@ public final class MonsterScaler {
 			}
 		} else {
 			data.remove(TAG_ARCHETYPE);
+		}
+		String newArchetype = data.getString(TAG_ARCHETYPE);
+		if (!oldArchetype.equals(newArchetype)) {
+			MinecraftForge.EVENT_BUS.post(new ThreatArchetypeChangedEvent(entity,
+					oldArchetype, newArchetype));
 		}
 
 		// TL 能力：新怪按 TL 区间抽取（0/1/2/3/4；卓越者 +1）；已有标签（残留 / 命令覆盖）则保留
@@ -266,7 +283,23 @@ public final class MonsterScaler {
 							? round(EximusShield.current(entity)) + " / " + round(EximusShield.max(entity)) : "无",
 					data.getString(TAG_ABILITIES).isEmpty() ? "无" : data.getString(TAG_ABILITIES));
 		}
+		MinecraftForge.EVENT_BUS.post(new ThreatScalePostEvent(entity, tl, kind,
+				healthMultiplier, attackMultiplier));
 		return true;
+	}
+
+	public static void setArchetype(LivingEntity entity, String archetypeId) {
+		String next = archetypeId == null ? "" : archetypeId.trim().toLowerCase(java.util.Locale.ROOT);
+		CompoundTag data = entity.getPersistentData();
+		String old = data.getString(TAG_ARCHETYPE);
+		if (next.isEmpty()) {
+			data.remove(TAG_ARCHETYPE);
+		} else {
+			data.putString(TAG_ARCHETYPE, next);
+		}
+		if (!old.equals(next)) {
+			MinecraftForge.EVENT_BUS.post(new ThreatArchetypeChangedEvent(entity, old, next));
+		}
 	}
 
 	/**

@@ -108,6 +108,7 @@ public final class ThreatDevCheck {
 				case 290 -> ReliquaryCompatDevCheck.run(player);
 				case 292 -> FAILURES.addAll(BossHardcodedDamageDevCheck.run(player));
 				case 294 -> FAILURES.addAll(ArmorPenetrationDevCheck.start(player));
+				case 296 -> FAILURES.addAll(KubeJSCompatDevCheck.run(player));
 				case 340 -> FAILURES.addAll(ArmorPenetrationDevCheck.checkShortWindow());
 				case 430 -> FAILURES.addAll(ArmorPenetrationDevCheck.finish());
 				case 350 -> prepareNaturalSpawn(player, 1.0D, "100%");
@@ -421,28 +422,31 @@ public final class ThreatDevCheck {
 				"hits=%d/20000 ratio=%.2f%%".formatted(hits, ratio * 100.0D));
 
 		random = RandomSource.create();
-		int[] archetypes = new int[EximusArchetype.values().length];
+		List<EximusArchetype> archetypeValues = List.of(EximusArchetype.values());
+		int[] archetypes = new int[archetypeValues.size()];
 		for (int i = 0; i < 16_000; i++) {
-			archetypes[EximusArchetype.random(random).ordinal()]++;
+			EximusArchetype rolled = EximusArchetype.random(random);
+			int index = archetypeValues.indexOf(rolled);
+			if (index >= 0) {
+				archetypes[index]++;
+			}
 		}
 		StringBuilder archLog = new StringBuilder();
 		boolean archOk = true;
-		for (EximusArchetype type : EximusArchetype.values()) {
-			int count = archetypes[type.ordinal()];
+		for (int i = 0; i < archetypeValues.size(); i++) {
+			EximusArchetype type = archetypeValues.get(i);
+			int count = archetypes[i];
 			archLog.append(type.id()).append('=').append(count).append(' ');
-			archOk &= count >= 1_500 && count <= 2_500;
+			if (type.builtIn()) {
+				archOk &= count >= 1_500 && count <= 2_500;
+			}
 		}
 		log("RANDOM_ARCH " + archLog);
 		check("随机 8 原型均匀（各 1500~2500/16000）", archOk, archLog.toString());
 
 		int[] tls = {0, 3, 4, 5, 7, 8, 9, 11, 12, 13, 15, 16, 17, 20};
 		for (int tl : tls) {
-			int poolSize = 0;
-			for (AbilityId id : AbilityId.values()) {
-				if (id.unlockTl() <= tl) {
-					poolSize++;
-				}
-			}
+			int poolSize = AbilityId.rollable(tl, false, true).length;
 			int expected = Math.min(poolSize, AbilityId.baseCountFor(tl));
 			Map<String, Integer> freq = new HashMap<>();
 			int dup = 0;

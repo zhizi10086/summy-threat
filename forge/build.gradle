@@ -140,15 +140,29 @@ tasks.matching { it.name == 'runServer' || it.name == 'runClient' }.configureEac
 // 不进产物、不影响 build。jar 不入库（见 .gitignore）。
 configurations {
     attributeFixDev
+    kubejsDev
 }
 
 dependencies {
     attributeFixDev fg.deobf('attributefix-forge:attributefix-forge:21.0.5')
+    kubejsDev fg.deobf('kubejs-forge:kubejs-forge:2001.6.5-build.16')
 }
 
 tasks.register('copyAttributeFixDevJar', Copy) {
     from configurations.attributeFixDev
     into layout.projectDirectory.dir('run/mods')
+}
+
+// KubeJS 只在显式 -Pkubejsdev 时进入开发实例；正式构建始终 compileOnly。
+tasks.register('copyKubeJSDevJar', Copy) {
+    from configurations.kubejsDev
+    into layout.projectDirectory.dir('run/mods')
+}
+
+tasks.matching { it.name == 'runClient' || it.name == 'runServer' }.configureEach {
+    if (project.hasProperty('kubejsdev')) {
+        dependsOn 'copyKubeJSDevJar'
+    }
 }
 
 // Jade 11.13.3（MIT）：编译期 API + dev 客户端冒烟副本。
@@ -206,6 +220,9 @@ dependencies {
 
     // Jade 可选依赖：只编译期引用其 API；@WailaPlugin 由 Jade 在运行时扫描加载
     compileOnly fg.deobf('jade:jade:11.13.3')
+    // KubeJS 可选依赖：仅用于编译插件；未安装时 kubejs.plugins.txt 不会被读取。
+    compileOnly files('libs/kubejs-forge-2001.6.5-build.16.jar')
+    compileOnly files('libs/rhino-forge-2001.2.3-build.10.jar')
     // 仅 devcheck 的 AttackTestHarness 用于清空 Curios 栏位；正式 jar 不含 devcheck。
     compileOnly files('libs/curios-forge-5.14.1.jar')
 }

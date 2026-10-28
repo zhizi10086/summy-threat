@@ -146,16 +146,19 @@ public final class EximusArchetypeEffects {
 			ambient(entity, archetype);
 		}
 		long now = entity.level().getGameTime();
-		switch (archetype) {
-			case FLAME -> tickFlame(entity, now);
-			case FROST -> tickFrost(entity, now);
-			case POISON -> tickPoison(entity);
-			case STORM -> tickStorm(entity, now);
-			case SHOCK -> tickShock(entity, now);
-			case GUARDIAN -> {
-				// 守护只通过伤害转移工作，不需要每 tick 推进状态。
-			}
-			case VAMPIRE, MAGNET -> tickClouds(entity, archetype, now);
+		if (archetype == EximusArchetype.FLAME) {
+			tickFlame(entity, now);
+		} else if (archetype == EximusArchetype.FROST) {
+			tickFrost(entity, now);
+		} else if (archetype == EximusArchetype.POISON) {
+			tickPoison(entity);
+		} else if (archetype == EximusArchetype.STORM) {
+			tickStorm(entity, now);
+		} else if (archetype == EximusArchetype.SHOCK) {
+			tickShock(entity, now);
+		} else if (archetype == EximusArchetype.VAMPIRE
+				|| archetype == EximusArchetype.MAGNET) {
+			tickClouds(entity, archetype, now);
 		}
 	}
 
@@ -321,11 +324,12 @@ public final class EximusArchetypeEffects {
 		if (follow == null) {
 			return;
 		}
-		if (follow.getModifier(STORM_FOLLOW) != null && follow.getValue() >= 47.999D) {
+		if (follow.getModifier(STORM_FOLLOW) != null && follow.getValue() >= 48.999D) {
 			return;
 		}
 		follow.removeModifier(STORM_FOLLOW);
-		double addition = Math.max(0.0D, 48.0D - follow.getValue());
+		// 目标 49 格，为其它模组后置的负向跟随 modifier 留 1 格安全余量。
+		double addition = Math.max(0.0D, 49.0D - follow.getValue());
 		if (addition > 0.0D) {
 			follow.addTransientModifier(new AttributeModifier(STORM_FOLLOW,
 					"summy_threat:storm_follow_range", addition, AttributeModifier.Operation.ADDITION));
@@ -1261,38 +1265,27 @@ public final class EximusArchetypeEffects {
 		double y = entity.getY() + 0.25D;
 		double z = entity.getZ();
 		level.sendParticles(new DustParticleOptions(color, 0.9F), x, y, z, 2, 0.3D, 0.1D, 0.3D, 0.01D);
-		switch (archetype) {
-			case FLAME -> level.sendParticles(ParticleTypes.FLAME, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
-			case FROST -> level.sendParticles(ParticleTypes.SNOWFLAKE, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
-			case POISON -> {
-				level.sendParticles(ParticleTypes.SPORE_BLOSSOM_AIR, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
-				// 常驻绿色地面圈，提示 3 格毒光环范围。
-				groundRing(entity, 3.0D, color(archetype));
-			}
-			case STORM -> level.sendParticles(ParticleTypes.ELECTRIC_SPARK, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
-			case SHOCK -> level.sendParticles(ParticleTypes.CRIT, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
-			case GUARDIAN -> {
-				level.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
-				// 常驻金色地面圈，提示 8 格守护光环范围。
-				groundRing(entity, 8.0D, color(archetype));
-			}
-			case VAMPIRE, MAGNET -> {
-				// 云团本身由贴地尘埃与边界环表达，避免上升粒子堆成光柱。
-			}
+		if (archetype == EximusArchetype.FLAME) {
+			level.sendParticles(ParticleTypes.FLAME, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
+		} else if (archetype == EximusArchetype.FROST) {
+			level.sendParticles(ParticleTypes.SNOWFLAKE, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
+		} else if (archetype == EximusArchetype.POISON) {
+			level.sendParticles(ParticleTypes.SPORE_BLOSSOM_AIR, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
+			groundRing(entity, 3.0D, color(archetype));
+		} else if (archetype == EximusArchetype.STORM) {
+			level.sendParticles(ParticleTypes.ELECTRIC_SPARK, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
+		} else if (archetype == EximusArchetype.SHOCK) {
+			level.sendParticles(ParticleTypes.CRIT, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
+		} else if (archetype == EximusArchetype.GUARDIAN) {
+			level.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, x, y, z, 1, 0.2D, 0.1D, 0.2D, 0.01D);
+			groundRing(entity, 8.0D, color(archetype));
 		}
 	}
 
 	private static Vector3f color(EximusArchetype archetype) {
-		return switch (archetype) {
-			case FLAME -> new Vector3f(1.0F, 0.42F, 0.0F);
-			case FROST -> new Vector3f(0.61F, 0.91F, 1.0F);
-			case POISON -> new Vector3f(0.4F, 0.8F, 0.2F);
-			case STORM -> new Vector3f(1.0F, 0.88F, 0.4F);
-			case SHOCK -> new Vector3f(1.0F, 0.69F, 0.0F);
-			case GUARDIAN -> new Vector3f(1.0F, 0.84F, 0.0F);
-			case VAMPIRE -> new Vector3f(0.7F, 0.0F, 0.1F);
-			case MAGNET -> new Vector3f(0.71F, 0.36F, 1.0F);
-		};
+		int rgb = archetype.color();
+		return new Vector3f(((rgb >> 16) & 0xFF) / 255.0F,
+				((rgb >> 8) & 0xFF) / 255.0F, (rgb & 0xFF) / 255.0F);
 	}
 
 	@SubscribeEvent

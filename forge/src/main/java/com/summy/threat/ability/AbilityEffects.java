@@ -1,6 +1,7 @@
 package com.summy.threat.ability;
 
 import com.summy.threat.Config;
+import com.summy.threat.api.event.ThreatAbilityChangedEvent;
 import com.summy.threat.combat.ArmorShred;
 import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.scaling.MonsterScaler;
@@ -36,6 +37,7 @@ import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.common.MinecraftForge;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -105,8 +107,27 @@ public final class AbilityEffects {
 
 	/** 写入能力（逗号分隔；空串 = 无能力），并重刷静态修饰符（迅捷 / 力量 / 狂怒）。 */
 	public static void setAbilities(LivingEntity entity, int tl, String csv) {
+		String old = entity.getPersistentData().getString(MonsterScaler.TAG_ABILITIES);
 		entity.getPersistentData().putString(MonsterScaler.TAG_ABILITIES, csv);
 		refreshStaticModifiers(entity, tl);
+		if (!old.equals(csv)) {
+			MinecraftForge.EVENT_BUS.post(new ThreatAbilityChangedEvent(entity,
+					splitAbilities(old), splitAbilities(csv)));
+		}
+	}
+
+	private static List<String> splitAbilities(String csv) {
+		if (csv == null || csv.isBlank()) {
+			return List.of();
+		}
+		List<String> out = new ArrayList<>();
+		for (String part : csv.split(",")) {
+			String value = part.trim().toLowerCase(java.util.Locale.ROOT);
+			if (!value.isEmpty()) {
+				out.add(value);
+			}
+		}
+		return out;
 	}
 
 	/**
@@ -114,25 +135,35 @@ public final class AbilityEffects {
 	 * necroEligible 为 false 时，亡灵增援不进入候选池（Boss/领袖/召唤体）。
 	 */
 	public static String roll(int tl, int extra, RandomSource random, boolean necroEligible) {
-		List<AbilityId> pool = new ArrayList<>();
-		for (AbilityId id : AbilityId.values()) {
-			if (id.unlockTl() <= tl) {
-				if (id == AbilityId.NECRO_REINFORCEMENT && !necroEligible) {
-					continue;
-				}
-				pool.add(id);
-			}
-		}
+		List<AbilityId> pool = new ArrayList<>(List.of(
+				AbilityId.rollable(tl, extra > 0, necroEligible)));
 		int count = Math.min(pool.size(), AbilityId.baseCountFor(tl) + extra);
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < count; i++) {
-			AbilityId picked = pool.remove(random.nextInt(pool.size()));
+			AbilityId picked = removeWeighted(pool, random);
 			if (sb.length() > 0) {
 				sb.append(',');
 			}
 			sb.append(picked.id());
 		}
 		return sb.toString();
+	}
+
+	private static AbilityId removeWeighted(List<AbilityId> pool, RandomSource random) {
+		int total = 0;
+		for (AbilityId id : pool) {
+			total += Math.max(1, id.weight());
+		}
+		int roll = random.nextInt(Math.max(1, total));
+		for (int i = 0; i < pool.size(); i++) {
+			AbilityId id = pool.get(i);
+			roll -= Math.max(1, id.weight());
+			if (roll < 0) {
+				pool.remove(i);
+				return id;
+			}
+		}
+		return pool.remove(pool.size() - 1);
 	}
 
 	private static void refreshStaticModifiers(LivingEntity entity, int tl) {

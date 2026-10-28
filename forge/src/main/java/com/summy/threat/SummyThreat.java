@@ -6,6 +6,7 @@ import com.summy.threat.command.SummyThreatCommand;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.armor.EchoArmorEffects;
 import com.summy.threat.armor.PlayerEximusShield;
+import com.summy.threat.api.ThreatConfigApi;
 import com.summy.threat.combat.BossHardcodedDamageScaling;
 import com.summy.threat.compat.ReliquaryFixedDamageCompat;
 import com.summy.threat.eximus.EximusArchetypeEffects;
@@ -28,6 +29,7 @@ import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,6 +96,9 @@ public class SummyThreat {
 		AttributeCaps.apply();
 		// 数值表 / 档位 / 全局 TL 都从配置读，配置一变就刷新
 		ScalingState.refresh();
+		if (!ThreatConfigApi.isApiWriteInProgress()) {
+			ThreatConfigApi.notifyReload(ThreatConfigApi.snapshot());
+		}
 	}
 
 	/** 开服时判定生态档位并写一条日志，便于实机核对（尤其是 ∅ 档短路） */
@@ -111,6 +116,13 @@ public class SummyThreat {
 					globalTl == -2 ? "关闭"
 							: globalTl == -1 ? "自动 PCF/CDF"
 							: globalTl + "（手动覆盖）");
+		}
+	}
+
+	@SubscribeEvent
+	public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+		if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+			com.summy.threat.network.ModNetwork.sendRegistry(player);
 		}
 	}
 

@@ -61,9 +61,9 @@ EA = A + (A×T)/15
 当前已实装数值表、PCF/CDF、TL 能力池、卓越护盾、8 个卓越者原型与 5% 自然刷新；
 完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池、SR 背叛仍未实装。
 
-**当前状态（v2.42）**：
+**当前状态（v2.43）**：
 
-- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、末影龙 / 凋灵 / 古守硬编码攻击接管、显式单次穿甲与临时削甲、回响下界合金四件、玩家护盾 HUD、承伤日志、SR 固定伤害全伤害增伤兼容（默认关闭；5 项 isDivine 补 SR+SE，2 项 isExactDamage 只补 SE）。
+- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、末影龙 / 凋灵 / 古守硬编码攻击接管、显式单次穿甲与临时削甲、可选 KubeJS 全配置/生成/自定义能力与原型 API、回响下界合金四件、玩家护盾 HUD、承伤日志、SR 固定伤害全伤害增伤兼容（默认关闭；5 项 isDivine 补 SR+SE，2 项 isExactDamage 只补 SE）。
 - 未完成：领袖 / Boss / 超级 Boss 能力池、
   SR 背叛、卓越者精华获取、回响套正式贴图/模型。
 - 历史验证记录保留原样；以后续“当前状态”与内部《缺失项清单》为准。
@@ -89,6 +89,8 @@ EA = A + (A×T)/15
 | 卓越护盾（卓越者） | 最大生命 × 等级曲线 `f1`（TL20 = **75%**，TL0/5/10/15 ≈ 0.31%/0.60%/4.98%/23.94%）；不可再生；护甲/附魔/吸收后、生命前承伤；负面 MobEffect、腐蚀与属性下降免疫（属性快照）；护盾存在时 **100% 击退抗性**；**破碎时溢出伤害清零并获 0.5 秒真无敌** |
 | 自然卓越者 | 自然类生成（NATURAL / CHUNK_GENERATION / STRUCTURE / PATROL / JOCKEY / REINFORCEMENT）5%；刷怪笼、命令、召唤、刷怪蛋等 0% |
 | 原版领队僵尸 | 剥离原版 `Leader zombie bonus` 的 MAX_HEALTH modifier（避免与 M/E/首领倍率相乘），保留 `spawn_reinforcements` 与破门；TL 关闭时补满当前生命；与区域首领不合并 |
+
+KubeJS 详细接口、事件与自定义能力/原型示例见 [`../docs/kubejs.md`](../docs/kubejs.md)。
 
 **生态分档（§5.0）**：检测 `summy_enchantment` / `summy_reliquary` / `summy_reliquary_apocrypha`
 （SRA 强制依赖 SR，共 6 个预设档 + 1 个手动 `free` 档）；两维系数 `r_hp`（生命 / 护甲）与

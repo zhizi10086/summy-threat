@@ -21,7 +21,10 @@ public final class AbilityTexts {
 
 	/** 单个能力名（带阶段色）。 */
 	public static MutableComponent name(AbilityId id) {
-		return Component.translatable("summy_threat.jade.ability." + id.id())
+		MutableComponent text = id.translated()
+				? Component.translatable(id.displayName())
+				: Component.literal(id.displayName());
+		return text
 				.withStyle(Style.EMPTY.withColor(TextColor.fromRgb(colorOf(id.stage()))));
 	}
 
@@ -33,6 +36,14 @@ public final class AbilityTexts {
 			for (String part : csv.split(",")) {
 				AbilityId id = AbilityId.byId(part);
 				if (id == null) {
+					if (part.isBlank()) {
+						continue;
+					}
+					if (!first) {
+						out.append(Component.literal(separator));
+					}
+					out.append(Component.literal(part.trim()).withStyle(Style.EMPTY.withColor(0x777777)));
+					first = false;
 					continue;
 				}
 				if (!first) {

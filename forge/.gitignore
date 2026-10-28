@@ -17,6 +17,9 @@ run/
 libs/*.jar
 # Jade 可选依赖的编译期 API（MIT，随仓库分发以保证离线可编译）
 !libs/jade-*.jar
+# KubeJS / Rhino 仅作为可选插件的编译期依赖，随仓库分发；运行时不打入正式 JAR。
+!libs/kubejs-forge-*.jar
+!libs/rhino-forge-*.jar
 
 # Python 缓存（docs/护甲减伤计算器.py 被导入时会生成 __pycache__）
 __pycache__/

@@ -34,3 +34,10 @@ description = '''
     versionRange = "[11.13,)"
     ordering = "AFTER"
     side = "BOTH"
+
+[[dependencies.summy_threat]]
+    modId = "kubejs"
+    mandatory = false
+    versionRange = "[2001.6.5,)"
+    ordering = "AFTER"
+    side = "BOTH"

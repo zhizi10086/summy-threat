@@ -1,10 +1,13 @@
 package com.summy.threat.compat.jade;
 
 import com.summy.threat.ability.AbilityTexts;
+import com.summy.threat.eximus.EximusArchetype;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.TextColor;
 import snownee.jade.api.EntityAccessor;
 import snownee.jade.api.IEntityComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -33,8 +36,14 @@ public enum EntityAbilityTooltip implements IEntityComponentProvider {
 			Component type = Component.translatable("summy_threat.jade.kind." + kind);
 			String archetype = data.getString(EntityAbilityDataProvider.KEY_ARCHETYPE);
 			if (!archetype.isEmpty()) {
-				type = type.copy().append("·")
-						.append(Component.translatable("summy_threat.jade.archetype." + archetype));
+				EximusArchetype value = EximusArchetype.byId(archetype);
+				Component archetypeText = value == null
+						? Component.literal(archetype)
+						: value.translated()
+								? Component.translatable("summy_threat.jade.archetype." + archetype)
+								: Component.literal(value.displayName())
+										.withStyle(Style.EMPTY.withColor(TextColor.fromRgb(value.color())));
+				type = type.copy().append("·").append(archetypeText);
 			}
 			tooltip.add(Component.translatable("summy_threat.jade.status", tl, type));
 		}
