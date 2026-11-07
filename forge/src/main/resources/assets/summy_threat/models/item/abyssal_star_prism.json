@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "summy_threat:item/abyssal_star_prism"
+  }
+}

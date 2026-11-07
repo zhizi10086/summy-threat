@@ -139,9 +139,10 @@ public class SummyThreat {
 			}
 		} else if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
 			event.accept(ModItems.EXIMUS_ESSENCE.get());
+			event.accept(ModItems.ABYSSAL_STAR_PRISM.get());
 			if (!loggedIngredientsTab) {
 				loggedIngredientsTab = true;
-				LOGGER.info("[Summy Threat] 已向原版「材料」创造页注入卓越者精华");
+				LOGGER.info("[Summy Threat] 已向原版「材料」创造页注入卓越者精华与星渊棱晶");
 			}
 		}
 	}
