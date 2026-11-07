@@ -93,8 +93,7 @@ minecraft {
                     || project.hasProperty('attacktest.auto') || project.hasProperty('attacktest.demon')
                     || project.hasProperty('attacktest.mid') || project.hasProperty('attacktest.mid.angel')
                     || project.hasProperty('attacktest.mid.demon')
-					|| project.hasProperty('attacktest.autostart')
-					|| project.hasProperty('attacktest.compat')) {
+					|| project.hasProperty('attacktest.autostart')) {
                 property 'summy_threat.attacktest', 'true'
             }
             if (project.hasProperty('attacktest.stats')) {
@@ -109,9 +108,6 @@ minecraft {
             if (project.hasProperty('attacktest.autostart')) {
                 property 'summy_threat.attacktest.autostart', 'true'
             }
-			if (project.hasProperty('attacktest.compat')) {
-				property 'summy_threat.attacktest.compat', 'true'
-			}
             if (project.hasProperty('attacktest.demon') || project.hasProperty('attacktest.mid.demon')) {
                 property 'summy_threat.attacktest.demon', 'true'
             }

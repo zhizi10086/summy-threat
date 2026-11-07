@@ -8,7 +8,6 @@ import com.summy.threat.armor.EchoArmorEffects;
 import com.summy.threat.armor.PlayerEximusShield;
 import com.summy.threat.api.ThreatConfigApi;
 import com.summy.threat.combat.BossHardcodedDamageScaling;
-import com.summy.threat.compat.ReliquaryFixedDamageCompat;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.eximus.EximusSpawner;
 import com.summy.threat.eximus.EximusShield;
@@ -83,8 +82,6 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(SummyThreatCommand.class);
 		MinecraftForge.EVENT_BUS.register(PlayerArmorRefill.class);
 		MinecraftForge.EVENT_BUS.register(BossHardcodedDamageScaling.class);
-		// SR 固定伤害兼容：LOW 优先级，排在 SR 常规倍率之后、SR LOWEST 伤害池之前。
-		MinecraftForge.EVENT_BUS.register(ReliquaryFixedDamageCompat.class);
 		// 放在最后注册：与 EximusShield 同为 LOWEST 时后执行，能读到本次护盾吸收量。
 		MinecraftForge.EVENT_BUS.register(CombatMeter.class);
 	}

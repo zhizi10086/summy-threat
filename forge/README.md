@@ -61,10 +61,11 @@ EA = A + (A×T)/15
 当前已实装数值表、PCF/CDF、TL 能力池、卓越护盾、8 个卓越者原型与 5% 自然刷新；
 完整刷新链路与领袖 / Boss / 超级 Boss 专属能力池仍未实装。
 
-**当前状态（v2.44）**：
+**当前状态（v2.45）**：
 
-- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、末影龙 / 凋灵 / 古守硬编码攻击接管、显式单次穿甲与临时削甲、可选 KubeJS 全配置/生成/自定义能力与原型 API、回响下界合金四件、玩家护盾 HUD、承伤日志、SR 固定伤害全伤害增伤兼容（默认关闭）、可配置再生、Mod Boss 自动反推与 SR 2.0 背叛联调。
+- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、末影龙 / 凋灵 / 古守硬编码攻击接管、显式单次穿甲与临时削甲、可选 KubeJS 全配置/生成/自定义能力与原型 API、回响下界合金四件、玩家护盾 HUD、承伤日志、可配置再生、Mod Boss 自动反推与 SR 2.0 背叛联调。
 - 未完成：领袖 / Boss / 超级 Boss 能力池、卓越者精华/星渊棱晶获取、回响套正式贴图/模型。
+- SR 2.0 起，定值真伤增伤与 SE 死神祝福已统一由 SR 的 `exact_damage_gets_multiplier` 接管；ST 旧兼容层已移除。
 - 历史验证记录保留原样；以后续“当前状态”与内部《缺失项清单》为准。
 
 **TL 驱动**：默认 `global_tl = -1`，由 PCF/CDF 自动计算；`/summythreat tl <0-20>` 可手动覆盖，
@@ -204,7 +205,6 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `tl_abilities.regeneration_percent_per_second` | double | `1.0`（每秒恢复 1% 最大生命） | 0.0 ~ 100.0 |
 | `tl_abilities.reduced_regeneration_percent_per_second` | double | `0.25`（低恢复名单每秒 0.25%） | 0.0 ~ 100.0 |
 | `tl_abilities.reduced_regeneration_entity_ids` | string list | `["minecraft:ender_dragon"]` | 实体类型 ID |
-| `reliquary_compat.enable_fixed_damage_boosts` | boolean | `false` | 开启后为 7 项 SR 固定伤害补全伤害增伤 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
 
@@ -213,16 +213,10 @@ TL0 保持基础生命，中间 TL 沿用原 Boss 曲线并继续叠加 `r_hp`�
 或 KJS `scale(entity, tl, 'boss')` 会持久保留 Boss 分类；关闭自动计算只停用
 `mod_boss_ids` 的自动识别，不影响 PCF 计分或显式标签。
 
-**SR 固定伤害兼容（v2.38）**：只处理 7 项写死数值的伤害——
-`holy_light_burst`、`golden_razor`、`revelation_light`、`demon_flame`、`abyss_aura`
-以及 `godhead_aura`、`sacrifice` 统一补 SR 暴怒/嫉妒/谦逊/最终乘区、思想/咒印发光 +10%、
-玄秘魔眼注视 ×1.3、恶魔王冠 `hell_locked` 条件加伤与 SE 死神祝福（SR 1.8.7 对
-`isDivine` / `isExactDamage` 都会跳过核心乘区）。
-`holy_light`（基于原攻击伤害）、`hellfire`（按等级变化）、`pact_shatter`、`sacrifice_self` 不在本轮范围。
-兼容层不调用 `SinEffects.modifyOutgoingDamage`，因此不会触发暴怒自伤、色欲脱甲或贪婪惩罚；
-SE 复仇是剑/斧/三叉戟近战专属，不作用于固定伤害。SRA 凋亡的“损伤状态受伤 +N%”与
-额外元素附伤照常作用于 7 项固定伤害，但 SRA 侧会排除 7 项固定伤害的推凋亡条、削抵抗与笞心斩杀副作用。
-SR/SE 未安装或反射接口缺失时按 1.0 处理，不影响正常伤害。
+**SR 固定伤害兼容迁移（v2.45）**：ST 的旧反射兼容层已删除，不再提供
+`[reliquary_compat] enable_fixed_damage_boosts`。旧存档中的该键会被 Forge 忽略；
+SR 2.0+ 负责七罪/七德/最终倍率、思想/咒印/魔眼/王冠条件层与 SE 死神祝福。
+搭配 SR 1.8.7 时 ST 不再补偿固定伤害增伤。
 
 ## 自检入口
 

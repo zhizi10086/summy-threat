@@ -106,7 +106,6 @@ public final class ThreatDevCheck {
 				case 270 -> checkPcfCdfMapping(player);
 				case 280 -> checkRandomness(player);
 				case 285 -> checkRegionMultipliers(player);
-				case 290 -> ReliquaryCompatDevCheck.run(player);
 				case 292 -> FAILURES.addAll(BossHardcodedDamageDevCheck.run(player));
 				case 294 -> FAILURES.addAll(ArmorPenetrationDevCheck.start(player));
 				case 296 -> FAILURES.addAll(KubeJSCompatDevCheck.run(player));

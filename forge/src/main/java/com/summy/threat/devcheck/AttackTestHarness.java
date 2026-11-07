@@ -59,7 +59,6 @@ public final class AttackTestHarness {
 	private static final boolean ENABLED = Boolean.getBoolean("summy_threat.attacktest");
 	private static final boolean AUTO = Boolean.getBoolean("summy_threat.attacktest.auto");
 	private static final boolean AUTOSTART = Boolean.getBoolean("summy_threat.attacktest.autostart");
-	private static final boolean COMPAT = Boolean.getBoolean("summy_threat.attacktest.compat");
 	private static final boolean DEMON = Boolean.getBoolean("summy_threat.attacktest.demon");
 	private static final boolean MID = Boolean.getBoolean("summy_threat.attacktest.mid");
 	private static final String TIER = System.getProperty("summy_threat.attacktest.tier", "full")
@@ -220,9 +219,7 @@ public final class AttackTestHarness {
 		run(player, "difficulty normal");
 		run(player, "summythreat tier " + TIER);
 		run(player, "summythreat tl 20");
-		// A/B 只改运行期值，不写回 world/serverconfig。
-		Config.ENABLE_RELIQUARY_FIXED_DAMAGE_BOOSTS.set(COMPAT);
-		SummyThreat.LOGGER.info("[A11] TIER SET {} FIXED_DAMAGE_COMPAT={}", TIER, COMPAT);
+		SummyThreat.LOGGER.info("[A11] TIER SET {}", TIER);
 	}
 
 	private static void preparePlayer(ServerPlayer player) {
@@ -624,9 +621,9 @@ public final class AttackTestHarness {
 		resetDebugDamage();
 		AutoAttackDriver.resetHolyLight();
 		SummyThreat.LOGGER.info(
-				"[A11] AUTO START route={} weapon={} mainhand={} attackDamage={} seStrength={} fixedDamageCompat={} attempts={} attackSpeed={} playerHealth={}/{} targetMaxHealth={} targetArmor={} targetToughness={} holyLightAvailable={}",
+				"[A11] AUTO START route={} weapon={} mainhand={} attackDamage={} seStrength={} attempts={} attackSpeed={} playerHealth={}/{} targetMaxHealth={} targetArmor={} targetToughness={} holyLightAvailable={}",
 				routeName(), weaponId(), mainHandId(player), player.getAttributeValue(Attributes.ATTACK_DAMAGE),
-				AutoAttackDriver.seStrengthMultiplier(player), COMPAT,
+				AutoAttackDriver.seStrengthMultiplier(player),
 				AUTO_ATTACKS, player.getAttributeValue(Attributes.ATTACK_SPEED),
 				player.getHealth(), player.getMaxHealth(), target.getMaxHealth(),
 				target.getArmorValue(), target.getAttributeValue(Attributes.ARMOR_TOUGHNESS),

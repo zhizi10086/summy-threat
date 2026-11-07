@@ -59,8 +59,6 @@
   "summy_threat.configuration.environment_tier.atk_scale_free": "自由档：攻击系数",
   "summy_threat.configuration.scaling_debug": "调试",
   "summy_threat.configuration.scaling_debug.global_tl": "全局 TL（-2 关闭 / -1 自动）",
-  "summy_threat.configuration.reliquary_compat": "SR 兼容",
-  "summy_threat.configuration.reliquary_compat.enable_fixed_damage_boosts": "启用固定伤害全伤害增伤",
   "summy_threat.configuration.player_challenge_factor": "PCF 玩家挑战因子",
   "summy_threat.configuration.player_challenge_factor.equipment_weight": "装备权重",
   "summy_threat.configuration.player_challenge_factor.boss_weight": "Boss 权重",

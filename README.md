@@ -4,10 +4,12 @@ Minecraft **1.20.1**（Forge）的“属性与怪物机制改造”模组。当�
 TL 数值缩放、PCF/CDF、卓越者与 8 个专属原型、Boss 硬编码攻击接管、回响下界合金与玩家卓越护盾；
 完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池仍在开发中。作者：**Summy**。
 
-**当前状态（v2.44）**：TL / PCF / CDF、6 个预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型、
-回响下界合金四件、玩家护盾 HUD、SR 固定伤害兼容（默认关闭）、末影龙 / 凋灵 / 古守硬编码攻击接管，
+**当前状态（v2.45）**：TL / PCF / CDF、6 个预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型、
+回响下界合金四件、玩家护盾 HUD、末影龙 / 凋灵 / 古守硬编码攻击接管，
 显式单次穿甲与配置化临时削甲、可选 KubeJS 高可配 API、可配置再生、Mod Boss 自动反推与 SR 2.0
 背叛联调已实现；领袖 / Boss / 超级 Boss 专属能力池、卓越者精华/星渊棱晶获取与回响套正式贴图仍待完成。
+SR 固定伤害兼容层已于 SR 2.0 转正后从 ST 移除，增伤与 SE 死神祝福统一由 SR 的
+`[combat] exact_damage_gets_multiplier` 接管。
 8 个卓越者原型已切换到高风险平衡档，烈焰/剧毒/电涌/震荡/吸血/磁力均强化；冰霜、守护保持原强度。
 SR 1.8.7 起 `isDivine` 与 `isExactDamage` 都会被 SR 跳过，ST 对 7 项固定伤害统一补核心乘区，
 含思想/咒印、玄秘魔眼与恶魔王冠条件层；
@@ -15,7 +17,7 @@ SE 复仇保持近战专属，SRA 凋亡保留受伤 +10% 但排除固定伤害�
 
 | 目录 | 平台 | 版本 | 说明 |
 | --- | --- | --- | --- |
-| [`forge/`](forge/README.md) | Forge 47.4.10（ForgeGradle 6 + MixinExtras） | `0.1.0` | 当前实现：属性上限、护甲公式、穿甲/削甲、TL/PCF/CDF、卓越者核心、Boss 攻击接管、回响套、SR 固定伤害兼容与测量命令 |
+| [`forge/`](forge/README.md) | Forge 47.4.10（ForgeGradle 6 + MixinExtras） | `0.1.0` | 当前实现：属性上限、护甲公式、穿甲/削甲、TL/PCF/CDF、卓越者核心、Boss 攻击接管、回响套与测量命令 |
 
 KubeJS 集成见 [`docs/kubejs.md`](docs/kubejs.md)。
 

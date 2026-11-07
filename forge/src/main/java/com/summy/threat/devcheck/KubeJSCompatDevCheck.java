@@ -150,8 +150,8 @@ final class KubeJSCompatDevCheck {
 		}
 		ThreatDevCheck.checkDetailed("配置 API 分组枚举",
 				ThreatConfigApi.groups().contains("player_challenge_factor")
-						&& ThreatConfigApi.keys("reliquary_compat")
-						.contains("reliquary_compat.enable_fixed_damage_boosts"),
+						&& ThreatConfigApi.keys("boss_health")
+						.contains("boss_health.auto_calculate_mod_boss"),
 				"groups=" + ThreatConfigApi.groups().size());
 		ThreatDevCheck.checkDetailed("配置 API 六种声明类型识别",
 				"boolean".equals(ThreatConfigApi.type(booleanKey))
