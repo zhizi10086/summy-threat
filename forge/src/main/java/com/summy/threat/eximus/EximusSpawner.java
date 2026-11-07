@@ -6,9 +6,6 @@ import com.summy.threat.scaling.ScalingState;
 import com.summy.threat.scaling.SpawnAudit;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
-import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
-import net.minecraft.world.entity.boss.wither.WitherBoss;
-import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.util.RandomSource;
 import net.minecraftforge.event.entity.living.MobSpawnEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -30,8 +27,8 @@ public final class EximusSpawner {
 		if (!MonsterScaler.isScalable(mob)) {
 			return;
 		}
-		// Boss 类不参与自然卓越者；远古守卫者按普通怪处理
-		if (mob instanceof Warden || mob instanceof EnderDragon || mob instanceof WitherBoss) {
+		// Boss 类不参与自然卓越者；包含显式与 mod_boss_ids 自动识别的 Mod Boss。
+		if (MonsterScaler.isBoss(mob)) {
 			SpawnAudit.recordFinalize(mob, event.getSpawnType(), false, false, 0.0D, "boss_excluded");
 			return;
 		}

@@ -59,13 +59,12 @@ EA = A + (A×T)/15
 
 口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.35 的 §4~§8。
 当前已实装数值表、PCF/CDF、TL 能力池、卓越护盾、8 个卓越者原型与 5% 自然刷新；
-完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池、SR 背叛仍未实装。
+完整刷新链路与领袖 / Boss / 超级 Boss 专属能力池仍未实装。
 
-**当前状态（v2.43）**：
+**当前状态（v2.44）**：
 
-- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、末影龙 / 凋灵 / 古守硬编码攻击接管、显式单次穿甲与临时削甲、可选 KubeJS 全配置/生成/自定义能力与原型 API、回响下界合金四件、玩家护盾 HUD、承伤日志、SR 固定伤害全伤害增伤兼容（默认关闭；5 项 isDivine 补 SR+SE，2 项 isExactDamage 只补 SE）。
-- 未完成：领袖 / Boss / 超级 Boss 能力池、
-  SR 背叛、卓越者精华/星渊棱晶获取、回响套正式贴图/模型。
+- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、末影龙 / 凋灵 / 古守硬编码攻击接管、显式单次穿甲与临时削甲、可选 KubeJS 全配置/生成/自定义能力与原型 API、回响下界合金四件、玩家护盾 HUD、承伤日志、SR 固定伤害全伤害增伤兼容（默认关闭）、可配置再生、Mod Boss 自动反推与 SR 2.0 背叛联调。
+- 未完成：领袖 / Boss / 超级 Boss 能力池、卓越者精华/星渊棱晶获取、回响套正式贴图/模型。
 - 历史验证记录保留原样；以后续“当前状态”与内部《缺失项清单》为准。
 
 **TL 驱动**：默认 `global_tl = -1`，由 PCF/CDF 自动计算；`/summythreat tl <0-20>` 可手动覆盖，
@@ -189,7 +188,10 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `regional_boss_health.pcf_base_factor` / `pcf_scale_divisor` | double | `0.3` / `28.0` | 见配置文件 |
 | `boss_health.warden` / `ender_dragon` / `wither` | double | `70` / `175` / `117` | 1.0 ~ 10000.0 |
 | `boss_health.warden_melee_attack` / `ender_dragon_attack` / `wither_attack` | double | `3.29` / `4.0` / `3.0`（龙 / 凋灵的硬编码攻击已接管） | 0.0 ~ 1000.0 |
+| `boss_health.auto_calculate_mod_boss` | boolean | `true`（自动读取 `mod_boss_ids`） | 无 |
 | `boss_health.default_effective_dps` | double | `700.0` | 1.0 ~ 100000.0 |
+| `boss_health.default_target_ttk` | double | `50.0` | 1.0 ~ 10000.0 |
+| `boss_health.default_mod_boss_attack` | double | `3.0`（Mod Boss 的 TL20 攻击锚点） | 0.0 ~ 1000.0 |
 | `environment_tier.mode` | enum | `auto` | auto / none / sr / se / sr_apocrypha / se_sr / full / free |
 | `environment_tier.hp_scale_*` / `atk_scale_*` | double | `0.35` / `0.55` / `0.55`(**攻击 0.35**) / `0.75` / `1.00` / **free 0.50** | 预设 0.0 ~ 1.0；free 0.0 ~ 2.0 |
 | `scaling_debug.global_tl` | int | `-1`（自动 PCF/CDF） | -2 ~ 20 |
@@ -199,9 +201,17 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `region_multiplier.*` / `region_tl_cap.*` | double/int | 区域倍率与区域首领 TL 上限 | 见配置文件 |
 | `combat_log.log_player_taken` | boolean | `true` | 无 |
 | `tl_abilities.enable_tl_abilities` | boolean | `true` | 无 |
+| `tl_abilities.regeneration_percent_per_second` | double | `1.0`（每秒恢复 1% 最大生命） | 0.0 ~ 100.0 |
+| `tl_abilities.reduced_regeneration_percent_per_second` | double | `0.25`（低恢复名单每秒 0.25%） | 0.0 ~ 100.0 |
+| `tl_abilities.reduced_regeneration_entity_ids` | string list | `["minecraft:ender_dragon"]` | 实体类型 ID |
 | `reliquary_compat.enable_fixed_damage_boosts` | boolean | `false` | 开启后为 7 项 SR 固定伤害补全伤害增伤 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
+
+Mod Boss 的 TL20 生命锚点为 `default_target_ttk × default_effective_dps`，默认即 `35,000`；
+TL0 保持基础生命，中间 TL 沿用原 Boss 曲线并继续叠加 `r_hp`。显式 `summy_threat:boss`
+或 KJS `scale(entity, tl, 'boss')` 会持久保留 Boss 分类；关闭自动计算只停用
+`mod_boss_ids` 的自动识别，不影响 PCF 计分或显式标签。
 
 **SR 固定伤害兼容（v2.38）**：只处理 7 项写死数值的伤害——
 `holy_light_burst`、`golden_razor`、`revelation_light`、`demon_flame`、`abyss_aura`

@@ -401,7 +401,7 @@ public final class AbilityEffects {
 		List<AbilityId> ids = abilities(entity);
 		if (ids.contains(AbilityId.REGENERATION) && entity.tickCount % 20 == 0
 				&& entity.getHealth() < entity.getMaxHealth()) {
-			entity.heal(entity.getMaxHealth() * 0.01F);
+			entity.heal(regenerationAmount(entity));
 		}
 		if (ids.contains(AbilityId.FRENZY)) {
 			updateFrenzy(entity);
@@ -414,6 +414,28 @@ public final class AbilityEffects {
 				PHASE_COOLDOWN.put(entity.getUUID(), now + 400L);
 			}
 		}
+	}
+
+	/** 单次再生量；供实际 tick 与开发自检共用同一事实来源。 */
+	public static float regenerationAmount(LivingEntity entity) {
+		double percent = usesReducedRegeneration(entity)
+				? Config.REDUCED_REGENERATION_PERCENT_PER_SECOND.get()
+				: Config.REGENERATION_PERCENT_PER_SECOND.get();
+		return (float) (entity.getMaxHealth() * percent / 100.0D);
+	}
+
+	/** 低恢复名单按实体类型 ID 精确匹配，忽略大小写。 */
+	private static boolean usesReducedRegeneration(LivingEntity entity) {
+		if (!Config.SPEC.isLoaded()) {
+			return false;
+		}
+		String entityId = EntityType.getKey(entity.getType()).toString();
+		for (Object value : Config.REDUCED_REGENERATION_ENTITY_IDS.get()) {
+			if (value instanceof String configured && configured.trim().equalsIgnoreCase(entityId)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** 追加段：进清前帧、结算后不清；期间跳过攻击方链式能力。 */

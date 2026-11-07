@@ -73,8 +73,11 @@ minecraft {
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
             // 只有显式加 -Pdevcheck 时才打开客户端自检；测试脚本会自动停止客户端。
-            if (project.hasProperty('devcheck')) {
+            if (project.hasProperty('devcheck') || project.hasProperty('betrayalcheck')) {
                 property 'summy_threat.devcheck', 'true'
+            }
+            if (project.hasProperty('betrayalcheck')) {
+                property 'summy_threat.betrayalcheck', 'true'
             }
             if (project.hasProperty('stormcheck')) {
                 property 'summy_threat.stormcheck', 'true'

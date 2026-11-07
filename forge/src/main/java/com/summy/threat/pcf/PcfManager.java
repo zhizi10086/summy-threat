@@ -401,6 +401,11 @@ public final class PcfManager {
 				|| configuredBosses().contains(id);
 	}
 
+	/** 扩展包配置的 Mod Boss ID（只包含 player_challenge_factor.mod_boss_ids）。 */
+	public static boolean isConfiguredBossId(String id) {
+		return id != null && configuredBosses().contains(id.trim().toLowerCase(Locale.ROOT));
+	}
+
 	private static Set<String> configuredBosses() {
 		if (!Config.SPEC.isLoaded()) {
 			return Set.of();

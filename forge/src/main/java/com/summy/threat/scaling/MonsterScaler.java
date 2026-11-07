@@ -57,6 +57,8 @@ public final class MonsterScaler {
 	public static final String TAG_EXIMUS = "summy_threat:eximus";
 	/** 区域首领标记（本轮只由命令强制） */
 	public static final String TAG_LEADER = "summy_threat:leader";
+	/** Boss 分类标记：KJS / 命令显式缩放后跨存档保留 */
+	public static final String TAG_BOSS = "summy_threat:boss";
 	/** 区域首领的 PCF（生命公式用，默认 20） */
 	public static final String TAG_PCF = "summy_threat:pcf";
 	/** 会话令牌：与当前服务端会话比对，用于识别跨存档残留实体 */
@@ -153,12 +155,16 @@ public final class MonsterScaler {
 
 	/** 是否属于"敌对生物"（含史莱姆等 Enemy 接口实现）或末影龙 */
 	public static boolean isScalable(LivingEntity entity) {
-		return entity instanceof Enemy || entity instanceof EnderDragon;
+		return entity instanceof Enemy || entity instanceof EnderDragon
+				|| entity.getPersistentData().getBoolean(TAG_BOSS) || isAutoModBoss(entity);
 	}
 
 	/** 判定类别（实体类型 + 命令打的标记） */
 	public static Kind kindOf(LivingEntity entity) {
 		if (entity instanceof Warden || entity instanceof EnderDragon || entity instanceof WitherBoss) {
+			return Kind.BOSS;
+		}
+		if (entity.getPersistentData().getBoolean(TAG_BOSS) || isAutoModBoss(entity)) {
 			return Kind.BOSS;
 		}
 		if (entity.getPersistentData().getBoolean(TAG_LEADER)) {
@@ -168,6 +174,16 @@ public final class MonsterScaler {
 			return Kind.EXIMUS;
 		}
 		return Kind.NORMAL;
+	}
+
+	/** 供自然卓越者刷新排除自动识别的 Mod Boss。 */
+	public static boolean isBoss(LivingEntity entity) {
+		return kindOf(entity) == Kind.BOSS;
+	}
+
+	private static boolean isAutoModBoss(LivingEntity entity) {
+		return Config.SPEC.isLoaded() && Config.AUTO_CALCULATE_MOD_BOSS.get()
+				&& PcfManager.isConfiguredBossId(net.minecraft.world.entity.EntityType.getKey(entity.getType()).toString());
 	}
 
 	/** 立即按当前全局 TL 数值化（命令调用；自然刷怪由 onEntityJoin 调用） */
@@ -241,6 +257,7 @@ public final class MonsterScaler {
 
 		CompoundTag data = entity.getPersistentData();
 		data.putBoolean(TAG_SCALED, true);
+		data.putBoolean(TAG_BOSS, kind == Kind.BOSS);
 		data.putInt(TAG_TL, tl);
 		data.putDouble(TAG_HARDCODED_ATTACK_MULTIPLIER, attackMultiplier);
 		data.putLong(TAG_SESSION, sessionToken);
@@ -428,7 +445,17 @@ public final class MonsterScaler {
 		if (entity instanceof EnderDragon) {
 			return Config.BOSS_ENDER_DRAGON_MULTIPLIER.get();
 		}
-		return Config.BOSS_WITHER_MULTIPLIER.get();
+		if (entity instanceof WitherBoss) {
+			return Config.BOSS_WITHER_MULTIPLIER.get();
+		}
+		// Mod Boss：按默认 TTK × 有效 DPS 反推 TL20 总生命倍率。
+		AttributeInstance maxHealth = entity.getAttribute(Attributes.MAX_HEALTH);
+		double baseHealth = maxHealth == null ? 0.0D : maxHealth.getBaseValue();
+		if (baseHealth <= 0.0D) {
+			return 1.0D;
+		}
+		double targetHealth = Config.DEFAULT_TARGET_TTK.get() * Config.DEFAULT_EFFECTIVE_DPS.get();
+		return Math.max(1.0E-6D, targetHealth / baseHealth);
 	}
 
 	private static double bossAttack(LivingEntity entity) {
@@ -438,7 +465,10 @@ public final class MonsterScaler {
 		if (entity instanceof EnderDragon) {
 			return Config.BOSS_ENDER_DRAGON_ATTACK.get();
 		}
-		return Config.BOSS_WITHER_ATTACK.get();
+		if (entity instanceof WitherBoss) {
+			return Config.BOSS_WITHER_ATTACK.get();
+		}
+		return Config.DEFAULT_MOD_BOSS_ATTACK.get();
 	}
 
 	/** 区域首领名单判定（命令用）：只有这三种原版实体可以做区域首领 */

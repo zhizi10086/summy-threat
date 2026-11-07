@@ -139,9 +139,13 @@ final class KubeJSCompatDevCheck {
 		String stringKey = "multiplayer.normal_pcf_mode";
 		String enumKey = "environment_tier.mode";
 		String listKey = "player_challenge_factor.mod_boss_ids";
+		String regenDoubleKey = "tl_abilities.regeneration_percent_per_second";
+		String regenListKey = "tl_abilities.reduced_regeneration_entity_ids";
+		String modBossAttackKey = "boss_health.default_mod_boss_attack";
 
 		Map<String, Object> original = new LinkedHashMap<>();
-		for (String key : List.of(booleanKey, integerKey, doubleKey, stringKey, enumKey, listKey)) {
+		for (String key : List.of(booleanKey, integerKey, doubleKey, stringKey, enumKey, listKey,
+				regenDoubleKey, regenListKey, modBossAttackKey)) {
 			original.put(key, ThreatConfigApi.get(key));
 		}
 		ThreatDevCheck.checkDetailed("配置 API 分组枚举",
@@ -172,6 +176,9 @@ final class KubeJSCompatDevCheck {
 		changes.put(stringKey, "kjs_test");
 		changes.put(enumKey, changedEnum);
 		changes.put(listKey, List.of("summy_threat:api_test"));
+		changes.put(regenDoubleKey, 0.75D);
+		changes.put(regenListKey, List.of("MINECRAFT:ENDER_DRAGON", "minecraft:wither"));
+		changes.put(modBossAttackKey, 2.5D);
 		int oldEvents = EventProbe.configChanged;
 		try {
 			Map<String, Object> written = ThreatConfigApi.setMany(changes);
@@ -181,7 +188,11 @@ final class KubeJSCompatDevCheck {
 					&& Math.abs(((Number) ThreatConfigApi.get(doubleKey)).doubleValue() - 0.31D) < 1.0E-6D
 					&& "kjs_test".equals(ThreatConfigApi.get(stringKey))
 					&& changedEnum.equals(ThreatConfigApi.get(enumKey))
-					&& List.of("summy_threat:api_test").equals(ThreatConfigApi.get(listKey));
+					&& List.of("summy_threat:api_test").equals(ThreatConfigApi.get(listKey))
+					&& Math.abs(((Number) ThreatConfigApi.get(regenDoubleKey)).doubleValue() - 0.75D) < 1.0E-6D
+					&& List.of("MINECRAFT:ENDER_DRAGON", "minecraft:wither")
+							.equals(ThreatConfigApi.get(regenListKey))
+					&& Math.abs(((Number) ThreatConfigApi.get(modBossAttackKey)).doubleValue() - 2.5D) < 1.0E-6D;
 			ThreatDevCheck.checkDetailed("配置 API 六种类型 setMany 可写",
 					allWritten && written.size() == changes.size(), written.toString());
 			ThreatDevCheck.checkDetailed("config.changed 单次触发",

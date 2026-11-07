@@ -184,6 +184,7 @@ final class FreeTierSettings {
 		register("boss", "warden_melee_attack", Config.BOSS_WARDEN_ATTACK, ValueType.DOUBLE, 0.0D, 1000.0D);
 		register("boss", "ender_dragon_attack", Config.BOSS_ENDER_DRAGON_ATTACK, ValueType.DOUBLE, 0.0D, 1000.0D);
 		register("boss", "wither_attack", Config.BOSS_WITHER_ATTACK, ValueType.DOUBLE, 0.0D, 1000.0D);
+		register("boss", "default_mod_boss_attack", Config.DEFAULT_MOD_BOSS_ATTACK, ValueType.DOUBLE, 0.0D, 1000.0D);
 		register("boss", "default_effective_dps", Config.DEFAULT_EFFECTIVE_DPS, ValueType.DOUBLE, 1.0D, 1000000.0D);
 		register("boss", "default_target_ttk", Config.DEFAULT_TARGET_TTK, ValueType.DOUBLE, 1.0D, 10000.0D);
 	}

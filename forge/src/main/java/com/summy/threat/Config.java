@@ -112,6 +112,10 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue BOSS_ENDER_DRAGON_ATTACK;
 	/** Boss：凋灵攻击倍率 */
 	public static final ForgeConfigSpec.DoubleValue BOSS_WITHER_ATTACK;
+	/** 是否自动把 player_challenge_factor.mod_boss_ids 中的实体识别为 Mod Boss */
+	public static final ForgeConfigSpec.BooleanValue AUTO_CALCULATE_MOD_BOSS;
+	/** 未单独配置攻击锚点的 Mod Boss 在 TL20 使用的默认攻击倍率 */
+	public static final ForgeConfigSpec.DoubleValue DEFAULT_MOD_BOSS_ATTACK;
 	/** Mod Boss 反推用的默认有效 DPS（后续 Mod Boss 支持落地后启用） */
 	public static final ForgeConfigSpec.DoubleValue DEFAULT_EFFECTIVE_DPS;
 	/** Mod Boss 反推用的默认目标 TTK（秒；后续 Mod Boss 支持落地后启用） */
@@ -249,11 +253,20 @@ public final class Config {
 			"meetyourfight:rosalyne", "bosses_of_mass_destruction:lich",
 			"aquamirae:captain_cornelia", "theinkarena:ink_titan");
 
+	private static final List<String> DEFAULT_REDUCED_REGENERATION_ENTITY_IDS =
+			List.of("minecraft:ender_dragon");
+
 	/** 玩家承伤日志开关（效仿 SRA 的 log_trigger） */
 	public static final ForgeConfigSpec.BooleanValue LOG_PLAYER_TAKEN;
 
 	/** TL 能力总开关（关闭后不抽取、不生效） */
 	public static final ForgeConfigSpec.BooleanValue TL_ABILITIES_ENABLED;
+	/** 再生能力默认每秒恢复的最大生命百分比 */
+	public static final ForgeConfigSpec.DoubleValue REGENERATION_PERCENT_PER_SECOND;
+	/** 低恢复名单内实体每秒恢复的最大生命百分比 */
+	public static final ForgeConfigSpec.DoubleValue REDUCED_REGENERATION_PERCENT_PER_SECOND;
+	/** 使用低恢复比例的实体类型 ID 列表 */
+	public static final ForgeConfigSpec.ConfigValue<List<? extends String>> REDUCED_REGENERATION_ENTITY_IDS;
 
 	public static final ForgeConfigSpec SPEC;
 
@@ -420,8 +433,15 @@ public final class Config {
 		BOSS_WITHER_ATTACK = builder
 				.comment("凋灵攻击倍率：接管生成爆炸、头颅直击 8f 与头颅爆炸")
 				.defineInRange("wither_attack", 3.0D, 0.0D, 1000.0D);
+		AUTO_CALCULATE_MOD_BOSS = builder
+				.comment("是否把 player_challenge_factor.mod_boss_ids 中的实体自动识别为 Mod Boss",
+						"关闭后该列表只继续用于 PCF 计分；显式 summy_threat:boss 标签仍然有效")
+				.define("auto_calculate_mod_boss", true);
+		DEFAULT_MOD_BOSS_ATTACK = builder
+				.comment("未单独配置攻击锚点的 Mod Boss 在 TL20 使用的默认攻击倍率")
+				.defineInRange("default_mod_boss_attack", 3.0D, 0.0D, 1000.0D);
 		DEFAULT_EFFECTIVE_DPS = builder
-				.comment("Mod Boss 反推公式用的默认有效 DPS（v2.7 校准常数：Boss 档实测 ≈700；Mod Boss 支持落地后启用）")
+				.comment("Mod Boss 反推公式用的默认有效 DPS（v2.7 校准常数：Boss 档实测 ≈700）")
 				.defineInRange("default_effective_dps", 700.0D, 1.0D, 1_000_000.0D);
 		DEFAULT_TARGET_TTK = builder
 				.comment("Mod Boss 反推公式用的默认目标 TTK（秒；v2.7 定为 50）")
@@ -565,6 +585,19 @@ public final class Config {
 		TL_ABILITIES_ENABLED = builder
 				.comment("是否启用 TL 能力")
 				.define("enable_tl_abilities", true);
+		REGENERATION_PERCENT_PER_SECOND = builder
+				.comment("再生能力默认每秒恢复最大生命的百分比", "默认 1.0 表示每秒恢复 1% 最大生命")
+				.defineInRange("regeneration_percent_per_second", 1.0D, 0.0D, 100.0D);
+		REDUCED_REGENERATION_PERCENT_PER_SECOND = builder
+				.comment("reduced_regeneration_entity_ids 中的实体每秒恢复最大生命的百分比",
+						"默认 0.25 表示每秒恢复 0.25% 最大生命")
+				.defineInRange("reduced_regeneration_percent_per_second", 0.25D, 0.0D, 100.0D);
+		REDUCED_REGENERATION_ENTITY_IDS = builder
+				.comment("使用低恢复比例的实体类型 ID 列表；按实体类型 ID 精确匹配，忽略大小写",
+						"默认仅末影龙使用低恢复比例；从列表移除后恢复全局再生比例")
+				.defineListAllowEmpty("reduced_regeneration_entity_ids",
+						DEFAULT_REDUCED_REGENERATION_ENTITY_IDS,
+						element -> element instanceof String);
 		builder.pop();
 
 		SPEC = builder.build();
