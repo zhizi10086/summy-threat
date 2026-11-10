@@ -23,7 +23,7 @@ Forge 1.20.1 的"属性与怪物机制改造"模组，承载四块内容：
 | 构建 | ForgeGradle 6 + MixinGradle 0.7.38 + MixinExtras 0.5.5（jar-in-jar）+ 官方（Mojang）映射 |
 | Gradle / JDK | Gradle 8.8（wrapper）；JDK 17（由全局 `~/.gradle/gradle.properties` 的 `org.gradle.java.home` 指定） |
 | 构建命令 | `gradlew build` |
-| 产物 | `build/libs/summy-threat-0.1.0.jar`（薄包）与 `summy-threat-0.1.0-all.jar`（含嵌套 MixinExtras）；可发布的是后者，构建结束后自动复制并重命名为 `../JAR/summy-threat-forge/summy-threat-0.1.0.jar` |
+| 产物 | `build/libs/summy-threat-0.1.0.jar`（薄包）与 `summy-threat-0.1.0-all.jar`（含嵌套 MixinExtras）；可发布的是后者，构建结束后自动复制并重命名为 `JAR/<Minecraft版本>/summy-threat-forge/summy-threat-0.1.0.jar` |
 
 ## 已实现①：属性上限抬升
 
@@ -303,7 +303,7 @@ Summy Enchantment 曾因为注解里的包路径写错、被 dev 环境的宽松
 | 工程目录 | `summy-threat-forge/` |
 | mixin 配置 / refmap | `summy_threat.mixins.json` / `summy-threat.refmap.json` |
 | 资源命名空间 | `assets/summy_threat/`，配置翻译键 `summy_threat.configuration.*` |
-| 发布目录 | `../JAR/summy-threat-forge/` |
+| 发布目录 | `JAR/<Minecraft版本>/summy-threat-forge/` |
 | 版本 / 许可 / 作者 | `0.1.0` / MIT / Summy |
 | 仓库 | <https://github.com/zhizi10086/summy-threat>（工作副本 `_github/summy-threat`，其中 `forge/` 对应本工程） |
 
