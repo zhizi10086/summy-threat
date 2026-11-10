@@ -368,10 +368,15 @@ def resolveJarArchive = { String moduleDirectory ->
     return new File(cursor, "JAR/${project.minecraft_version}/${moduleDirectory}")
 }
 
-// 构建结束后把 reobf 后的 jar 复制到 JAR/<Minecraft版本>/summy-threat-forge
+// 1.20.1 沿用 Forge 目录；1.21.1 迁移后将产物切到 NeoForge 目录。
+def archiveModuleDirectory = project.minecraft_version.startsWith('1.21.1')
+        ? 'summy-threat-neoforge'
+        : 'summy-threat-forge'
+
+// 构建结束后把 reobf 后的 jar 复制到 JAR/<Minecraft版本>/<加载器目录>
 tasks.named('build') {
     doLast {
-        def releaseDir = resolveJarArchive('summy-threat-forge')
+        def releaseDir = resolveJarArchive(archiveModuleDirectory)
         releaseDir.mkdirs()
         // 开启 JarJar 后，真正可发布的产物是 reobfJarJar（含嵌套的 MixinExtras）
         def reobfTask = tasks.findByName('reobfJarJar') ?: tasks.named('reobfJar').get()
