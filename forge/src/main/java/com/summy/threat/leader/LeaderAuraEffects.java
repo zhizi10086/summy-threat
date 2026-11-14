@@ -114,7 +114,7 @@ public final class LeaderAuraEffects {
 			LivingEntity leader = living(victim, entry.getKey().owner());
 			if (leader != null && LeaderTargeting.isTarget(leader, victim)
 					&& LeaderTargeting.isLeaderSideSource(leader, source)) {
-				event.setAmount(event.getAmount() * 1.08F);
+				event.setAmount(event.getAmount() * 1.10F);
 				return;
 			}
 		}
@@ -301,7 +301,7 @@ public final class LeaderAuraEffects {
 						AttributeModifier.Operation.MULTIPLY_TOTAL);
 			}
 			case SUPPRESSION -> modifier(target, Attributes.MOVEMENT_SPEED, SUPPRESSION_SPEED,
-					"summy_threat:leader_aura/suppression_speed", -0.10D,
+					"summy_threat:leader_aura/suppression_speed", -0.15D,
 					AttributeModifier.Operation.MULTIPLY_TOTAL);
 			case BLOODLUST -> {
 				modifier(target, Attributes.ATTACK_DAMAGE, BLOODLUST_ATTACK,

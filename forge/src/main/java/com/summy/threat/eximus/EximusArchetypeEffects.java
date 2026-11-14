@@ -69,8 +69,6 @@ public final class EximusArchetypeEffects {
 	private static final String TAG_FROST_SHIELD = "summy_threat:frost_shield";
 	private static final String TAG_FROST_SHIELD_MAX = "summy_threat:frost_shield_max";
 	private static final String TAG_FROST_GRANTED = "summy_threat:frost_granted";
-	/** 原型伤害以 TL20 的 A 表值 16.44 为基准。 */
-	private static final double A_TL20 = 16.44D;
 	private static final float STORM_WAYPOINT_TOLERANCE = 2.0F;
 	private static final int STORM_STUCK_LIMIT = 10;
 	private static final int STORM_STUCK_REST = 40;
@@ -293,9 +291,9 @@ public final class EximusArchetypeEffects {
 	/** 原型技能的伤害口径：玩家/友军 1×，其他非玩家 10×。 */
 	private static float skillDamage(LivingEntity owner, LivingEntity target, double d20) {
 		int tl = ScalingState.clampTl(owner.getPersistentData().getInt(MonsterScaler.TAG_TL));
-		double a = ScalingState.rawAttackMultiplier(tl);
 		double factor = isPlayerAlly(target) ? 1.0D : 10.0D;
-		return (float) (d20 * a / A_TL20 * ScalingState.rAtk() * factor);
+		return (float) (d20 * ScalingState.relativeAttackMultiplier(tl)
+				* ScalingState.rAtk() * factor);
 	}
 
 	/** 前摇/锁定期间把移速乘数压到 0；结束后恢复原版移速。 */

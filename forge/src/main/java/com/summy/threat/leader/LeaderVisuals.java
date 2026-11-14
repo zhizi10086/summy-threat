@@ -99,17 +99,17 @@ public final class LeaderVisuals {
 
 	public static void tectonicWarning(ServerLevel level, Vec3 point, long elapsed) {
 		double progress = Math.min(1.0D, elapsed / 20.0D);
-		groundRing(level, point, 4.0D, LeaderAbilityId.TECTONIC_RUPTURE.color(),
+		groundRing(level, point, 4.5D, LeaderAbilityId.TECTONIC_RUPTURE.color(),
 				36, OUTLINE_SCALE, 0.07D);
-		groundRing(level, point, 3.7D - progress * 1.1D,
+		groundRing(level, point, 4.2D - progress * 1.3D,
 				LeaderAbilityId.TECTONIC_RUPTURE.color(), 18, 1.05F, 0.12D);
-		radialLines(level, point, 0.8D, 3.8D, 4, 5,
+		radialLines(level, point, 0.8D, 4.3D, 4, 5,
 				LeaderAbilityId.TECTONIC_RUPTURE.color(), 1.15F);
 		level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK,
 						Blocks.COARSE_DIRT.defaultBlockState()),
 				point.x, point.y + 0.08D, point.z, 4, 2.2D, 0.05D, 2.2D, 0.02D);
 		if (elapsed >= 15L) {
-			groundRing(level, point, 4.0D, 0xFFE5A3, 16, 1.0F, 0.18D,
+			groundRing(level, point, 4.5D, 0xFFE5A3, 16, 1.0F, 0.18D,
 					ParticleTypes.END_ROD);
 		}
 	}
@@ -118,7 +118,7 @@ public final class LeaderVisuals {
 		int color = LeaderAbilityId.TECTONIC_RUPTURE.color();
 		level.sendParticles(dust(color, CORE_SCALE),
 				point.x, point.y + 0.2D, point.z, 72, 2.3D, 0.35D, 2.3D, 0.04D);
-		groundRing(level, point, 4.0D, color, 48, OUTLINE_SCALE, 0.06D);
+		groundRing(level, point, 4.5D, color, 48, OUTLINE_SCALE, 0.06D);
 		level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK,
 						Blocks.COARSE_DIRT.defaultBlockState()),
 				point.x, point.y + 0.15D, point.z, 16, 2.0D, 0.25D, 2.0D, 0.04D);
@@ -126,8 +126,7 @@ public final class LeaderVisuals {
 				point.x, point.y + 0.25D, point.z, 12, 1.4D, 0.3D, 1.4D, 0.04D);
 	}
 
-	public static void armorWarning(ServerLevel level, LivingEntity target, long elapsed) {
-		Vec3 point = target.position();
+	public static void armorWarning(ServerLevel level, Vec3 point, long elapsed) {
 		int color = LeaderAbilityId.ARMOR_BREAKER.color();
 		groundRing(level, point, 1.2D, color, 20, OUTLINE_SCALE, 0.06D);
 		verticalBeam(level, point, 1.4D, color, 3, 0.2D);
@@ -166,6 +165,9 @@ public final class LeaderVisuals {
 		if (elapsed >= 8L) {
 			Vec3 end = rayEndpoint(level, owner, origin, direction, 20.0D);
 			line(level, origin, end, color, 1.0D, 0.9F, false);
+			Vec3 side = perpendicular(direction).scale(1.0D);
+			line(level, origin.add(side), end.add(side), color, 1.0D, 0.75F, false);
+			line(level, origin.subtract(side), end.subtract(side), color, 1.0D, 0.75F, false);
 			level.sendParticles(ParticleTypes.END_ROD, end.x, end.y, end.z,
 					3, 0.2D, 0.2D, 0.2D, 0.01D);
 		}
@@ -178,7 +180,7 @@ public final class LeaderVisuals {
 			return;
 		}
 		Vec3 normal = direction.normalize();
-		Vec3 side = perpendicular(normal).scale(0.28D);
+		Vec3 side = perpendicular(normal).scale(1.0D);
 		double length = direction.length();
 		DustParticleOptions edge = dust(color, OUTLINE_SCALE);
 		for (double distance = 0.0D; distance <= length; distance += 0.5D) {
@@ -239,7 +241,7 @@ public final class LeaderVisuals {
 
 	public static void phaseWarning(ServerLevel level, Vec3 start, Vec3 end,
 			Vec3 direction, long elapsed) {
-		Vec3 side = perpendicular(direction).scale(0.75D);
+		Vec3 side = perpendicular(direction).scale(1.0D);
 		line(level, start.add(side), end.add(side), LeaderAbilityId.PHASE_LUNGE.color(),
 				1.0D, 1.1F, false);
 		line(level, start.subtract(side), end.subtract(side),
@@ -254,7 +256,7 @@ public final class LeaderVisuals {
 
 	public static void phaseImpact(ServerLevel level, Vec3 start, Vec3 end, Vec3 direction) {
 		int color = LeaderAbilityId.PHASE_LUNGE.color();
-		Vec3 side = perpendicular(direction).scale(0.75D);
+		Vec3 side = perpendicular(direction).scale(1.0D);
 		line(level, start, end, 0xFFF1A6, 0.75D, 1.0F, true);
 		line(level, start.add(side), end.add(side), color, 0.9D, 1.2F, false);
 		line(level, start.subtract(side), end.subtract(side), color, 0.9D, 1.2F, false);

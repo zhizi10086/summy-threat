@@ -53,13 +53,13 @@ public final class LeaderActiveEffects {
 	private static final String SLOW_NAME = "summy_threat:leader_ability/tectonic_slow";
 	private static final String COLLAPSE_SLOW_NAME = "summy_threat:leader_ability/collapse_slow";
 
-	private record TectonicCast(long triggerTick, Vec3 point) {
+	private record TectonicCast(long triggerTick, LivingEntity target, Vec3 point) {
 	}
 
-	private record ArmorCast(long triggerTick, LivingEntity target) {
+	private record ArmorCast(long triggerTick, LivingEntity target, Vec3 point) {
 	}
 
-	private record RayCast(long triggerTick, Vec3 origin, Vec3 direction) {
+	private record RayCast(long triggerTick, LivingEntity target, Vec3 origin, Vec3 direction) {
 	}
 
 	private record GravityCast(long triggerTick) {
@@ -290,6 +290,10 @@ public final class LeaderActiveEffects {
 		TectonicCast cast = TECTONIC.get(owner.getUUID());
 		if (cast != null) {
 			long elapsed = now - (cast.triggerTick() - 20L);
+			if (elapsed >= 0L && elapsed < 10L && canTrack(owner, cast.target())) {
+				cast = new TectonicCast(cast.triggerTick(), cast.target(), cast.target().position());
+				TECTONIC.put(owner.getUUID(), cast);
+			}
 			if (elapsed >= 0L && elapsed % 2L == 0L
 					&& owner.level() instanceof ServerLevel level) {
 				LeaderVisuals.tectonicWarning(level, cast.point(), elapsed);
@@ -304,8 +308,9 @@ public final class LeaderActiveEffects {
 				|| LeaderTargeting.currentTarget(owner) == null) {
 			return;
 		}
-		Vec3 point = LeaderTargeting.currentTarget(owner).position();
-		TECTONIC.put(owner.getUUID(), new TectonicCast(now + 20L, point));
+		LivingEntity target = LeaderTargeting.currentTarget(owner);
+		Vec3 point = target.position();
+		TECTONIC.put(owner.getUUID(), new TectonicCast(now + 20L, target, point));
 		READY.put(cooldownKey(owner, LeaderAbilityId.TECTONIC_RUPTURE), now + 160L);
 		if (owner.level() instanceof ServerLevel level) {
 			LeaderVisuals.tectonicWarning(level, point, 0L);
@@ -320,17 +325,17 @@ public final class LeaderActiveEffects {
 			if (now < cast.triggerTick() && elapsed % 2L == 0L
 					&& cast.target().isAlive()
 					&& owner.level() instanceof ServerLevel level) {
-				LeaderVisuals.armorWarning(level, cast.target(), elapsed);
+				LeaderVisuals.armorWarning(level, cast.point(), elapsed);
 			}
 			if (now >= cast.triggerTick()) {
 				LivingEntity target = cast.target();
 				if (target.isAlive() && target.level() == owner.level()
-						&& owner.distanceTo(target) <= 4.0D) {
+						&& owner.distanceTo(target) <= 5.0D) {
 					target.invulnerableTime = 0;
 					DamageSource source = owner.damageSources().mobAttack(owner);
-					float amount = skillDamage(owner, target, 75.0D);
+					float amount = skillDamage(owner, target, 120.0D);
 					boolean landed = skillHurt(owner, target, source,
-							() -> ArmorPenetration.hurt(target, source, amount, 0.30D));
+							() -> ArmorPenetration.hurt(target, source, amount, 0.50D));
 					if (landed) {
 						ArmorShred.applyCorrosion(target);
 					}
@@ -348,10 +353,10 @@ public final class LeaderActiveEffects {
 		}
 		LivingEntity target = LeaderTargeting.currentTarget(owner);
 		if (ready(owner, LeaderAbilityId.ARMOR_BREAKER) > now || target == null
-				|| owner.distanceTo(target) > 4.0D) {
+				|| owner.distanceTo(target) > 5.0D) {
 			return;
 		}
-		ARMOR.put(owner.getUUID(), new ArmorCast(now + 16L, target));
+		ARMOR.put(owner.getUUID(), new ArmorCast(now + 16L, target, target.position()));
 		READY.put(cooldownKey(owner, LeaderAbilityId.ARMOR_BREAKER), now + 140L);
 		if (owner.level() instanceof ServerLevel level) {
 			LeaderVisuals.play(level, target.position(), SoundEvents.ANVIL_HIT, 0.75F, 0.65F);
@@ -362,6 +367,14 @@ public final class LeaderActiveEffects {
 		RayCast cast = RAY.get(owner.getUUID());
 		if (cast != null) {
 			long elapsed = now - (cast.triggerTick() - 25L);
+			if (elapsed >= 0L && elapsed < 15L && canTrack(owner, cast.target())) {
+				Vec3 origin = owner.getEyePosition();
+				Vec3 diff = cast.target().getBoundingBox().getCenter().subtract(origin);
+				if (diff.lengthSqr() > 1.0E-5D) {
+					cast = new RayCast(cast.triggerTick(), cast.target(), origin, diff.normalize());
+					RAY.put(owner.getUUID(), cast);
+				}
+			}
 			if (now < cast.triggerTick() && elapsed % 2L == 0L
 					&& owner.level() instanceof ServerLevel level) {
 				LeaderVisuals.rayCharge(level, owner, cast.origin(), cast.direction(), elapsed);
@@ -382,7 +395,7 @@ public final class LeaderActiveEffects {
 		if (diff.lengthSqr() < 1.0E-5D) {
 			return;
 		}
-		RAY.put(owner.getUUID(), new RayCast(now + 25L, origin, diff.normalize()));
+		RAY.put(owner.getUUID(), new RayCast(now + 25L, target, origin, diff.normalize()));
 		READY.put(cooldownKey(owner, LeaderAbilityId.HUNT_RAY), now + 180L);
 		if (owner.level() instanceof ServerLevel level) {
 			LeaderVisuals.rayCharge(level, owner, origin, diff.normalize(), 0L);
@@ -421,6 +434,13 @@ public final class LeaderActiveEffects {
 		PhaseCast cast = PHASE.get(owner.getUUID());
 		if (cast != null) {
 			long elapsed = now - (cast.triggerTick() - 16L);
+			if (elapsed >= 0L && elapsed < 8L && canTrack(owner, cast.target())) {
+				PhaseCast updated = phaseCast(owner, cast.target(), cast.triggerTick());
+				if (updated != null) {
+					cast = updated;
+					PHASE.put(owner.getUUID(), cast);
+				}
+			}
 			if (now < cast.triggerTick() && elapsed % 2L == 0L
 					&& owner.level() instanceof ServerLevel level) {
 				LeaderVisuals.phaseWarning(level, cast.start(), cast.end(),
@@ -437,19 +457,16 @@ public final class LeaderActiveEffects {
 				|| owner.distanceTo(target) > 12.0D) {
 			return;
 		}
-		Vec3 start = owner.position();
-		Vec3 diff = new Vec3(target.getX() - start.x, 0.0D, target.getZ() - start.z);
-		if (diff.lengthSqr() < 1.0E-5D) {
+		PhaseCast started = phaseCast(owner, target, now + 16L);
+		if (started == null) {
 			return;
 		}
-		double distance = Math.max(0.0D, Math.min(12.0D, diff.length() - 1.0D));
-		Vec3 direction = diff.normalize();
-		Vec3 end = clipEndpoint(owner, start, start.add(direction.scale(distance)));
-		PHASE.put(owner.getUUID(), new PhaseCast(now + 16L, start, end, direction, target));
+		PHASE.put(owner.getUUID(), started);
 		READY.put(cooldownKey(owner, LeaderAbilityId.PHASE_LUNGE), now + 180L);
 		if (owner.level() instanceof ServerLevel level) {
-			LeaderVisuals.phaseWarning(level, start, end, direction, 0L);
-			LeaderVisuals.play(level, start, SoundEvents.TRIDENT_RIPTIDE_1, 0.75F, 0.8F);
+			LeaderVisuals.phaseWarning(level, started.start(), started.end(),
+					started.direction(), 0L);
+			LeaderVisuals.play(level, started.start(), SoundEvents.TRIDENT_RIPTIDE_1, 0.75F, 0.8F);
 		}
 	}
 
@@ -517,7 +534,7 @@ public final class LeaderActiveEffects {
 				target.invulnerableTime = 0;
 				boolean landed = skillHurt(owner, target,
 						owner.damageSources().indirectMagic(owner, owner),
-						skillDamage(owner, target, 10.0D));
+						skillDamage(owner, target, 12.0D));
 				if (landed) {
 					COLLAPSE_LAST_HIT.put(target.getUUID(), now);
 				}
@@ -548,10 +565,10 @@ public final class LeaderActiveEffects {
 		if (block.getType() != HitResult.Type.MISS) {
 			end = block.getLocation();
 		}
-		for (LivingEntity target : lineTargets(owner, cast.origin(), end, 0.5D)) {
+		for (LivingEntity target : lineTargets(owner, cast.origin(), end, 1.0D)) {
 			target.invulnerableTime = 0;
 			if (skillHurt(owner, target, owner.damageSources().indirectMagic(owner, owner),
-					skillDamage(owner, target, 60.0D))) {
+					skillDamage(owner, target, 75.0D))) {
 				LeaderVisuals.hitFlash(target, LeaderAbilityId.HUNT_RAY.color());
 			}
 		}
@@ -568,7 +585,7 @@ public final class LeaderActiveEffects {
 			target.invulnerableTime = 0;
 			boolean landed = skillHurt(owner, target,
 					owner.damageSources().indirectMagic(owner, owner),
-					skillDamage(owner, target, 30.0D));
+					skillDamage(owner, target, 40.0D));
 			if (landed && MonsterScaler.kindOf(target) != MonsterScaler.Kind.BOSS
 					&& MonsterScaler.kindOf(target) != MonsterScaler.Kind.LEADER) {
 				PULLS.add(new PullState(target, owner.getUUID(), now + 10L));
@@ -586,11 +603,11 @@ public final class LeaderActiveEffects {
 			return;
 		}
 		Set<UUID> hit = new HashSet<>();
-		for (LivingEntity target : lineTargets(owner, cast.start(), cast.end(), 0.75D)) {
+		for (LivingEntity target : lineTargets(owner, cast.start(), cast.end(), 1.0D)) {
 			hit.add(target.getUUID());
 			target.invulnerableTime = 0;
 			boolean landed = skillHurt(owner, target, owner.damageSources().mobAttack(owner),
-					skillDamage(owner, target, 65.0D));
+					skillDamage(owner, target, 120.0D));
 			if (landed) {
 				control(target, cast.direction().x * 0.8D, cast.direction().z * 0.8D, 0.25D);
 			}
@@ -600,7 +617,7 @@ public final class LeaderActiveEffects {
 				&& locked.distanceToSqr(cast.end()) <= 2.25D) {
 			locked.invulnerableTime = 0;
 			boolean landed = skillHurt(owner, locked, owner.damageSources().mobAttack(owner),
-					skillDamage(owner, locked, 65.0D));
+					skillDamage(owner, locked, 120.0D));
 			if (landed) {
 				control(locked, cast.direction().x * 0.8D, cast.direction().z * 0.8D, 0.25D);
 			}
@@ -622,7 +639,7 @@ public final class LeaderActiveEffects {
 		for (LivingEntity target : targetsAt(owner, owner.position(), 5.0D)) {
 			target.invulnerableTime = 0;
 			skillHurt(owner, target, owner.damageSources().mobAttack(owner),
-					skillDamage(owner, target, 60.0D));
+					skillDamage(owner, target, 180.0D));
 		}
 		LeaderVisuals.ironCounter(owner);
 		LeaderVisuals.play(level, owner.position(), SoundEvents.BELL_BLOCK, 1.0F, 0.65F);
@@ -697,15 +714,15 @@ public final class LeaderActiveEffects {
 		if (!(owner.level() instanceof ServerLevel level)) {
 			return;
 		}
-		AABB area = new AABB(cast.point(), cast.point()).inflate(4.0D);
+		AABB area = new AABB(cast.point(), cast.point()).inflate(4.5D);
 		for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, area)) {
-			if (target.distanceToSqr(cast.point()) > 16.0D
+			if (target.distanceToSqr(cast.point()) > 20.25D
 					|| !LeaderTargeting.isTarget(owner, target)) {
 				continue;
 			}
 			target.invulnerableTime = 0;
 			boolean landed = skillHurt(owner, target, owner.damageSources().mobAttack(owner),
-					skillDamage(owner, target, 60.0D));
+					skillDamage(owner, target, 120.0D));
 			if (landed) {
 				pushFromPoint(target, cast.point(), 0.8D, 0.25D);
 				applySlow(owner, target, cast.triggerTick(), 40L,
@@ -790,6 +807,23 @@ public final class LeaderActiveEffects {
 		return point.distanceToSqr(start.add(segment.scale(t)));
 	}
 
+	private static boolean canTrack(LivingEntity owner, LivingEntity target) {
+		return target != null && target.isAlive() && target.level() == owner.level()
+				&& LeaderTargeting.isTarget(owner, target);
+	}
+
+	private static PhaseCast phaseCast(LivingEntity owner, LivingEntity target, long triggerTick) {
+		Vec3 start = owner.position();
+		Vec3 diff = new Vec3(target.getX() - start.x, 0.0D, target.getZ() - start.z);
+		if (diff.lengthSqr() < 1.0E-5D) {
+			return null;
+		}
+		double distance = Math.max(0.0D, Math.min(12.0D, diff.length() - 1.0D));
+		Vec3 direction = diff.normalize();
+		Vec3 end = clipEndpoint(owner, start, start.add(direction.scale(distance)));
+		return new PhaseCast(triggerTick, start, end, direction, target);
+	}
+
 	private static Vec3 clipEndpoint(LivingEntity owner, Vec3 start, Vec3 end) {
 		if (!(owner.level() instanceof ServerLevel level)) {
 			return end;
@@ -805,8 +839,11 @@ public final class LeaderActiveEffects {
 	}
 
 	private static float skillDamage(LivingEntity owner, LivingEntity target, double base) {
+		int tl = Math.max(10, ScalingState.clampTl(
+				owner.getPersistentData().getInt(MonsterScaler.TAG_TL)));
 		double factor = LeaderTargeting.isPlayerSide(target) ? 1.0D : 10.0D;
-		return (float) (base * ScalingState.rAtk() * factor);
+		return (float) (base * ScalingState.relativeAttackMultiplier(tl)
+				* ScalingState.rAtk() * factor);
 	}
 
 	private static long ready(LivingEntity owner, LeaderAbilityId ability) {

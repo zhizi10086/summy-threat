@@ -4,6 +4,7 @@ import com.summy.threat.SummyThreat;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.scaling.MonsterScaler;
+import com.summy.threat.scaling.ScalingState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -210,6 +211,10 @@ public final class StormRuleDevCheck {
 			float normalDamage = (float) method.invoke(null, owner, normal, d20);
 			float wolfDamage = (float) method.invoke(null, owner, wolf, d20);
 			float teamDamage = (float) method.invoke(null, owner, teamZombie, d20);
+			double expectedPlayerDamage = d20 * ScalingState.rAtk();
+			check("TL20 倍率 d20=" + d20 + "：玩家侧使用完整基准",
+					Math.abs(playerDamage - expectedPlayerDamage) < 0.05D,
+					"player=%.2f expected=%.2f".formatted(playerDamage, expectedPlayerDamage));
 			check("倍率 d20=" + d20 + "：普通怪 10×",
 					playerDamage > 0.0F && Math.abs(normalDamage / playerDamage - 10.0D) < 0.02D,
 					"player=%.2f normal=%.2f".formatted(playerDamage, normalDamage));
@@ -219,6 +224,25 @@ public final class StormRuleDevCheck {
 			check("倍率 d20=" + d20 + "：同队僵尸 1×",
 					playerDamage > 0.0F && Math.abs(teamDamage / playerDamage - 1.0D) < 0.02D,
 					"player=%.2f team=%.2f".formatted(playerDamage, teamDamage));
+		}
+		int originalTl = owner.getPersistentData().getInt(MonsterScaler.TAG_TL);
+		try {
+			owner.getPersistentData().putInt(MonsterScaler.TAG_TL, 12);
+			float tl12 = (float) method.invoke(null, owner, player, 50.0D);
+			double expectedTl12 = 50.0D * ScalingState.rawAttackMultiplier(
+					12) / ScalingState.rawAttackMultiplier(20) * ScalingState.rAtk();
+			check("卓越者 TL12 电涌继承 A(TL)/A(20)",
+					Math.abs(tl12 - expectedTl12) < 0.05D,
+					"amount=%.2f expected=%.2f".formatted(tl12, expectedTl12));
+			owner.getPersistentData().putInt(MonsterScaler.TAG_TL, 0);
+			float tl0 = (float) method.invoke(null, owner, player, 50.0D);
+			double expectedTl0 = 50.0D * ScalingState.rawAttackMultiplier(
+					0) / ScalingState.rawAttackMultiplier(20) * ScalingState.rAtk();
+			check("卓越者 TL0 电涌继承 A(TL)/A(20)",
+					Math.abs(tl0 - expectedTl0) < 0.05D,
+					"amount=%.2f expected=%.2f".formatted(tl0, expectedTl0));
+		} finally {
+			owner.getPersistentData().putInt(MonsterScaler.TAG_TL, originalTl);
 		}
 	}
 

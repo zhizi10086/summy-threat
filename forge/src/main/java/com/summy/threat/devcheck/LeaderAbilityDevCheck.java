@@ -1,5 +1,6 @@
 package com.summy.threat.devcheck;
 
+import com.summy.threat.combat.ArmorPenetration;
 import com.summy.threat.leader.LeaderAbilityId;
 import com.summy.threat.leader.LeaderAbilityPool;
 import com.summy.threat.leader.LeaderAbilityState;
@@ -21,6 +22,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.level.GameType;
@@ -32,6 +34,7 @@ import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -233,6 +236,7 @@ final class LeaderAbilityDevCheck {
 				6_000L, 6_016L, "PHASE 断步突进造成伤害");
 		checkActiveDamage(failures, player, leader, LeaderAbilityId.COLLAPSE_FIELD,
 				7_000L, 7_020L, "COLLAPSE 崩裂场首跳造成伤害");
+		checkApprovedStrengthening(failures, player, leader);
 
 		checkAuraEdges(failures, player, leader);
 		checkTargetingEdges(failures, player, leader);
@@ -244,6 +248,8 @@ final class LeaderAbilityDevCheck {
 		if (ironAttacker != null) {
 			ironAttacker.moveTo(leader.getX() + 2.0D, leader.getY(), leader.getZ());
 			player.serverLevel().addFreshEntity(ironAttacker);
+			ironAttacker.getAttribute(Attributes.MAX_HEALTH).setBaseValue(10_000.0D);
+			ironAttacker.setHealth(ironAttacker.getMaxHealth());
 			leader.setTarget(ironAttacker);
 			long ironStart = player.serverLevel().getGameTime();
 			LeaderActiveEffects.tickLeader(leader, ironStart);
@@ -264,11 +270,17 @@ final class LeaderAbilityDevCheck {
 					leader.damageSources().mobAttack(ironAttacker), 100.0F));
 			LeaderActiveEffects.onLivingDamage(new LivingDamageEvent(leader,
 					leader.damageSources().mobAttack(ironAttacker), 100.0F));
-			float ironBefore = ironAttacker.getHealth();
-			LeaderActiveEffects.tickServer(player.serverLevel(), ironStart + 1L);
+			HurtCapture counter = new HurtCapture(List.of(ironAttacker), true);
+			MinecraftForge.EVENT_BUS.register(counter);
+			try {
+				LeaderActiveEffects.tickServer(player.serverLevel(), ironStart + 1L);
+			} finally {
+				MinecraftForge.EVENT_BUS.unregister(counter);
+			}
+			double expectedCounter = expectedRawDamage(leader, ironAttacker, 180.0D);
 			check(failures, "IRON 铁壁反击三次受击后反震 5 格目标",
-					ironAttacker.getHealth() < ironBefore || !ironAttacker.isAlive(),
-					"before=" + ironBefore + " after=" + ironAttacker.getHealth());
+					Math.abs(counter.amountFor(ironAttacker) - expectedCounter) < 0.05D,
+					"amount=" + counter.amountFor(ironAttacker) + " expected=" + expectedCounter);
 			ironAttacker.discard();
 			leader.setTarget(null);
 		}
@@ -302,6 +314,327 @@ final class LeaderAbilityDevCheck {
 		leader.setTarget(null);
 	}
 
+	private static void checkApprovedStrengthening(List<String> failures, ServerPlayer player,
+			Zombie leader) {
+		ServerLevel level = player.serverLevel();
+		int baseX = player.getBlockX() + 72;
+		int baseY = player.getBlockY();
+		int baseZ = player.getBlockZ() + 48;
+		prepareLane(level, baseX, baseY, baseZ, 32);
+		leader.moveTo(baseX + 0.5D, baseY, baseZ + 0.5D, 0.0F, 0.0F);
+		long now = level.getGameTime() + 120_000L;
+
+		checkSkillDamageValue(failures, player, leader, LeaderAbilityId.TECTONIC_RUPTURE,
+				"TECTONIC", 120.0D, 2.0D, now, now + 20L);
+		checkSkillDamageValue(failures, player, leader, LeaderAbilityId.ARMOR_BREAKER,
+				"ARMOR", 120.0D, 2.0D, now + 1_000L, now + 1_016L);
+		checkSkillDamageValue(failures, player, leader, LeaderAbilityId.HUNT_RAY,
+				"RAY", 75.0D, 5.0D, now + 2_000L, now + 2_025L);
+		checkSkillDamageValue(failures, player, leader, LeaderAbilityId.GRAVITY_PULSE,
+				"GRAVITY", 40.0D, 2.0D, now + 3_000L, now + 3_020L);
+		checkSkillDamageValue(failures, player, leader, LeaderAbilityId.PHASE_LUNGE,
+				"PHASE", 120.0D, 5.0D, now + 4_000L, now + 4_016L);
+		checkSkillDamageValue(failures, player, leader, LeaderAbilityId.COLLAPSE_FIELD,
+				"COLLAPSE", 12.0D, 2.0D, now + 5_000L, now + 5_020L);
+
+		checkTectonicTracking(failures, player, leader, baseX, baseY, baseZ);
+		checkArmorRangeAndPenetration(failures, player, leader, baseX, baseY, baseZ);
+		checkRayWidthAndTracking(failures, player, leader, baseX, baseY, baseZ);
+		checkPhaseWidthAndTracking(failures, player, leader, baseX, baseY, baseZ);
+
+		LeaderActiveEffects.cleanupLeader(leader);
+		LeaderAbilityState.clear(leader);
+		leader.setTarget(null);
+	}
+
+	private static void checkSkillDamageValue(List<String> failures, ServerPlayer player,
+			Zombie leader, LeaderAbilityId ability, String label, double base, double distance,
+			long startTick, long hitTick) {
+		Zombie target = spawnZombie(player, leader.getX() + distance, leader.getY(), leader.getZ());
+		if (target == null) {
+			failures.add(label + " 强度测试无法创建靶子");
+			return;
+		}
+		target.getAttribute(Attributes.MAX_HEALTH).setBaseValue(10_000.0D);
+		target.setHealth(target.getMaxHealth());
+		LeaderActiveEffects.cleanupLeader(leader);
+		float amount = captureSkillDamage(leader, target, ability, startTick, hitTick);
+		double expected = expectedRawDamage(leader, target, base);
+		check(failures, label + " 已应用新基础值与 TL 曲线",
+				Math.abs(amount - expected) < 0.05D,
+				"amount=" + amount + " expected=" + expected + " base=" + base);
+		target.discard();
+		leader.setTarget(null);
+	}
+
+	private static void checkTectonicTracking(List<String> failures, ServerPlayer player,
+			Zombie leader, int baseX, int baseY, int baseZ) {
+		ServerLevel level = player.serverLevel();
+		prepareLane(level, baseX, baseY, baseZ, 32);
+		leader.moveTo(baseX + 0.5D, baseY, baseZ + 0.5D, 0.0F, 0.0F);
+		Zombie target = spawnZombie(player, baseX + 3.5D, baseY, baseZ + 0.5D);
+		if (target == null) {
+			failures.add("TECTONIC 追踪测试无法创建实体");
+			return;
+		}
+		Vec3 playerPosition = player.position();
+		long now = level.getGameTime() + 130_000L;
+		leader.setTarget(target);
+		LeaderAbilityState.setAbilities(leader,
+				List.of(LeaderAbilityId.BASTION_AURA, LeaderAbilityId.TECTONIC_RUPTURE));
+		HurtCapture capture = new HurtCapture(List.of(target), true);
+		MinecraftForge.EVENT_BUS.register(capture);
+		try {
+			LeaderActiveEffects.tickLeader(leader, now);
+			target.moveTo(baseX + 9.5D, baseY, baseZ + 0.5D);
+			LeaderActiveEffects.tickLeader(leader, now + 5L);
+			LeaderActiveEffects.tickLeader(leader, now + 10L);
+			LeaderActiveEffects.tickLeader(leader, now + 20L);
+		} finally {
+			MinecraftForge.EVENT_BUS.unregister(capture);
+		}
+		check(failures, "TECTONIC 前 10 tick 跟随目标，后 10 tick 保留落点",
+				!Float.isNaN(capture.amountFor(target)),
+				"target=" + capture.amountFor(target));
+
+		LeaderActiveEffects.cleanupLeader(leader);
+		target.moveTo(baseX + 3.5D, baseY, baseZ + 0.5D);
+		HurtCapture locked = new HurtCapture(List.of(target), true);
+		MinecraftForge.EVENT_BUS.register(locked);
+		try {
+			LeaderActiveEffects.tickLeader(leader, now + 1_000L);
+			target.moveTo(baseX + 9.5D, baseY, baseZ + 0.5D);
+			LeaderActiveEffects.tickLeader(leader, now + 1_005L);
+			LeaderActiveEffects.tickLeader(leader, now + 1_010L);
+			target.moveTo(baseX + 14.5D, baseY, baseZ + 0.5D);
+			LeaderActiveEffects.tickLeader(leader, now + 1_020L);
+		} finally {
+			MinecraftForge.EVENT_BUS.unregister(locked);
+		}
+		check(failures, "TECTONIC 锁定后不继续追随移动目标",
+				Float.isNaN(locked.amountFor(target)),
+				"target=" + locked.amountFor(target));
+
+		LeaderActiveEffects.cleanupLeader(leader);
+		target.moveTo(baseX + 3.5D, baseY, baseZ + 0.5D);
+		player.teleportTo(level, baseX + 7.8D, baseY, baseZ + 0.5D, player.getYRot(), player.getXRot());
+		HurtCapture radius = new HurtCapture(List.of(player), true);
+		MinecraftForge.EVENT_BUS.register(radius);
+		try {
+			LeaderActiveEffects.tickLeader(leader, now + 2_000L);
+			LeaderActiveEffects.tickLeader(leader, now + 2_020L);
+		} finally {
+			MinecraftForge.EVENT_BUS.unregister(radius);
+			player.teleportTo(level, playerPosition.x, playerPosition.y, playerPosition.z,
+					player.getYRot(), player.getXRot());
+		}
+		check(failures, "TECTONIC 有效半径扩大到 4.5 格",
+				!Float.isNaN(radius.amountFor(player)),
+				"decoy=" + radius.amountFor(player));
+		target.discard();
+		leader.setTarget(null);
+	}
+
+	private static void checkArmorRangeAndPenetration(List<String> failures, ServerPlayer player,
+			Zombie leader, int baseX, int baseY, int baseZ) {
+		ServerLevel level = player.serverLevel();
+		prepareLane(level, baseX, baseY, baseZ, 32);
+		leader.moveTo(baseX + 0.5D, baseY, baseZ + 0.5D, 0.0F, 0.0F);
+		Zombie moving = spawnZombie(player, baseX + 2.5D, baseY, baseZ + 0.5D);
+		if (moving == null) {
+			failures.add("ARMOR 范围测试无法创建靶子");
+			return;
+		}
+		long now = level.getGameTime() + 140_000L;
+		leader.setTarget(moving);
+		LeaderAbilityState.setAbilities(leader,
+				List.of(LeaderAbilityId.BASTION_AURA, LeaderAbilityId.ARMOR_BREAKER));
+		HurtCapture rangeCapture = new HurtCapture(List.of(moving), true);
+		MinecraftForge.EVENT_BUS.register(rangeCapture);
+		try {
+			LeaderActiveEffects.tickLeader(leader, now);
+			moving.moveTo(baseX + 4.8D, baseY, baseZ + 0.5D);
+			LeaderActiveEffects.tickLeader(leader, now + 16L);
+		} finally {
+			MinecraftForge.EVENT_BUS.unregister(rangeCapture);
+		}
+		check(failures, "ARMOR 施放与结算距离扩大到 5 格",
+				!Float.isNaN(rangeCapture.amountFor(moving)),
+				"amount=" + rangeCapture.amountFor(moving));
+
+		LeaderActiveEffects.cleanupLeader(leader);
+		moving.discard();
+		Zombie armored = spawnZombie(player, baseX + 2.5D, baseY, baseZ + 0.5D);
+		if (armored == null) {
+			failures.add("ARMOR 穿甲测试无法创建靶子");
+			return;
+		}
+		armored.getAttribute(Attributes.MAX_HEALTH).setBaseValue(10_000.0D);
+		armored.getAttribute(Attributes.ARMOR).setBaseValue(38.0D);
+		armored.getAttribute(Attributes.ARMOR_TOUGHNESS).setBaseValue(28.0D);
+		armored.setHealth(armored.getMaxHealth());
+		Zombie control = spawnZombie(player, baseX + 12.5D, baseY, baseZ + 0.5D);
+		if (control == null) {
+			armored.discard();
+			failures.add("ARMOR 穿甲对照无法创建靶子");
+			return;
+		}
+		control.getAttribute(Attributes.MAX_HEALTH).setBaseValue(10_000.0D);
+		control.getAttribute(Attributes.ARMOR).setBaseValue(38.0D);
+		control.getAttribute(Attributes.ARMOR_TOUGHNESS).setBaseValue(28.0D);
+		control.setHealth(control.getMaxHealth());
+		float controlBefore = control.getHealth();
+		DamageSource armorSource = leader.damageSources().mobAttack(leader);
+		ArmorPenetration.hurt(control, armorSource, 1_200.0F, 0.50D);
+		double expectedLoss = controlBefore - control.getHealth();
+		int originalTl = leader.getPersistentData().getInt(MonsterScaler.TAG_TL);
+		float healthBefore = armored.getHealth();
+		try {
+			leader.getPersistentData().putInt(MonsterScaler.TAG_TL, 20);
+			leader.setTarget(armored);
+			LeaderAbilityState.setAbilities(leader,
+					List.of(LeaderAbilityId.BASTION_AURA, LeaderAbilityId.ARMOR_BREAKER));
+			LeaderActiveEffects.tickLeader(leader, now + 1_000L);
+			LeaderActiveEffects.tickLeader(leader, now + 1_016L);
+		} finally {
+			leader.getPersistentData().putInt(MonsterScaler.TAG_TL, originalTl);
+		}
+		double actualLoss = healthBefore - armored.getHealth();
+		check(failures, "ARMOR 使用 120 基础值与 50% 本次穿甲",
+				Math.abs(actualLoss - expectedLoss) < 1.0D,
+				"actual=" + actualLoss + " expected=" + expectedLoss);
+		control.discard();
+		armored.discard();
+		leader.setTarget(null);
+		LeaderActiveEffects.cleanupLeader(leader);
+	}
+
+	private static void checkRayWidthAndTracking(List<String> failures, ServerPlayer player,
+			Zombie leader, int baseX, int baseY, int baseZ) {
+		ServerLevel level = player.serverLevel();
+		prepareLane(level, baseX, baseY, baseZ, 32);
+		leader.moveTo(baseX + 0.5D, baseY, baseZ + 0.5D, 0.0F, 0.0F);
+		Wolf primary = spawnPet(player, baseX + 8.5D, baseY, baseZ + 0.5D);
+		Wolf side = spawnPet(player, baseX + 6.5D, baseY, baseZ + 1.35D);
+		if (primary == null || side == null) {
+			failures.add("RAY 宽度测试无法创建目标");
+			return;
+		}
+		long now = level.getGameTime() + 150_000L;
+		leader.setTarget(primary);
+		LeaderAbilityState.setAbilities(leader,
+				List.of(LeaderAbilityId.BASTION_AURA, LeaderAbilityId.HUNT_RAY));
+		HurtCapture width = new HurtCapture(List.of(primary, side), true);
+		MinecraftForge.EVENT_BUS.register(width);
+		try {
+			LeaderActiveEffects.tickLeader(leader, now);
+			LeaderActiveEffects.tickLeader(leader, now + 25L);
+		} finally {
+			MinecraftForge.EVENT_BUS.unregister(width);
+		}
+		check(failures, "RAY 宽度扩大到 2 格",
+				!Float.isNaN(width.amountFor(side)),
+				"side=" + width.amountFor(side));
+
+		LeaderActiveEffects.cleanupLeader(leader);
+		prepareLane(level, baseX, baseY, baseZ, 32);
+		primary.moveTo(baseX + 8.5D, baseY, baseZ + 0.5D);
+		Wolf oldLine = spawnPet(player, baseX + 6.5D, baseY, baseZ + 0.5D);
+		if (oldLine == null) {
+			failures.add("RAY 追踪测试无法创建旧方向目标");
+			return;
+		}
+		leader.moveTo(baseX + 0.5D, baseY, baseZ + 0.5D, 0.0F, 0.0F);
+		leader.setTarget(primary);
+		HurtCapture tracking = new HurtCapture(List.of(primary, oldLine), true);
+		MinecraftForge.EVENT_BUS.register(tracking);
+		try {
+			LeaderActiveEffects.tickLeader(leader, now + 1_000L);
+			primary.moveTo(baseX + 8.5D, baseY, baseZ + 2.5D);
+			LeaderActiveEffects.tickLeader(leader, now + 1_014L);
+			LeaderActiveEffects.tickLeader(leader, now + 1_015L);
+			LeaderActiveEffects.tickLeader(leader, now + 1_025L);
+		} finally {
+			MinecraftForge.EVENT_BUS.unregister(tracking);
+		}
+		check(failures, "RAY 前 15 tick 追踪、后 10 tick 冻结方向",
+				!Float.isNaN(tracking.amountFor(primary))
+						&& Float.isNaN(tracking.amountFor(oldLine)),
+				"primary=" + tracking.amountFor(primary)
+						+ " oldLine=" + tracking.amountFor(oldLine));
+		primary.discard();
+		side.discard();
+		oldLine.discard();
+		leader.setTarget(null);
+	}
+
+	private static void checkPhaseWidthAndTracking(List<String> failures, ServerPlayer player,
+			Zombie leader, int baseX, int baseY, int baseZ) {
+		ServerLevel level = player.serverLevel();
+		prepareLane(level, baseX, baseY, baseZ, 32);
+		leader.moveTo(baseX + 0.5D, baseY, baseZ + 0.5D, 0.0F, 0.0F);
+		Wolf primary = spawnPet(player, baseX + 8.5D, baseY, baseZ + 0.5D);
+		Wolf side = spawnPet(player, baseX + 6.5D, baseY, baseZ + 1.35D);
+		if (primary == null || side == null) {
+			failures.add("PHASE 宽度测试无法创建目标");
+			return;
+		}
+		long now = level.getGameTime() + 160_000L;
+		leader.setTarget(primary);
+		LeaderAbilityState.setAbilities(leader,
+				List.of(LeaderAbilityId.BASTION_AURA, LeaderAbilityId.PHASE_LUNGE));
+		HurtCapture width = new HurtCapture(List.of(primary, side), true);
+		MinecraftForge.EVENT_BUS.register(width);
+		try {
+			LeaderActiveEffects.tickLeader(leader, now);
+			LeaderActiveEffects.tickLeader(leader, now + 16L);
+		} finally {
+			MinecraftForge.EVENT_BUS.unregister(width);
+		}
+		check(failures, "PHASE 路径宽度扩大到 2 格",
+				!Float.isNaN(width.amountFor(side)),
+				"side=" + width.amountFor(side));
+
+		LeaderActiveEffects.cleanupLeader(leader);
+		prepareLane(level, baseX, baseY, baseZ, 32);
+		primary.moveTo(baseX + 8.5D, baseY, baseZ + 0.5D);
+		Wolf oldLine = spawnPet(player, baseX + 6.5D, baseY, baseZ + 0.5D);
+		if (oldLine == null) {
+			failures.add("PHASE 追踪测试无法创建旧方向目标");
+			return;
+		}
+		leader.moveTo(baseX + 0.5D, baseY, baseZ + 0.5D, 0.0F, 0.0F);
+		leader.setTarget(primary);
+		HurtCapture tracking = new HurtCapture(List.of(primary, oldLine), true);
+		MinecraftForge.EVENT_BUS.register(tracking);
+		try {
+			LeaderActiveEffects.tickLeader(leader, now + 1_000L);
+			primary.moveTo(baseX + 8.5D, baseY, baseZ + 2.5D);
+			LeaderActiveEffects.tickLeader(leader, now + 1_007L);
+			LeaderActiveEffects.tickLeader(leader, now + 1_008L);
+			LeaderActiveEffects.tickLeader(leader, now + 1_016L);
+		} finally {
+			MinecraftForge.EVENT_BUS.unregister(tracking);
+		}
+		check(failures, "PHASE 前 8 tick 跟踪、最后 8 tick 锁定方向",
+				!Float.isNaN(tracking.amountFor(primary))
+						&& Float.isNaN(tracking.amountFor(oldLine)),
+				"primary=" + tracking.amountFor(primary)
+						+ " oldLine=" + tracking.amountFor(oldLine));
+		primary.discard();
+		side.discard();
+		oldLine.discard();
+		leader.setTarget(null);
+	}
+
+	private static double expectedRawDamage(LivingEntity owner, LivingEntity target, double base) {
+		int tl = Math.max(10, ScalingState.clampTl(
+				owner.getPersistentData().getInt(MonsterScaler.TAG_TL)));
+		double factor = LeaderTargeting.isPlayerSide(target) ? 1.0D : 10.0D;
+		return base * ScalingState.relativeAttackMultiplier(tl)
+				* ScalingState.rAtk() * factor;
+	}
+
 	private static void checkAuraEdges(List<String> failures, ServerPlayer player, Zombie leader) {
 		ServerLevel level = player.serverLevel();
 		long now = level.getGameTime() + 20_000L;
@@ -319,8 +652,8 @@ final class LeaderAbilityDevCheck {
 		LivingHurtEvent intimidation = new LivingHurtEvent(victim,
 				victim.damageSources().mobAttack(ally), 100.0F);
 		LeaderAuraEffects.onLivingHurt(intimidation);
-		check(failures, "INTIMIDATION 首领方普通伤害放大 8%",
-				Math.abs(intimidation.getAmount() - 108.0F) < 0.01F,
+		check(failures, "INTIMIDATION 首领方普通伤害放大 10%",
+				Math.abs(intimidation.getAmount() - 110.0F) < 0.01F,
 				"amount=" + intimidation.getAmount());
 		LivingHurtEvent canceledIntimidation = new LivingHurtEvent(victim,
 				victim.damageSources().mobAttack(ally), 100.0F);
@@ -369,8 +702,8 @@ final class LeaderAbilityDevCheck {
 		double beforeSuppression = speed.getValue();
 		LeaderAuraEffects.tickLeader(leader, now + 200L);
 		double afterSuppression = speed.getValue();
-		check(failures, "SUPPRESSION 对最终移速独立乘 90%",
-				Math.abs(afterSuppression / beforeSuppression - 0.90D) < 0.002D,
+		check(failures, "SUPPRESSION 对最终移速独立乘 85%",
+				Math.abs(afterSuppression / beforeSuppression - 0.85D) < 0.002D,
 				"before=" + beforeSuppression + " after=" + afterSuppression);
 		speed.removeModifier(speedBonusId);
 		leader.setTarget(null);
@@ -444,19 +777,49 @@ final class LeaderAbilityDevCheck {
 		leader.moveTo(baseX + 0.5D, baseY, baseZ + 0.5D, 0.0F, 0.0F);
 		leader.setTarget(normal);
 		long now = level.getGameTime() + 30_000L;
+		int leaderTl = Math.max(10, leader.getPersistentData().getInt(MonsterScaler.TAG_TL));
+		double expectedDirectNormal = 600.0D * ScalingState.rawAttackMultiplier(
+				leaderTl) / ScalingState.rawAttackMultiplier(20) * ScalingState.rAtk();
+		float directNormalHit = directSkillDamage(leader, normal, 60.0D);
+		check(failures, "SKILL 直接结算同时应用首领 TL 与 10 倍目标倍率",
+				Math.abs(directNormalHit - expectedDirectNormal) < 0.05D,
+				"amount=" + directNormalHit + " expected=" + expectedDirectNormal
+						+ " tl=" + leaderTl + " rAtk=" + ScalingState.rAtk());
+		double expectedPlayerHit = 60.0D * ScalingState.rawAttackMultiplier(
+				leaderTl) / ScalingState.rawAttackMultiplier(20) * ScalingState.rAtk();
+		float directPlayerHit = directSkillDamage(leader, player, 60.0D);
+		check(failures, "SKILL 玩家侧应用首领 TL 且保持 1 倍目标倍率",
+				Math.abs(directPlayerHit - expectedPlayerHit) < 0.05D,
+				"amount=" + directPlayerHit + " expected=" + expectedPlayerHit
+						+ " tl=" + leaderTl + " rAtk=" + ScalingState.rAtk());
+		leader.getPersistentData().putInt(MonsterScaler.TAG_TL, 9);
+		double expectedTl10 = 600.0D * ScalingState.rawAttackMultiplier(
+				10) / ScalingState.rawAttackMultiplier(20) * ScalingState.rAtk();
+		float directTl10 = directSkillDamage(leader, normal, 60.0D);
+		check(failures, "SKILL 首领 TL 下限固定按 10 计算",
+				Math.abs(directTl10 - expectedTl10) < 0.05D,
+				"amount=" + directTl10 + " expected=" + expectedTl10);
+		leader.getPersistentData().putInt(MonsterScaler.TAG_TL, 24);
+		double expectedTl20 = 600.0D * ScalingState.rAtk();
+		float directTl20 = directSkillDamage(leader, normal, 60.0D);
+		check(failures, "SKILL 首领 TL 上限固定按 20 计算",
+				Math.abs(directTl20 - expectedTl20) < 0.05D,
+				"amount=" + directTl20 + " expected=" + expectedTl20);
+		leader.getPersistentData().putInt(MonsterScaler.TAG_TL, leaderTl);
 		float normalHit = captureSkillDamage(leader, normal, LeaderAbilityId.TECTONIC_RUPTURE,
 				now, now + 20L);
-		check(failures, "SKILL 普通非玩家目标使用 10 倍原始伤害",
-				Math.abs(normalHit - 600.0F * (float) ScalingState.rAtk()) < 0.05F,
-				"amount=" + normalHit + " rAtk=" + ScalingState.rAtk());
+		double expectedNormalHit = 1_200.0D * ScalingState.rawAttackMultiplier(
+				leaderTl) / ScalingState.rawAttackMultiplier(20) * ScalingState.rAtk();
+		check(failures, "SKILL 普通非玩家目标同时应用 TL 与 10 倍原始伤害",
+				Math.abs(normalHit - expectedNormalHit) < 0.05F,
+				"amount=" + normalHit + " expected=" + expectedNormalHit
+						+ " tl=" + leaderTl + " rAtk=" + ScalingState.rAtk());
 		pet.moveTo(baseX + 8.5D, baseY, baseZ + 0.5D);
 		leader.setTarget(pet);
-		float petHit = captureSkillDamage(leader, pet, LeaderAbilityId.TECTONIC_RUPTURE,
-				now + 1_000L, now + 1_020L);
+		float petHit = directSkillDamage(leader, pet, 60.0D);
 		wildWolf.moveTo(baseX + 8.5D, baseY, baseZ + 0.5D);
 		leader.setTarget(wildWolf);
-		float wildHit = captureSkillDamage(leader, wildWolf, LeaderAbilityId.TECTONIC_RUPTURE,
-				now + 1_500L, now + 1_520L);
+		float wildHit = directSkillDamage(leader, wildWolf, 60.0D);
 		check(failures, "SKILL 玩家驯服宠物相对非玩家同类使用 1/10 倍率",
 				petHit > 0.0F && Math.abs(wildHit / petHit - 10.0F) < 0.20F,
 				"pet=" + petHit + " wild=" + wildHit + " ratio=" + (wildHit / petHit));
@@ -846,6 +1209,17 @@ final class LeaderAbilityDevCheck {
 			MinecraftForge.EVENT_BUS.unregister(capture);
 		}
 		return capture.amountFor(target);
+	}
+
+	private static float directSkillDamage(Zombie leader, LivingEntity target, double base) {
+		try {
+			Method method = LeaderActiveEffects.class.getDeclaredMethod(
+					"skillDamage", LivingEntity.class, LivingEntity.class, double.class);
+			method.setAccessible(true);
+			return (float) method.invoke(null, leader, target, base);
+		} catch (ReflectiveOperationException exception) {
+			throw new IllegalStateException("无法调用首领技能伤害入口", exception);
+		}
 	}
 
 	private static final class HurtCapture {

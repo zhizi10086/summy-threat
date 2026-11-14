@@ -180,6 +180,12 @@ public final class ScalingState {
 		return Config.ATTACK_MULTIPLIER_PER_TL[clampTl(tl)].get();
 	}
 
+	/** 定值技能相对 TL20 的攻击比例 A(TL) / A(20)；基准为 0 时按零伤害处理。 */
+	public static double relativeAttackMultiplier(int tl) {
+		double baseline = rawAttackMultiplier(20);
+		return baseline > 0.0D ? rawAttackMultiplier(tl) / baseline : 0.0D;
+	}
+
 	public static double eximusMultiplier(int tl) {
 		return scale(Config.EXIMUS_HEALTH_MULTIPLIER_PER_TL[clampTl(tl)].get(), rHp());
 	}
