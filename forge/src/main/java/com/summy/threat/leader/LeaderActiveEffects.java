@@ -35,6 +35,7 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -714,12 +715,7 @@ public final class LeaderActiveEffects {
 		if (!(owner.level() instanceof ServerLevel level)) {
 			return;
 		}
-		AABB area = new AABB(cast.point(), cast.point()).inflate(4.5D);
-		for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, area)) {
-			if (target.distanceToSqr(cast.point()) > 20.25D
-					|| !LeaderTargeting.isTarget(owner, target)) {
-				continue;
-			}
+		for (LivingEntity target : targetsAt(owner, cast.point(), 4.5D)) {
 			target.invulnerableTime = 0;
 			boolean landed = skillHurt(owner, target, owner.damageSources().mobAttack(owner),
 					skillDamage(owner, target, 120.0D));
@@ -778,10 +774,21 @@ public final class LeaderActiveEffects {
 		if (!(owner.level() instanceof ServerLevel level)) {
 			return List.of();
 		}
+		List<LivingEntity> out = new ArrayList<>();
+		LivingEntity current = LeaderTargeting.currentTarget(owner);
+		if (current != null && current.distanceToSqr(point) <= radius * radius
+				&& LeaderTargeting.isTarget(owner, current)) {
+			out.add(current);
+		}
 		AABB area = new AABB(point, point).inflate(radius);
-		return level.getEntitiesOfClass(LivingEntity.class, area,
+		for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, area,
 				target -> target.distanceToSqr(point) <= radius * radius
-						&& LeaderTargeting.isTarget(owner, target));
+						&& LeaderTargeting.isTarget(owner, target))) {
+			if (!out.contains(target)) {
+				out.add(target);
+			}
+		}
+		return out;
 	}
 
 	private static List<LivingEntity> lineTargets(LivingEntity owner, Vec3 start, Vec3 end,
@@ -789,11 +796,24 @@ public final class LeaderActiveEffects {
 		if (!(owner.level() instanceof ServerLevel level)) {
 			return List.of();
 		}
+		List<LivingEntity> out = new ArrayList<>();
+		LivingEntity current = LeaderTargeting.currentTarget(owner);
+		if (current != null
+				&& distanceToSegmentSqr(current.getBoundingBox().getCenter(), start, end)
+						<= radius * radius
+				&& LeaderTargeting.isTarget(owner, current)) {
+			out.add(current);
+		}
 		AABB area = new AABB(start, end).inflate(radius);
-		return level.getEntitiesOfClass(LivingEntity.class, area,
+		for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, area,
 				target -> LeaderTargeting.isTarget(owner, target)
 						&& distanceToSegmentSqr(target.getBoundingBox().getCenter(), start, end)
-								<= radius * radius);
+								<= radius * radius)) {
+			if (!out.contains(target)) {
+				out.add(target);
+			}
+		}
+		return out;
 	}
 
 	private static double distanceToSegmentSqr(Vec3 point, Vec3 start, Vec3 end) {

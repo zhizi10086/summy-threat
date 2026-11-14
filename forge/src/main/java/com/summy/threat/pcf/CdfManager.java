@@ -200,7 +200,8 @@ public final class CdfManager {
 		BlockPos center = new BlockPos(chunk.getMinBlockX() + 8, 64, chunk.getMinBlockZ() + 8);
 		SpawnRegion region = SpawnRegion.detect(level, Vec3.atCenterOf(center), MobSpawnType.NATURAL);
 		double max = maxPcf(level, key);
-		state.value = Math.min(max, region.leaderCap()) * doubleCfg(Config.CDF_LEGACY_CHUNK_INIT_RATIO, 0.5D);
+		state.value = Math.min(max, region.legacyCdfReferenceTl())
+				* doubleCfg(Config.CDF_LEGACY_CHUNK_INIT_RATIO, 0.5D);
 		state.lastUpdate = now;
 		state.peakPcf = max;
 		return state;

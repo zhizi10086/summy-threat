@@ -12,7 +12,9 @@ import com.summy.threat.item.ModItems;
 import com.summy.threat.pcf.CdfManager;
 import com.summy.threat.pcf.PcfManager;
 import com.summy.threat.pcf.SpawnRegion;
+import com.summy.threat.pcf.TlSelector;
 import com.summy.threat.scaling.MonsterScaler;
+import com.summy.threat.scaling.ScalingState;
 import com.summy.threat.scaling.SpawnAudit;
 import com.summy.threat.Config;
 import net.minecraft.client.Minecraft;
@@ -64,7 +66,7 @@ public final class ThreatDevCheck {
 	// 就把客户端关掉，因此这里放宽到 10 分钟，总运行上限放宽到 20 分钟。
 	private static final int IDLE_STOP_TICKS = 12000;
 	private static final int TOTAL_STOP_TICKS = 24000;
-	private static final int CLIENT_STOP_TICK = 1520;
+	private static final int CLIENT_STOP_TICK = LEADER_CHECK ? 240 : 1520;
 	private static final List<String> FAILURES = new ArrayList<>();
 	private static int serverTick;
 	private static int clientTick;
@@ -91,6 +93,16 @@ public final class ThreatDevCheck {
 		ServerPlayer player = event.getServer().getPlayerList().getPlayers().get(0);
 		serverTick++;
 		try {
+			if (LEADER_CHECK) {
+				switch (serverTick) {
+					case 20 -> prepareWorld(player);
+					case 40 -> prepareEquipment(player);
+					case 60 -> FAILURES.addAll(LeaderAbilityDevCheck.run(player));
+					default -> {
+					}
+				}
+				return;
+			}
 			switch (serverTick) {
 				case 20 -> prepareWorld(player);
 				case 40 -> prepareEquipment(player);
@@ -379,6 +391,15 @@ public final class ThreatDevCheck {
 		int min = 99;
 		int max = -1;
 		Map<Integer, Integer> freq = new TreeMap<>();
+		Zombie directProbe = EntityType.ZOMBIE.create(player.serverLevel());
+		if (directProbe != null) {
+			directProbe.moveTo(player.getX(), player.getY(), player.getZ());
+		}
+		double probePcf = PcfManager.selectedPcf(player.serverLevel(), player.position(),
+				MonsterScaler.Kind.NORMAL);
+		int probeTl = directProbe == null ? -1
+				: TlSelector.select(player.serverLevel(), directProbe,
+						MonsterScaler.Kind.NORMAL, MobSpawnType.NATURAL);
 		// 随机浮动 ±1：每组 200 次，覆盖边界并验证中间值的分布。
 		for (int i = 0; i < 200; i++) {
 			Zombie zombie = EntityType.ZOMBIE.create(player.serverLevel());
@@ -403,8 +424,21 @@ public final class ThreatDevCheck {
 		}
 		MAPPING.add("%s pcf=%d cdf=%d tl=%d..%d dist=%s"
 				.formatted(region, pcf, cdf, min, max, dist));
+		log(("MAPPING_DIAG case=%s pcf=%d cdf=%d min=%d max=%d selectedPcf=%.3f directTl=%d "
+				+ "players=%d probePos=%s playerPos=%s playerLevel=%s")
+				.formatted(region, pcf, cdf, min, max, probePcf, probeTl,
+						player.serverLevel().getPlayers(value -> true).size(),
+						directProbe == null ? "null" : directProbe.position(),
+						player.position(), player.serverLevel().dimension().location()));
 		check("映射 %s PCF=%d CDF=%d TL %d~%d".formatted(region, pcf, cdf, lo, hi),
-				min >= lo && max <= hi, "实测 %d..%d".formatted(min, max));
+				min >= lo && max <= hi, "实测 %d..%d globalTl=%d cdfNow=%.3f pcfNow=%.3f "
+						+ "selectedPcf=%.3f directTl=%d regionNow=%s players=%d probePos=%s "
+						+ "playerPos=%s sameLevel=%s"
+						.formatted(probePcf, probeTl,
+								SpawnRegion.forEntity(player.serverLevel(), player).id(),
+								player.serverLevel().getPlayers(value -> true).size(),
+								directProbe == null ? "null" : directProbe.position(),
+								player.position(), player.serverLevel() == player.level()));
 		if (lo > 0 && hi < 20) {
 			int center = (lo + hi) / 2;
 			int lowCount = freq.getOrDefault(center - 1, 0);
@@ -692,6 +726,10 @@ public final class ThreatDevCheck {
 
 	static void logDetailed(String message) {
 		log(message);
+	}
+
+	static void recordSubcheck() {
+		checks++;
 	}
 
 	static void runCommand(ServerPlayer player, String command) {

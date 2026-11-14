@@ -15,6 +15,7 @@ import com.summy.threat.item.ModItems;
 import com.summy.threat.leader.LeaderActiveEffects;
 import com.summy.threat.leader.LeaderAuraEffects;
 import com.summy.threat.leader.LegendaryResistance;
+import com.summy.threat.leader.LeaderSpawnController;
 import com.summy.threat.network.ModNetwork;
 import com.summy.threat.pcf.CdfManager;
 import com.summy.threat.pcf.PcfManager;
@@ -81,6 +82,7 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(EximusSpawner.class);
 		MinecraftForge.EVENT_BUS.register(LeaderActiveEffects.class);
 		MinecraftForge.EVENT_BUS.register(LeaderAuraEffects.class);
+		MinecraftForge.EVENT_BUS.register(LeaderSpawnController.class);
 		MinecraftForge.EVENT_BUS.register(LegendaryResistance.class);
 		MinecraftForge.EVENT_BUS.register(PcfManager.class);
 		MinecraftForge.EVENT_BUS.register(CdfManager.class);

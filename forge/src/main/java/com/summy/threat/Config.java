@@ -206,17 +206,15 @@ public final class Config {
 	public static final ForgeConfigSpec.ConfigValue<String> MULTIPLAYER_BOSS_ANCHOR;
 	public static final ForgeConfigSpec.IntValue MULTIPLAYER_PLAYER_DETECTION_RADIUS;
 
-	/** 区域倍率与区域首领 TL 上限 */
+	/** 区域倍率与首领生成概率 */
 	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_SPAWN_PROTECTION;
 	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_NORMAL_BIOME;
 	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_NETHER_END;
 	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_STRUCTURE;
 	public static final ForgeConfigSpec.DoubleValue REGION_MULTIPLIER_SPAWNER;
-	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_SPAWN_PROTECTION;
-	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_NORMAL_BIOME;
-	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_NETHER_END;
-	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_STRUCTURE;
-	public static final ForgeConfigSpec.IntValue REGION_TL_CAP_SPAWNER;
+	public static final ForgeConfigSpec.DoubleValue LEADER_GENERAL_NATURAL_CHANCE;
+	public static final ForgeConfigSpec.DoubleValue LEADER_MONUMENT_EXTRA_CHANCE;
+	public static final ForgeConfigSpec.DoubleValue LEADER_BASTION_EXTRA_CHANCE;
 
 	private static final List<String> DEFAULT_MOD_MATERIAL_IDS = List.of(
 			"summy_reliquary:sin_fragment_pride",
@@ -547,7 +545,7 @@ public final class Config {
 		MULTIPLAYER_PLAYER_DETECTION_RADIUS = builder.defineInRange("player_detection_radius", 128, 1, 512);
 		builder.pop();
 
-		builder.comment("区域修正倍率与区域首领 TL 上限；普通怪 / 卓越者只受 20 硬上限。")
+		builder.comment("区域修正倍率；普通怪 / 卓越者 / 区域首领均只受 20 硬上限。")
 				.push("region_multiplier");
 		REGION_MULTIPLIER_SPAWN_PROTECTION = builder.defineInRange("spawn_protection", 0.5D, 0.0D, 100.0D);
 		REGION_MULTIPLIER_NORMAL_BIOME = builder.defineInRange("normal_biome", 1.0D, 0.0D, 100.0D);
@@ -556,12 +554,17 @@ public final class Config {
 		REGION_MULTIPLIER_SPAWNER = builder.defineInRange("spawner", 0.3D, 0.0D, 100.0D);
 		builder.pop();
 
-		builder.push("region_tl_cap");
-		REGION_TL_CAP_SPAWN_PROTECTION = builder.defineInRange("spawn_protection", 12, 0, 20);
-		REGION_TL_CAP_NORMAL_BIOME = builder.defineInRange("normal_biome", 12, 0, 20);
-		REGION_TL_CAP_NETHER_END = builder.defineInRange("nether_end", 14, 0, 20);
-		REGION_TL_CAP_STRUCTURE = builder.defineInRange("structure", 15, 0, 20);
-		REGION_TL_CAP_SPAWNER = builder.defineInRange("spawner", 12, 0, 20);
+		builder.comment("区域首领自然生成概率；所有概率均为单个候选实体的独立概率。")
+				.push("leader_spawn");
+		LEADER_GENERAL_NATURAL_CHANCE = builder
+				.comment("普通敌对怪自然生成区域首领的概率")
+				.defineInRange("natural_chance", 0.001D, 0.0D, 1.0D);
+		LEADER_MONUMENT_EXTRA_CHANCE = builder
+				.comment("海底神殿除保底首领外，每只额外古守升级为首领的概率")
+				.defineInRange("monument_extra_chance", 0.25D, 0.0D, 1.0D);
+		LEADER_BASTION_EXTRA_CHANCE = builder
+				.comment("堡垒前两只保底首领外，每只额外蛮兵升级为首领的概率")
+				.defineInRange("bastion_extra_chance", 0.10D, 0.0D, 1.0D);
 		builder.pop();
 
 		builder.comment("调试：全局 TL（-2 = 完全关闭；-1 = 自动 PCF/CDF；0~20 = 手动覆盖）。运行期用 /summythreat tl 修改，重启复位。")

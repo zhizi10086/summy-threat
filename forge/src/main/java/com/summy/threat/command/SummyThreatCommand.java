@@ -139,7 +139,7 @@ public final class SummyThreatCommand {
 				.then(Commands.literal("spawn")
 						.then(Commands.argument("entity", ResourceLocationArgument.id())
 								.then(Commands.argument("tl", IntegerArgumentType.integer(0, 20))
-										.executes(ctx -> spawn(ctx, "normal", 20.0D, null))
+										.executes(ctx -> spawn(ctx, "auto", 20.0D, null))
 										.then(Commands.argument("kind", StringArgumentType.word())
 												.executes(ctx -> spawn(ctx, StringArgumentType.getString(ctx, "kind"), 20.0D, null))
 												.then(Commands.argument("pcf", DoubleArgumentType.doubleArg(0.0D, 20.0D))
@@ -355,9 +355,9 @@ public final class SummyThreatCommand {
 		CdfManager.Snapshot s = CdfManager.snapshot(level, pos);
 		SpawnRegion region = SpawnRegion.detect(level, ctx.getSource().getPosition(), MobSpawnType.NATURAL);
 		ctx.getSource().sendSuccess(() -> Component.literal(
-				"[Summy Threat] CDF %s（目标 %s，峰值 %s）｜区域 %s（×%s，首领上限 %d）｜击杀加成 %s｜死亡惩罚 %s｜玩家 %s"
+				"[Summy Threat] CDF %s（目标 %s，峰值 %s）｜区域 %s（×%s，首领TL 0~20，<10取消）｜击杀加成 %s｜死亡惩罚 %s｜玩家 %s"
 						.formatted(fmt(s.value()), fmt(s.target()), fmt(s.peakPcf()), region.id(),
-								fmt(region.multiplier()), region.leaderCap(), fmt(s.killBonus()),
+								fmt(region.multiplier()), fmt(s.killBonus()),
 								s.deathPenaltyUntil() > level.getGameTime() ? "有效" : "无",
 								s.hasPlayers() ? "在区块内" : "无")), false);
 		return 1;
@@ -487,9 +487,19 @@ public final class SummyThreatCommand {
 			return 0;
 		}
 
-		String kind = kindRaw.toLowerCase(Locale.ROOT);
+		String requestedKind = kindRaw.toLowerCase(Locale.ROOT);
+		boolean fixedLeaderType = MonsterScaler.isFixedLeaderType(living);
+		String kind = "auto".equals(requestedKind)
+				? (fixedLeaderType ? (tl < 10 ? "normal" : "leader") : "normal") : requestedKind;
+		if (fixedLeaderType && !"auto".equals(requestedKind)
+				&& ("normal".equals(kind) || "eximus".equals(kind))) {
+			source.sendFailure(Component.literal(
+					"远古守卫者与猪灵蛮兵不接受显式普通/卓越者生成；"
+							+ "请使用默认身份，Boss 由标签或 mod_boss_ids 判定"));
+			return 0;
+		}
 		if ("leader".equals(kind) && !MonsterScaler.isLeaderEligible(living)) {
-			source.sendFailure(Component.literal("区域首领只能是 zombie / piglin_brute / elder_guardian"));
+			source.sendFailure(Component.literal("区域首领只能是可缩放的普通敌对生物"));
 			return 0;
 		}
 		if (!"normal".equals(kind) && !"eximus".equals(kind) && !"leader".equals(kind)) {
@@ -501,6 +511,10 @@ public final class SummyThreatCommand {
 					"区域首领请先生成，再使用 /summythreat leaderability 设置能力"));
 			return 0;
 		}
+		if ("leader".equals(kind) && tl < 10) {
+			source.sendFailure(Component.literal("区域首领 TL 必须至少为 10"));
+			return 0;
+		}
 
 		Vec3 pos = source.getPosition();
 		created.moveTo(pos.x, pos.y, pos.z, source.getRotation().y, 0.0F);
@@ -510,18 +524,26 @@ public final class SummyThreatCommand {
 			mob.setPersistenceRequired();
 		}
 
+		if (fixedLeaderType && "normal".equals(kind)) {
+			MonsterScaler.clearLeaderCandidate(living, true);
+		}
 		if ("eximus".equals(kind)) {
 			created.getPersistentData().putBoolean(MonsterScaler.TAG_EXIMUS, true);
 			if (archetype != null) {
 				created.getPersistentData().putString(MonsterScaler.TAG_ARCHETYPE, archetype.id());
 			}
 		} else if ("leader".equals(kind)) {
-			created.getPersistentData().putBoolean(MonsterScaler.TAG_LEADER, true);
+			MonsterScaler.markLeaderCandidate(living, tl, true);
 			created.getPersistentData().putDouble(MonsterScaler.TAG_PCF, pcf);
 		}
 
 		// 先数值化（此时实体还没进世界，避免 join 事件重复处理），再加进世界
-		MonsterScaler.scaleNow(living, tl);
+		if (!MonsterScaler.scaleNow(living, tl)) {
+			created.discard();
+			source.sendFailure(Component.literal("实体缩放被取消或当前身份无法应用"));
+			return 0;
+		}
+		MonsterScaler.clearLeaderCandidate(living, MonsterScaler.kindOf(living) != MonsterScaler.Kind.LEADER);
 		if ("eximus".equals(kind) && clearArchetype) {
 			created.getPersistentData().remove(MonsterScaler.TAG_ARCHETYPE);
 		}

@@ -96,9 +96,40 @@ public final class SummyThreatApi {
 	}
 
 	public static boolean scale(LivingEntity entity, int tl, String kind) {
-		MonsterScaler.Kind value = kind == null || kind.isBlank()
-				? MonsterScaler.kindOf(entity) : parseKind(kind);
-		return MonsterScaler.scaleNow(entity, tl, value);
+		String requested = kind == null ? "auto" : kind.trim();
+		boolean automatic = requested.isBlank() || "auto".equalsIgnoreCase(requested);
+		MonsterScaler.Kind current = MonsterScaler.kindOf(entity);
+		MonsterScaler.Kind value = automatic
+				? (MonsterScaler.isSpawnerSource(entity)
+						? MonsterScaler.Kind.NORMAL
+						: MonsterScaler.isFixedLeaderType(entity)
+								&& current != MonsterScaler.Kind.BOSS
+										? (tl < 10 ? MonsterScaler.Kind.NORMAL : MonsterScaler.Kind.LEADER)
+										: current)
+				: parseKind(requested);
+		if (MonsterScaler.isSpawnerSource(entity) && value != MonsterScaler.Kind.NORMAL) {
+			throw new IllegalArgumentException("刷怪笼来源实体只能按普通版缩放");
+		}
+		if (!automatic && !MonsterScaler.isSpawnerSource(entity)
+				&& MonsterScaler.isFixedLeaderType(entity)
+				&& value != MonsterScaler.Kind.LEADER && value != MonsterScaler.Kind.BOSS) {
+			throw new IllegalArgumentException("远古守卫者与猪灵蛮兵只能按区域首领或 Boss 缩放");
+		}
+		if (value == MonsterScaler.Kind.LEADER && tl < 10) {
+			throw new IllegalArgumentException("区域首领 TL 必须至少为 10");
+		}
+		if (MonsterScaler.isFixedLeaderType(entity) && value == MonsterScaler.Kind.LEADER) {
+			MonsterScaler.markLeaderCandidate(entity, tl, true);
+		} else if (MonsterScaler.isFixedLeaderType(entity) && value == MonsterScaler.Kind.NORMAL) {
+			MonsterScaler.clearLeaderCandidate(entity, true);
+		}
+		boolean scaled = MonsterScaler.scaleNow(entity, tl, value);
+		if (scaled) {
+			MonsterScaler.clearLeaderCandidate(entity, MonsterScaler.kindOf(entity) != MonsterScaler.Kind.LEADER);
+		} else {
+			MonsterScaler.clearLeaderCandidate(entity, current != MonsterScaler.Kind.LEADER);
+		}
+		return scaled;
 	}
 
 	public static double pcf(ServerPlayer player) {
@@ -193,6 +224,9 @@ public final class SummyThreatApi {
 
 	public static String setArchetype(LivingEntity entity, String id) {
 		String normalized = id == null ? "" : id.trim().toLowerCase(Locale.ROOT);
+		if (MonsterScaler.isSpawnerSource(entity) && !normalized.isEmpty()) {
+			throw new IllegalArgumentException("刷怪笼来源实体不能写入卓越者原型");
+		}
 		if (!normalized.isEmpty() && EximusArchetype.byId(normalized) == null) {
 			throw new IllegalArgumentException("未知原型 ID：" + id);
 		}
@@ -210,17 +244,33 @@ public final class SummyThreatApi {
 		if (!(created instanceof LivingEntity living) || !MonsterScaler.isScalable(living)) {
 			throw new IllegalArgumentException("实体不在 ST 接管范围：" + entityId);
 		}
+		String requestedKind = kind == null || kind.isBlank() ? "auto" : kind.trim();
+		boolean automatic = "auto".equalsIgnoreCase(requestedKind);
+		MonsterScaler.Kind parsedKind = automatic
+				? (MonsterScaler.isFixedLeaderType(living)
+						? (tl < 10 ? MonsterScaler.Kind.NORMAL : MonsterScaler.Kind.LEADER)
+						: MonsterScaler.Kind.NORMAL)
+				: parseKind(requestedKind);
+		if (!automatic && MonsterScaler.isFixedLeaderType(living)
+				&& parsedKind != MonsterScaler.Kind.LEADER && parsedKind != MonsterScaler.Kind.BOSS) {
+			throw new IllegalArgumentException("远古守卫者与猪灵蛮兵只能按区域首领或 Boss 生成");
+		}
+		if (parsedKind == MonsterScaler.Kind.LEADER && tl < 10) {
+			throw new IllegalArgumentException("区域首领 TL 必须至少为 10");
+		}
 		living.moveTo(pos.x, pos.y, pos.z, 0.0F, 0.0F);
 		if (living instanceof Mob mob) {
 			mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()),
 					MobSpawnType.COMMAND, null, null);
 			mob.setPersistenceRequired();
 		}
-		MonsterScaler.Kind parsedKind = parseKind(kind == null ? "normal" : kind);
+		if (MonsterScaler.isFixedLeaderType(living) && parsedKind == MonsterScaler.Kind.NORMAL) {
+			MonsterScaler.clearLeaderCandidate(living, true);
+		}
 		if (parsedKind == MonsterScaler.Kind.EXIMUS) {
 			living.getPersistentData().putBoolean(MonsterScaler.TAG_EXIMUS, true);
 		} else if (parsedKind == MonsterScaler.Kind.LEADER) {
-			living.getPersistentData().putBoolean(MonsterScaler.TAG_LEADER, true);
+			MonsterScaler.markLeaderCandidate(living, tl, true);
 			living.getPersistentData().putDouble(MonsterScaler.TAG_PCF, pcf);
 		}
 		if (archetype != null && !archetype.isBlank()) {
@@ -250,6 +300,7 @@ public final class SummyThreatApi {
 			created.discard();
 			return null;
 		}
+		MonsterScaler.clearLeaderCandidate(living, MonsterScaler.kindOf(living) != MonsterScaler.Kind.LEADER);
 		level.addFreshEntity(living);
 		return living;
 	}

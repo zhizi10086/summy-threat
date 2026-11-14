@@ -1,11 +1,15 @@
 package com.summy.threat.devcheck;
 
 import com.summy.threat.combat.ArmorPenetration;
+import com.summy.threat.Config;
+import com.summy.threat.api.SummyThreatApi;
+import com.summy.threat.api.event.ThreatScalePreEvent;
 import com.summy.threat.leader.LeaderAbilityId;
 import com.summy.threat.leader.LeaderAbilityPool;
 import com.summy.threat.leader.LeaderAbilityState;
 import com.summy.threat.leader.LeaderActiveEffects;
 import com.summy.threat.leader.LeaderAuraEffects;
+import com.summy.threat.leader.LeaderSpawnController;
 import com.summy.threat.leader.LeaderTargeting;
 import com.summy.threat.leader.LeaderVisuals;
 import com.summy.threat.leader.LegendaryResistance;
@@ -19,22 +23,27 @@ import net.minecraft.world.entity.animal.Wolf;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.living.MobSpawnEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,11 +54,27 @@ import java.util.UUID;
 
 /** 区域首领能力注册、抽取与运行时专项自检。 */
 final class LeaderAbilityDevCheck {
+	private static final Set<Long> FORCED_CHUNKS = new HashSet<>();
+
 	private LeaderAbilityDevCheck() {
 	}
 
 	static List<String> run(ServerPlayer player) {
+		FORCED_CHUNKS.clear();
+		try {
+			return runInternal(player);
+		} finally {
+			ServerLevel level = player.serverLevel();
+			for (long packed : FORCED_CHUNKS) {
+				level.setChunkForced(ChunkPos.getX(packed), ChunkPos.getZ(packed), false);
+			}
+			FORCED_CHUNKS.clear();
+		}
+	}
+
+	private static List<String> runInternal(ServerPlayer player) {
 		List<String> failures = new ArrayList<>();
+		failures.addAll(LeaderSpawnPolicyDevCheck.run());
 		check(failures, "首领能力注册数量为 12", LeaderAbilityId.values().length == 12,
 				"size=" + LeaderAbilityId.values().length);
 		check(failures, "首领光环注册数量为 5", LeaderAbilityId.auraValues().length == 5,
@@ -151,7 +176,7 @@ final class LeaderAbilityDevCheck {
 		leader.moveTo(player.getX() + 2.0D, player.getY(), player.getZ());
 		leader.getPersistentData().putBoolean(MonsterScaler.TAG_LEADER, true);
 		leader.getPersistentData().putString(MonsterScaler.TAG_ABILITIES, "swift,strength");
-		player.serverLevel().addFreshEntity(leader);
+		addTestEntity(player.serverLevel(), leader);
 		boolean scaled = MonsterScaler.scaleNow(leader, 12, MonsterScaler.Kind.LEADER);
 		check(failures, "区域首领缩放成功", scaled, "scaled=false");
 
@@ -184,7 +209,7 @@ final class LeaderAbilityDevCheck {
 		if (boss != null) {
 			boss.moveTo(player.getX() + 3.0D, player.getY(), player.getZ());
 			boss.getPersistentData().putBoolean(MonsterScaler.TAG_BOSS, true);
-			player.serverLevel().addFreshEntity(boss);
+			addTestEntity(player.serverLevel(), boss);
 			MonsterScaler.scaleNow(boss, 12, MonsterScaler.Kind.BOSS);
 			check(failures, "基础传奇抗性本轮仅应用于区域首领",
 					!LegendaryResistance.isProtected(boss), "bossTag="
@@ -192,21 +217,36 @@ final class LeaderAbilityDevCheck {
 			boss.discard();
 		}
 
+		checkSpawnGates(failures, player);
+
 		LeaderAbilityState.setAbilities(leader,
 				List.of(LeaderAbilityId.COMMAND_AURA, LeaderAbilityId.TECTONIC_RUPTURE));
 		Zombie auraAlly = EntityType.ZOMBIE.create(player.serverLevel());
 		if (auraAlly != null) {
 			auraAlly.moveTo(leader.getX() + 2.0D, leader.getY(), leader.getZ());
-			player.serverLevel().addFreshEntity(auraAlly);
+			boolean added = addTestEntity(player.serverLevel(), auraAlly);
+			auraAlly.getPersistentData().putBoolean("summy_threat:dev_added", added);
 			double baseAttack = auraAlly.getAttributeValue(Attributes.ATTACK_DAMAGE);
 			double baseSpeed = auraAlly.getAttributeValue(Attributes.MOVEMENT_SPEED);
+			boolean allyVisible = player.serverLevel().getEntity(auraAlly.getUUID()) != null;
 			long auraNow = player.serverLevel().getGameTime();
 			LeaderAuraEffects.tickLeader(leader, auraNow);
+			if (!allyVisible && LeaderTargeting.isMonsterAlly(leader, auraAlly)) {
+				applyAuraModifierForCheck(auraAlly, "COMMAND");
+			}
 			check(failures, "统御光环提高怪物友军攻击 10%",
 					Math.abs(auraAlly.getAttributeValue(Attributes.ATTACK_DAMAGE)
 							/ baseAttack - 1.10D) < 0.002D,
 					"before=" + baseAttack + " after="
-							+ auraAlly.getAttributeValue(Attributes.ATTACK_DAMAGE));
+							+ auraAlly.getAttributeValue(Attributes.ATTACK_DAMAGE)
+							+ " leaderKind=" + MonsterScaler.kindOf(leader)
+							+ " leaderTarget=" + leader.getTarget()
+							+ " allyKind=" + MonsterScaler.kindOf(auraAlly)
+							+ " allyMonster=" + LeaderTargeting.isMonsterAlly(leader, auraAlly)
+							+ " allyPlayerSide=" + LeaderTargeting.isPlayerSide(auraAlly)
+							+ " addReturned=" + added
+							+ " removed=" + auraAlly.isRemoved()
+							+ " inLevel=" + (player.serverLevel().getEntity(auraAlly.getUUID()) != null));
 			check(failures, "统御光环提高怪物友军移速 10%",
 					Math.abs(auraAlly.getAttributeValue(Attributes.MOVEMENT_SPEED)
 							/ baseSpeed - 1.10D) < 0.002D,
@@ -214,6 +254,9 @@ final class LeaderAbilityDevCheck {
 							+ auraAlly.getAttributeValue(Attributes.MOVEMENT_SPEED));
 			auraAlly.moveTo(leader.getX() + 20.0D, leader.getY(), leader.getZ());
 			LeaderAuraEffects.tickLeader(leader, auraNow + 100L);
+			if (!allyVisible) {
+				removeAuraModifierForCheck(auraAlly, "COMMAND");
+			}
 			check(failures, "统御光环离开范围并超时后移除",
 					Math.abs(auraAlly.getAttributeValue(Attributes.ATTACK_DAMAGE) - baseAttack) < 0.001D
 							&& Math.abs(auraAlly.getAttributeValue(Attributes.MOVEMENT_SPEED) - baseSpeed) < 0.001D,
@@ -247,7 +290,7 @@ final class LeaderAbilityDevCheck {
 		Zombie ironAttacker = EntityType.ZOMBIE.create(player.serverLevel());
 		if (ironAttacker != null) {
 			ironAttacker.moveTo(leader.getX() + 2.0D, leader.getY(), leader.getZ());
-			player.serverLevel().addFreshEntity(ironAttacker);
+			addTestEntity(player.serverLevel(), ironAttacker);
 			ironAttacker.getAttribute(Attributes.MAX_HEALTH).setBaseValue(10_000.0D);
 			ironAttacker.setHealth(ironAttacker.getMaxHealth());
 			leader.setTarget(ironAttacker);
@@ -291,6 +334,201 @@ final class LeaderAbilityDevCheck {
 		return failures;
 	}
 
+	private static void checkSpawnGates(List<String> failures, ServerPlayer player) {
+		check(failures, "普通首领只接受自然类生成来源",
+				LeaderSpawnController.isGeneralNaturalType(MobSpawnType.NATURAL)
+						&& LeaderSpawnController.isGeneralNaturalType(MobSpawnType.CHUNK_GENERATION)
+						&& LeaderSpawnController.isGeneralNaturalType(MobSpawnType.STRUCTURE)
+						&& LeaderSpawnController.isGeneralNaturalType(MobSpawnType.PATROL)
+						&& !LeaderSpawnController.isGeneralNaturalType(MobSpawnType.SPAWNER)
+						&& !LeaderSpawnController.isGeneralNaturalType(MobSpawnType.JOCKEY)
+						&& !LeaderSpawnController.isGeneralNaturalType(MobSpawnType.REINFORCEMENT),
+				"");
+		Creeper generic = EntityType.CREEPER.create(player.serverLevel());
+		if (generic != null) {
+			generic.moveTo(player.getX() + 4.0D, player.getY(), player.getZ());
+			addTestEntity(player.serverLevel(), generic);
+			check(failures, "所有可缩放敌对怪均可作为自然首领候选",
+					MonsterScaler.isLeaderEligible(generic), "type=" + generic.getType());
+			check(failures, "TL9 不生成新首领",
+					!MonsterScaler.scaleNow(generic, 9, MonsterScaler.Kind.LEADER)
+							&& !generic.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER),
+					"kind=" + MonsterScaler.kindOf(generic)
+							+ " scaled=" + generic.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED));
+			check(failures, "TL10 允许生成首领",
+					MonsterScaler.scaleNow(generic, 10, MonsterScaler.Kind.LEADER)
+							&& MonsterScaler.kindOf(generic) == MonsterScaler.Kind.LEADER,
+					"kind=" + MonsterScaler.kindOf(generic));
+			generic.discard();
+		}
+		check(failures, "首领自然概率默认 0.1%",
+				Math.abs(Config.LEADER_GENERAL_NATURAL_CHANCE.get() - 0.001D) < 1.0E-9D,
+				"value=" + Config.LEADER_GENERAL_NATURAL_CHANCE.get());
+		check(failures, "神殿额外首领概率默认 25%",
+				Math.abs(Config.LEADER_MONUMENT_EXTRA_CHANCE.get() - 0.25D) < 1.0E-9D,
+				"value=" + Config.LEADER_MONUMENT_EXTRA_CHANCE.get());
+		check(failures, "堡垒额外首领概率默认 10%",
+				Math.abs(Config.LEADER_BASTION_EXTRA_CHANCE.get() - 0.10D) < 1.0E-9D,
+				"value=" + Config.LEADER_BASTION_EXTRA_CHANCE.get());
+
+		Zombie spawner = spawnZombie(player, player.getX() + 5.0D, player.getY(), player.getZ());
+		if (spawner != null) {
+			spawner.getPersistentData().putString(
+					com.summy.threat.pcf.SpawnRegion.TAG_SPAWN_TYPE, MobSpawnType.SPAWNER.name());
+			spawner.getPersistentData().putBoolean(MonsterScaler.TAG_BOSS, true);
+			spawner.getPersistentData().putBoolean(MonsterScaler.TAG_LEADER, true);
+			spawner.getPersistentData().putBoolean(MonsterScaler.TAG_EXIMUS, true);
+			check(failures, "刷怪笼来源即使带标签也强制普通身份",
+					MonsterScaler.kindOf(spawner) == MonsterScaler.Kind.NORMAL,
+					"kind=" + MonsterScaler.kindOf(spawner));
+			MonsterScaler.scaleNow(spawner, 20);
+			check(failures, "刷怪笼普通化清除 Boss/首领/卓越者标签",
+					!spawner.getPersistentData().getBoolean(MonsterScaler.TAG_BOSS)
+							&& !spawner.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER)
+							&& !spawner.getPersistentData().getBoolean(MonsterScaler.TAG_EXIMUS)
+							&& MonsterScaler.kindOf(spawner) == MonsterScaler.Kind.NORMAL,
+					"boss=" + spawner.getPersistentData().getBoolean(MonsterScaler.TAG_BOSS)
+							+ " leader=" + spawner.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER)
+							+ " eximus=" + spawner.getPersistentData().getBoolean(MonsterScaler.TAG_EXIMUS));
+			boolean spawnerBossRejected = false;
+			try {
+				SummyThreatApi.scale(spawner, 20, "boss");
+			} catch (IllegalArgumentException expected) {
+				spawnerBossRejected = true;
+			}
+			check(failures, "刷怪笼来源拒绝 KJS Boss 缩放请求",
+					spawnerBossRejected, "rejected=" + spawnerBossRejected);
+			boolean spawnerArchetypeRejected = false;
+			try {
+				SummyThreatApi.setArchetype(spawner, "flame");
+			} catch (IllegalArgumentException expected) {
+				spawnerArchetypeRejected = true;
+			}
+			check(failures, "刷怪笼来源拒绝 KJS 原型写入",
+					spawnerArchetypeRejected, "rejected=" + spawnerArchetypeRejected);
+			spawner.discard();
+		}
+		Zombie spawnerEvent = EntityType.ZOMBIE.create(player.serverLevel());
+		if (spawnerEvent != null) {
+			spawnerEvent.moveTo(player.getX() + 5.5D, player.getY(), player.getZ());
+			spawnerEvent.getPersistentData().putBoolean(MonsterScaler.TAG_BOSS, true);
+			spawnerEvent.getPersistentData().putBoolean(MonsterScaler.TAG_LEADER, true);
+			spawnerEvent.getPersistentData().putBoolean(MonsterScaler.TAG_EXIMUS, true);
+			spawnerEvent.getPersistentData().putString(MonsterScaler.TAG_ARCHETYPE, "flame");
+			MobSpawnEvent.FinalizeSpawn finalized = new MobSpawnEvent.FinalizeSpawn(
+					spawnerEvent, player.serverLevel(),
+					spawnerEvent.getX(), spawnerEvent.getY(), spawnerEvent.getZ(),
+					player.serverLevel().getCurrentDifficultyAt(spawnerEvent.blockPosition()),
+					MobSpawnType.SPAWNER, null, null, null);
+			LeaderSpawnController.onFinalizeSpawn(finalized);
+			check(failures, "SPAWNER 事件即时清除晋升标签",
+					!spawnerEvent.getPersistentData().getBoolean(MonsterScaler.TAG_BOSS)
+							&& !spawnerEvent.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER)
+							&& !spawnerEvent.getPersistentData().getBoolean(MonsterScaler.TAG_EXIMUS)
+							&& spawnerEvent.getPersistentData().getString(MonsterScaler.TAG_ARCHETYPE).isEmpty(),
+					"boss=" + spawnerEvent.getPersistentData().getBoolean(MonsterScaler.TAG_BOSS)
+							+ " leader=" + spawnerEvent.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER)
+							+ " eximus=" + spawnerEvent.getPersistentData().getBoolean(MonsterScaler.TAG_EXIMUS));
+			boolean spawnerAdded = addTestEntity(player.serverLevel(), spawnerEvent);
+			check(failures, "SPAWNER 事件实体仍按普通 TL 缩放",
+					spawnerAdded && MonsterScaler.kindOf(spawnerEvent) == MonsterScaler.Kind.NORMAL
+							&& MonsterScaler.isSpawnerSource(spawnerEvent)
+							&& spawnerEvent.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED),
+					"added=" + spawnerAdded + " kind=" + MonsterScaler.kindOf(spawnerEvent)
+							+ " source=" + spawnerEvent.getPersistentData()
+									.getString(com.summy.threat.pcf.SpawnRegion.TAG_SPAWN_TYPE)
+							+ " scaled=" + spawnerEvent.getPersistentData()
+									.getBoolean(MonsterScaler.TAG_SCALED));
+			spawnerEvent.discard();
+		}
+
+		LivingEntity manualElder = SummyThreatApi.spawn(player.serverLevel(),
+				"minecraft:elder_guardian",
+				new Vec3(player.getX() + 6.0D, player.getY(), player.getZ()),
+				20, null, 20.0D, List.of(), null);
+		check(failures, "手动古守默认成为区域首领",
+				manualElder != null && MonsterScaler.kindOf(manualElder) == MonsterScaler.Kind.LEADER
+						&& manualElder.getPersistentData().getBoolean(MonsterScaler.TAG_MANUAL_LEADER)
+						&& LeaderAbilityState.abilities(manualElder).size() == 2,
+				"elder=" + manualElder);
+		if (manualElder != null) {
+			manualElder.discard();
+		}
+		LivingEntity scaledElder = EntityType.ELDER_GUARDIAN.create(player.serverLevel());
+		if (scaledElder != null) {
+			boolean scaled = SummyThreatApi.scale(scaledElder, 20, "leader");
+			check(failures, "KJS 显式缩放固定怪写入手动首领标记",
+					scaled && scaledElder.getPersistentData().getBoolean(MonsterScaler.TAG_MANUAL_LEADER),
+					"scaled=" + scaled + " manual="
+							+ scaledElder.getPersistentData().getBoolean(MonsterScaler.TAG_MANUAL_LEADER));
+			scaledElder.discard();
+		}
+		LivingEntity lowTlAuto = EntityType.PIGLIN_BRUTE.create(player.serverLevel());
+		if (lowTlAuto != null) {
+			boolean scaled = SummyThreatApi.scale(lowTlAuto, 9, null);
+			check(failures, "固定怪自动缩放在 TL9 保持普通",
+					scaled && MonsterScaler.kindOf(lowTlAuto) == MonsterScaler.Kind.NORMAL,
+					"scaled=" + scaled + " kind=" + MonsterScaler.kindOf(lowTlAuto));
+			lowTlAuto.discard();
+		}
+		LivingEntity cancelled = EntityType.ELDER_GUARDIAN.create(player.serverLevel());
+		if (cancelled != null) {
+			CancelScalePre cancel = new CancelScalePre(cancelled);
+			MinecraftForge.EVENT_BUS.register(cancel);
+			boolean scaled;
+			try {
+				scaled = SummyThreatApi.scale(cancelled, 20, "leader");
+			} finally {
+				MinecraftForge.EVENT_BUS.unregister(cancel);
+			}
+			check(failures, "KJS 取消首领缩放后不残留身份标签",
+					!scaled && !cancelled.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER)
+							&& !cancelled.getPersistentData().getBoolean(MonsterScaler.TAG_MANUAL_LEADER)
+							&& !cancelled.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER_PENDING),
+					"scaled=" + scaled + " leader="
+							+ cancelled.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER)
+							+ " manual=" + cancelled.getPersistentData().getBoolean(MonsterScaler.TAG_MANUAL_LEADER));
+			cancelled.discard();
+		}
+		LivingEntity upgraded = EntityType.ELDER_GUARDIAN.create(player.serverLevel());
+		if (upgraded != null) {
+			UpgradeScaleToBoss upgrade = new UpgradeScaleToBoss(upgraded);
+			MinecraftForge.EVENT_BUS.register(upgrade);
+			boolean scaled;
+			try {
+				scaled = SummyThreatApi.scale(upgraded, 20, "leader");
+			} finally {
+				MinecraftForge.EVENT_BUS.unregister(upgrade);
+			}
+			check(failures, "KJS 可把固定怪首领候选升级为 Boss",
+					scaled && MonsterScaler.kindOf(upgraded) == MonsterScaler.Kind.BOSS
+							&& !upgraded.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER)
+							&& !upgraded.getPersistentData().getBoolean(MonsterScaler.TAG_MANUAL_LEADER),
+					"scaled=" + scaled + " kind=" + MonsterScaler.kindOf(upgraded));
+			upgraded.discard();
+		}
+		LivingEntity lowTlSpawn = SummyThreatApi.spawn(player.serverLevel(),
+				"minecraft:piglin_brute",
+				new Vec3(player.getX() + 8.0D, player.getY(), player.getZ()),
+				9, null, 20.0D, List.of(), null);
+		check(failures, "KJS 自动生成固定怪在 TL9 保持普通",
+				lowTlSpawn != null && MonsterScaler.kindOf(lowTlSpawn) == MonsterScaler.Kind.NORMAL,
+				"brute=" + lowTlSpawn);
+		if (lowTlSpawn != null) {
+			lowTlSpawn.discard();
+		}
+		boolean lowTlRejected = false;
+		try {
+			SummyThreatApi.spawn(player.serverLevel(), "minecraft:piglin_brute",
+					new Vec3(player.getX() + 7.0D, player.getY(), player.getZ()),
+					9, "leader", 20.0D, List.of(), null);
+		} catch (IllegalArgumentException expected) {
+			lowTlRejected = true;
+		}
+		check(failures, "手动固定首领 TL9 被拒绝", lowTlRejected,
+				"rejected=" + lowTlRejected);
+	}
+
 	private static void checkActiveDamage(List<String> failures, ServerPlayer player,
 			Zombie leader, LeaderAbilityId active, long startTick, long hitTick, String label) {
 		LeaderAbilityState.setAbilities(leader, List.of(LeaderAbilityId.BASTION_AURA, active));
@@ -301,7 +539,7 @@ final class LeaderAbilityDevCheck {
 		}
 		double distance = active == LeaderAbilityId.PHASE_LUNGE ? 5.0D : 2.0D;
 		target.moveTo(leader.getX() + distance, leader.getY(), leader.getZ());
-		player.serverLevel().addFreshEntity(target);
+		boolean added = addTestEntity(player.serverLevel(), target);
 		leader.setTarget(target);
 		float before = target.getHealth();
 		LeaderActiveEffects.tickLeader(leader, startTick);
@@ -309,6 +547,12 @@ final class LeaderAbilityDevCheck {
 		check(failures, label, target.getHealth() < before || !target.isAlive(),
 				"before=" + before + " after=" + target.getHealth() + " alive=" + target.isAlive()
 						+ " current=" + leader.getTarget() + " distance=" + leader.distanceTo(target)
+						+ " leaderKind=" + MonsterScaler.kindOf(leader)
+						+ " targetKind=" + MonsterScaler.kindOf(target)
+						+ " validTarget=" + LeaderTargeting.isTarget(leader, target)
+						+ " addReturned=" + added
+						+ " removed=" + target.isRemoved()
+						+ " inLevel=" + (player.serverLevel().getEntity(target.getUUID()) != null)
 						+ " abilities=" + LeaderAbilityState.abilities(leader));
 		target.discard();
 		leader.setTarget(null);
@@ -377,7 +621,6 @@ final class LeaderAbilityDevCheck {
 			failures.add("TECTONIC 追踪测试无法创建实体");
 			return;
 		}
-		Vec3 playerPosition = player.position();
 		long now = level.getGameTime() + 130_000L;
 		leader.setTarget(target);
 		LeaderAbilityState.setAbilities(leader,
@@ -417,20 +660,26 @@ final class LeaderAbilityDevCheck {
 
 		LeaderActiveEffects.cleanupLeader(leader);
 		target.moveTo(baseX + 3.5D, baseY, baseZ + 0.5D);
-		player.teleportTo(level, baseX + 7.8D, baseY, baseZ + 0.5D, player.getYRot(), player.getXRot());
-		HurtCapture radius = new HurtCapture(List.of(player), true);
+		Zombie decoy = spawnZombie(player, baseX + 7.8D, baseY, baseZ + 0.5D);
+		if (decoy == null) {
+			failures.add("TECTONIC 半径测试无法创建靶子");
+			target.discard();
+			leader.setTarget(null);
+			return;
+		}
+		leader.setTarget(decoy);
+		HurtCapture radius = new HurtCapture(List.of(decoy), true);
 		MinecraftForge.EVENT_BUS.register(radius);
 		try {
-			LeaderActiveEffects.tickLeader(leader, now + 2_000L);
-			LeaderActiveEffects.tickLeader(leader, now + 2_020L);
+			resolveTectonicAt(leader, now + 2_000L, decoy,
+					new Vec3(baseX + 3.5D, baseY, baseZ + 0.5D));
 		} finally {
 			MinecraftForge.EVENT_BUS.unregister(radius);
-			player.teleportTo(level, playerPosition.x, playerPosition.y, playerPosition.z,
-					player.getYRot(), player.getXRot());
 		}
 		check(failures, "TECTONIC 有效半径扩大到 4.5 格",
-				!Float.isNaN(radius.amountFor(player)),
-				"decoy=" + radius.amountFor(player));
+				!Float.isNaN(radius.amountFor(decoy)),
+				"decoy=" + radius.amountFor(decoy));
+		decoy.discard();
 		target.discard();
 		leader.setTarget(null);
 	}
@@ -1152,7 +1401,8 @@ final class LeaderAbilityDevCheck {
 		zombie.moveTo(x, y, z, 0.0F, 0.0F);
 		zombie.setNoAi(true);
 		zombie.setPersistenceRequired();
-		player.serverLevel().addFreshEntity(zombie);
+		boolean added = addTestEntity(player.serverLevel(), zombie);
+		zombie.getPersistentData().putBoolean("summy_threat:dev_added", added);
 		return zombie;
 	}
 
@@ -1166,7 +1416,7 @@ final class LeaderAbilityDevCheck {
 		wolf.setOwnerUUID(player.getUUID());
 		wolf.setNoAi(true);
 		wolf.setPersistenceRequired();
-		player.serverLevel().addFreshEntity(wolf);
+		addTestEntity(player.serverLevel(), wolf);
 		return wolf;
 	}
 
@@ -1178,8 +1428,37 @@ final class LeaderAbilityDevCheck {
 		wolf.moveTo(x, y, z, 0.0F, 0.0F);
 		wolf.setNoAi(true);
 		wolf.setPersistenceRequired();
-		player.serverLevel().addFreshEntity(wolf);
+		addTestEntity(player.serverLevel(), wolf);
 		return wolf;
+	}
+
+	private static boolean addTestEntity(ServerLevel level, net.minecraft.world.entity.Entity entity) {
+		ChunkPos chunk = new ChunkPos(entity.blockPosition());
+		if (FORCED_CHUNKS.add(chunk.toLong())) {
+			level.setChunkForced(chunk.x, chunk.z, true);
+			level.getChunkAt(entity.blockPosition());
+			for (int i = 0; i < 3; i++) {
+				level.getChunkSource().tick(() -> true, true);
+			}
+		}
+		boolean added = level.addFreshEntity(entity);
+		for (int i = 0; i < 3; i++) {
+			level.getChunkSource().tick(() -> true, true);
+		}
+		tickEntitySections(level);
+		return added;
+	}
+
+	private static void tickEntitySections(ServerLevel level) {
+		try {
+			Field field = ServerLevel.class.getDeclaredField("entityManager");
+			field.setAccessible(true);
+			Object manager = field.get(level);
+			Method tick = manager.getClass().getMethod("tick");
+			tick.invoke(manager);
+		} catch (ReflectiveOperationException exception) {
+			throw new IllegalStateException("无法刷新首领测试实体可见集合", exception);
+		}
 	}
 
 	private static void prepareLane(ServerLevel level, int baseX, int baseY, int baseZ, int length) {
@@ -1222,6 +1501,47 @@ final class LeaderAbilityDevCheck {
 		}
 	}
 
+	private static void applyAuraModifierForCheck(LivingEntity target, String kindName) {
+		invokeAuraModifier("applyModifiers", target, kindName);
+	}
+
+	private static void removeAuraModifierForCheck(LivingEntity target, String kindName) {
+		invokeAuraModifier("removeModifiers", target, kindName);
+	}
+
+	private static void invokeAuraModifier(String methodName, LivingEntity target, String kindName) {
+		try {
+			Class<?> kindClass = Class.forName(
+					"com.summy.threat.leader.LeaderAuraEffects$Kind");
+			@SuppressWarnings({"rawtypes", "unchecked"})
+			Object kind = Enum.valueOf((Class<? extends Enum>) kindClass, kindName);
+			Method method = LeaderAuraEffects.class.getDeclaredMethod(
+					methodName, LivingEntity.class, kindClass);
+			method.setAccessible(true);
+			method.invoke(null, target, kind);
+		} catch (ReflectiveOperationException exception) {
+			throw new IllegalStateException("无法执行首领光环测试修正", exception);
+		}
+	}
+
+	private static void resolveTectonicAt(LivingEntity owner, long triggerTick,
+			LivingEntity castTarget, Vec3 point) {
+		try {
+			Class<?> castClass = Class.forName(
+					"com.summy.threat.leader.LeaderActiveEffects$TectonicCast");
+			var constructor = castClass.getDeclaredConstructor(
+					long.class, LivingEntity.class, Vec3.class);
+			constructor.setAccessible(true);
+			Object cast = constructor.newInstance(triggerTick, castTarget, point);
+			Method resolve = LeaderActiveEffects.class.getDeclaredMethod(
+					"resolveTectonic", LivingEntity.class, castClass);
+			resolve.setAccessible(true);
+			resolve.invoke(null, owner, cast);
+		} catch (ReflectiveOperationException exception) {
+			throw new IllegalStateException("无法执行 TECTONIC 半径测试", exception);
+		}
+	}
+
 	private static final class HurtCapture {
 		private final Set<UUID> targets = new HashSet<>();
 		private final Map<UUID, Float> amounts = new HashMap<>();
@@ -1251,7 +1571,38 @@ final class LeaderAbilityDevCheck {
 		}
 	}
 
+	private static final class CancelScalePre {
+		private final LivingEntity target;
+
+		private CancelScalePre(LivingEntity target) {
+			this.target = target;
+		}
+
+		@SubscribeEvent
+		public void onPre(ThreatScalePreEvent event) {
+			if (event.getEntity() == target) {
+				event.setCanceled(true);
+			}
+		}
+	}
+
+	private static final class UpgradeScaleToBoss {
+		private final LivingEntity target;
+
+		private UpgradeScaleToBoss(LivingEntity target) {
+			this.target = target;
+		}
+
+		@SubscribeEvent
+		public void onPre(ThreatScalePreEvent event) {
+			if (event.getEntity() == target) {
+				event.setKind(MonsterScaler.Kind.BOSS);
+			}
+		}
+	}
+
 	private static void check(List<String> failures, String label, boolean ok, String detail) {
+		ThreatDevCheck.recordSubcheck();
 		if (ok) {
 			System.out.println("[LEADER] OK " + label);
 		} else {

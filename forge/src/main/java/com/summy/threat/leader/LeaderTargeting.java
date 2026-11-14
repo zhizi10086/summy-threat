@@ -31,8 +31,17 @@ public final class LeaderTargeting {
 		if (target instanceof Player player) {
 			return !player.isCreative() && !player.isSpectator();
 		}
-		if (target instanceof OwnableEntity ownable && ownable.getOwner() instanceof Player) {
-			return true;
+		if (target instanceof OwnableEntity ownable && ownable.getOwnerUUID() != null) {
+			if (ownable.getOwner() instanceof Player) {
+				return true;
+			}
+			if (target.level() instanceof ServerLevel level) {
+				for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+					if (ownable.getOwnerUUID().equals(player.getUUID())) {
+						return true;
+					}
+				}
+			}
 		}
 		if (target.level() instanceof ServerLevel level) {
 			for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
@@ -70,7 +79,18 @@ public final class LeaderTargeting {
 	}
 
 	public static List<LivingEntity> offensiveTargets(LivingEntity owner, double radius) {
-		return targets(owner, radius, false);
+		List<LivingEntity> out = new ArrayList<>();
+		LivingEntity current = currentTarget(owner);
+		if (current != null && current.distanceTo(owner) <= radius
+				&& isTarget(owner, current)) {
+			out.add(current);
+		}
+		for (LivingEntity target : targets(owner, radius, false)) {
+			if (!out.contains(target)) {
+				out.add(target);
+			}
+		}
+		return out;
 	}
 
 	public static List<LivingEntity> supportTargets(LivingEntity owner, double radius) {

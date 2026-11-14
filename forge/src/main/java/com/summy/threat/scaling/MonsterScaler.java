@@ -62,6 +62,13 @@ public final class MonsterScaler {
 	public static final String TAG_LEADER = "summy_threat:leader";
 	/** Boss 分类标记：KJS / 命令显式缩放后跨存档保留 */
 	public static final String TAG_BOSS = "summy_threat:boss";
+	/** 自动结构首领标记：区分手动首领与结构选举结果。 */
+	public static final String TAG_FIXED_LEADER = "summy_threat:fixed_leader";
+	/** 待应用的首领候选及选定 TL。 */
+	public static final String TAG_LEADER_PENDING = "summy_threat:leader_pending";
+	public static final String TAG_LEADER_PENDING_TL = "summy_threat:leader_pending_tl";
+	public static final String TAG_LEADER_STRUCTURE = "summy_threat:leader_structure";
+	public static final String TAG_MANUAL_LEADER = "summy_threat:manual_leader";
 	/** 区域首领的 PCF（生命公式用，默认 20） */
 	public static final String TAG_PCF = "summy_threat:pcf";
 	/** 会话令牌：与当前服务端会话比对，用于识别跨存档残留实体 */
@@ -97,6 +104,28 @@ public final class MonsterScaler {
 	@SubscribeEvent
 	public static void onServerAboutToStart(ServerAboutToStartEvent event) {
 		sessionToken = System.nanoTime();
+	}
+
+	/** 统一写入区域首领待应用身份；结构候选和手动生成共用。 */
+	public static void markLeaderCandidate(LivingEntity entity, int tl, boolean manual) {
+		CompoundTag data = entity.getPersistentData();
+		data.putBoolean(TAG_LEADER, true);
+		data.putBoolean(TAG_LEADER_PENDING, true);
+		data.putInt(TAG_LEADER_PENDING_TL, tl);
+		data.putBoolean(TAG_MANUAL_LEADER, manual);
+		data.remove(TAG_BOSS);
+	}
+
+	/** 清除尚未应用的候选状态；需要时可一并移除已经写入的首领身份。 */
+	public static void clearLeaderCandidate(LivingEntity entity, boolean clearLeader) {
+		CompoundTag data = entity.getPersistentData();
+		data.remove(TAG_LEADER_PENDING);
+		data.remove(TAG_LEADER_PENDING_TL);
+		if (clearLeader) {
+			data.remove(TAG_LEADER);
+			data.remove(TAG_FIXED_LEADER);
+			data.remove(TAG_MANUAL_LEADER);
+		}
 	}
 
 	/** 实体加入世界：自然刷怪与命令召唤都会经过这里 */
@@ -164,6 +193,9 @@ public final class MonsterScaler {
 
 	/** 判定类别（实体类型 + 命令打的标记） */
 	public static Kind kindOf(LivingEntity entity) {
+		if (isSpawnerSource(entity)) {
+			return Kind.NORMAL;
+		}
 		if (entity instanceof Warden || entity instanceof EnderDragon || entity instanceof WitherBoss) {
 			return Kind.BOSS;
 		}
@@ -203,6 +235,15 @@ public final class MonsterScaler {
 	 */
 	public static boolean scaleNow(LivingEntity entity, int tl, Kind kind, boolean allowNecro) {
 		tl = ScalingState.clampTl(tl);
+		CompoundTag forcedData = entity.getPersistentData();
+		boolean forcedFixedLeader = isFixedLeaderType(entity)
+				&& forcedData.getBoolean(TAG_LEADER_PENDING);
+		if (kind == Kind.LEADER && tl < 10) {
+			return false;
+		}
+		if (isSpawnerSource(entity) && kind != Kind.NORMAL) {
+			return false;
+		}
 		ThreatScalePreEvent pre = new ThreatScalePreEvent(entity, tl, kind);
 		MinecraftForge.EVENT_BUS.post(pre);
 		if (pre.isCanceled()) {
@@ -210,6 +251,15 @@ public final class MonsterScaler {
 		}
 		tl = ScalingState.clampTl(pre.getTl());
 		kind = pre.getKind();
+		if (forcedFixedLeader && kind != Kind.BOSS) {
+			kind = Kind.LEADER;
+		}
+		if (kind == Kind.LEADER && tl < 10) {
+			return false;
+		}
+		if (isSpawnerSource(entity)) {
+			kind = Kind.NORMAL;
+		}
 		// 原版领队的 MAX_HEALTH 是 MULTIPLY_TOTAL；不剥离会与 M/E/首领倍率相乘（2–5 倍污染）
 		stripVanillaLeaderHealthBonus(entity);
 		double rHp = ScalingState.rHp();
@@ -261,7 +311,13 @@ public final class MonsterScaler {
 		CompoundTag data = entity.getPersistentData();
 		data.putBoolean(TAG_SCALED, true);
 		data.putBoolean(TAG_BOSS, kind == Kind.BOSS);
+		data.putBoolean(TAG_LEADER, kind == Kind.LEADER);
+		data.putBoolean(TAG_EXIMUS, kind == Kind.EXIMUS);
 		data.putInt(TAG_TL, tl);
+		if (kind != Kind.LEADER) {
+			data.remove(TAG_FIXED_LEADER);
+			data.remove(TAG_MANUAL_LEADER);
+		}
 		data.putDouble(TAG_HARDCODED_ATTACK_MULTIPLIER, attackMultiplier);
 		data.putLong(TAG_SESSION, sessionToken);
 		String oldArchetype = data.getString(TAG_ARCHETYPE);
@@ -281,6 +337,9 @@ public final class MonsterScaler {
 
 		// 区域首领使用独立能力标签，旧存档中的普通 TL 能力立即迁移清除
 		if (kind == Kind.LEADER) {
+			if (!isFixedLeaderType(entity)) {
+				data.remove(TAG_FIXED_LEADER);
+			}
 			AbilityEffects.setAbilities(entity, tl, "");
 			LeaderAbilityState.ensure(entity, Math.max(10, tl));
 		} else if (AbilityEffects.enabled()) {
@@ -482,11 +541,18 @@ public final class MonsterScaler {
 		return Config.DEFAULT_MOD_BOSS_ATTACK.get();
 	}
 
-	/** 区域首领名单判定（命令用）：只有这三种原版实体可以做区域首领 */
+	/** 普通敌对怪均可成为区域首领；Boss 由上层身份优先级排除。 */
 	public static boolean isLeaderEligible(LivingEntity entity) {
-		return entity.getType() == net.minecraft.world.entity.EntityType.ZOMBIE
-				|| entity.getType() == net.minecraft.world.entity.EntityType.PIGLIN_BRUTE
+		return entity instanceof Enemy && !isBoss(entity);
+	}
+
+	public static boolean isFixedLeaderType(LivingEntity entity) {
+		return entity.getType() == net.minecraft.world.entity.EntityType.PIGLIN_BRUTE
 				|| entity.getType() == net.minecraft.world.entity.EntityType.ELDER_GUARDIAN;
+	}
+
+	public static boolean isSpawnerSource(LivingEntity entity) {
+		return SpawnRegion.isSpawnerSource(entity);
 	}
 
 	private static String round(double v) {

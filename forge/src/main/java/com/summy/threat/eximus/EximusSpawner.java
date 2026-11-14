@@ -32,6 +32,11 @@ public final class EximusSpawner {
 			SpawnAudit.recordFinalize(mob, event.getSpawnType(), false, false, 0.0D, "boss_excluded");
 			return;
 		}
+		if (mob.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER)
+				|| mob.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER_PENDING)) {
+			SpawnAudit.recordFinalize(mob, event.getSpawnType(), false, false, 0.0D, "leader_excluded");
+			return;
+		}
 		if (!isNatural(event.getSpawnType())) {
 			SpawnAudit.recordFinalize(mob, event.getSpawnType(), false, false, 0.0D, "spawn_type_excluded");
 			return;

@@ -15,13 +15,14 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.entity.living.MobSpawnEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 生成区域：只用于 PCF/CDF 的区域倍率与区域首领 TL 上限。
+ * 生成区域：用于 PCF/CDF 的区域倍率、生成来源判定和旧存档 CDF 迁移参考。
  *
  * <p>优先级：刷怪笼 > 出生点 200 格内 > 结构 > 下界/末地 > 普通群系。
  * 结构查询按区块缓存，避免每只怪重复扫描。
@@ -56,13 +57,12 @@ public enum SpawnRegion {
 		};
 	}
 
-	public int leaderCap() {
+	/** 旧存档无 CDF 记录时的迁移参考；不参与任何当前 TL 上限。 */
+	public int legacyCdfReferenceTl() {
 		return switch (this) {
-			case SPAWNER -> intCfg(Config.REGION_TL_CAP_SPAWNER, 12);
-			case SPAWN_PROTECTION -> intCfg(Config.REGION_TL_CAP_SPAWN_PROTECTION, 12);
-			case STRUCTURE -> intCfg(Config.REGION_TL_CAP_STRUCTURE, 15);
-			case NETHER_END -> intCfg(Config.REGION_TL_CAP_NETHER_END, 14);
-			case NORMAL_BIOME -> intCfg(Config.REGION_TL_CAP_NORMAL_BIOME, 12);
+			case SPAWNER, SPAWN_PROTECTION, NORMAL_BIOME -> 12;
+			case NETHER_END -> 14;
+			case STRUCTURE -> 15;
 		};
 	}
 
@@ -87,6 +87,10 @@ public enum SpawnRegion {
 		return detect(level, entity.position(), spawnType(entity));
 	}
 
+	public static boolean isSpawnerSource(LivingEntity entity) {
+		return spawnType(entity) == MobSpawnType.SPAWNER;
+	}
+
 	private static MobSpawnType spawnType(LivingEntity entity) {
 		CompoundTag data = entity.getPersistentData();
 		if (!data.contains(TAG_SPAWN_TYPE)) {
@@ -107,7 +111,15 @@ public enum SpawnRegion {
 				.getAllStructuresAt(pos).isEmpty());
 	}
 
-	@SubscribeEvent
+	@SubscribeEvent(priority = EventPriority.HIGHEST)
+	public static void onPositionCheck(MobSpawnEvent.PositionCheck event) {
+		if (event.getSpawner() != null || event.getSpawnType() == MobSpawnType.SPAWNER) {
+			event.getEntity().getPersistentData().putString(
+					TAG_SPAWN_TYPE, MobSpawnType.SPAWNER.name());
+		}
+	}
+
+	@SubscribeEvent(priority = EventPriority.HIGHEST)
 	public static void onFinalizeSpawn(MobSpawnEvent.FinalizeSpawn event) {
 		Mob mob = event.getEntity();
 		if (MonsterScaler.isScalable(mob)) {
@@ -134,7 +146,4 @@ public enum SpawnRegion {
 		return Config.SPEC.isLoaded() ? value.get() : fallback;
 	}
 
-	private static int intCfg(net.minecraftforge.common.ForgeConfigSpec.IntValue value, int fallback) {
-		return Config.SPEC.isLoaded() ? value.get() : fallback;
-	}
 }

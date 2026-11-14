@@ -93,7 +93,6 @@ final class FreeTierSettings {
 			case "cdf" -> "CDF 区块难度因子";
 			case "multiplayer" -> "多人 PCF 选取";
 			case "region_multiplier" -> "区域倍率";
-			case "region_tl_cap" -> "区域首领 TL 上限";
 			case "leader" -> "区域首领生命/攻击倍率";
 			case "boss" -> "原版 Boss 生命/攻击与 Mod Boss 反推";
 			default -> group;
@@ -159,11 +158,6 @@ final class FreeTierSettings {
 		register("region_multiplier", "nether_end", Config.REGION_MULTIPLIER_NETHER_END, ValueType.DOUBLE, 0.0D, 100.0D);
 		register("region_multiplier", "structure", Config.REGION_MULTIPLIER_STRUCTURE, ValueType.DOUBLE, 0.0D, 100.0D);
 		register("region_multiplier", "spawner", Config.REGION_MULTIPLIER_SPAWNER, ValueType.DOUBLE, 0.0D, 100.0D);
-		register("region_tl_cap", "spawn_protection", Config.REGION_TL_CAP_SPAWN_PROTECTION, ValueType.INTEGER, 0.0D, 20.0D);
-		register("region_tl_cap", "normal_biome", Config.REGION_TL_CAP_NORMAL_BIOME, ValueType.INTEGER, 0.0D, 20.0D);
-		register("region_tl_cap", "nether_end", Config.REGION_TL_CAP_NETHER_END, ValueType.INTEGER, 0.0D, 20.0D);
-		register("region_tl_cap", "structure", Config.REGION_TL_CAP_STRUCTURE, ValueType.INTEGER, 0.0D, 20.0D);
-		register("region_tl_cap", "spawner", Config.REGION_TL_CAP_SPAWNER, ValueType.INTEGER, 0.0D, 20.0D);
 	}
 
 	private static void registerLeaders() {

@@ -31,7 +31,8 @@ public final class BossHardcodedDamageScaling {
 		}
 		DamageSource source = event.getSource();
 		LivingEntity owner = causingOwner(source);
-		if (owner == null || event.getEntity() == owner || !isHardcodedAttack(owner, source)) {
+		if (owner == null || event.getEntity() == owner || MonsterScaler.isSpawnerSource(owner)
+				|| !isHardcodedAttack(owner, source)) {
 			return;
 		}
 		double multiplier = MonsterScaler.hardcodedAttackMultiplier(owner);
