@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /** KJS API 的 Java 侧无头自检；实际 JS 语法由 kubejsdev 脚本回归负责。 */
 final class KubeJSCompatDevCheck {
@@ -179,7 +180,7 @@ final class KubeJSCompatDevCheck {
 		changes.put(regenDoubleKey, 0.75D);
 		changes.put(regenListKey, List.of("MINECRAFT:ENDER_DRAGON", "minecraft:wither"));
 		changes.put(modBossAttackKey, 2.5D);
-		int oldEvents = EventProbe.configChanged;
+		int oldEvents = EventProbe.apiConfigChanged;
 		try {
 			Map<String, Object> written = ThreatConfigApi.setMany(changes);
 			boolean allWritten = Boolean.TRUE.equals(ThreatConfigApi.get(booleanKey))
@@ -196,13 +197,14 @@ final class KubeJSCompatDevCheck {
 			ThreatDevCheck.checkDetailed("配置 API 六种类型 setMany 可写",
 					allWritten && written.size() == changes.size(), written.toString());
 			ThreatDevCheck.checkDetailed("config.changed 单次触发",
-					EventProbe.configChanged == oldEvents + 1,
-					"events=" + EventProbe.configChanged);
+					EventProbe.apiConfigChanged == oldEvents + 1
+							&& EventProbe.lastApiKeys.equals(changes.keySet()),
+					"events=" + EventProbe.apiConfigChanged + " keys=" + EventProbe.lastApiKeys);
 
 			Map<String, Object> partial = new LinkedHashMap<>();
 			partial.put(doubleKey, 0.32D);
 			partial.put(doubleKey + "_invalid", 0.50D);
-			int partialEvents = EventProbe.configChanged;
+			int partialEvents = EventProbe.apiConfigChanged;
 			boolean partialRejected = false;
 			try {
 				ThreatConfigApi.setMany(partial);
@@ -213,7 +215,7 @@ final class KubeJSCompatDevCheck {
 					partialRejected
 							&& Math.abs(((Number) ThreatConfigApi.get(doubleKey)).doubleValue()
 									- 0.31D) < 1.0E-6D
-							&& EventProbe.configChanged == partialEvents,
+							&& EventProbe.apiConfigChanged == partialEvents,
 					String.valueOf(ThreatConfigApi.get(doubleKey)));
 
 			boolean integerRejected = false;
@@ -285,6 +287,8 @@ final class KubeJSCompatDevCheck {
 
 	private static final class EventProbe {
 		private static int configChanged;
+		private static int apiConfigChanged;
+		private static Set<String> lastApiKeys = Set.of();
 		private final Zombie zombie;
 		private int pre;
 		private int post;
@@ -329,6 +333,10 @@ final class KubeJSCompatDevCheck {
 		@SubscribeEvent
 		public void onConfig(ThreatConfigChangedEvent event) {
 			configChanged++;
+			if ("api".equals(event.getSource())) {
+				apiConfigChanged++;
+				lastApiKeys = Set.copyOf(event.getNewValues().keySet());
+			}
 		}
 	}
 

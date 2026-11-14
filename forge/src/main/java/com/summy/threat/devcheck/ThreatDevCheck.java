@@ -59,6 +59,7 @@ import java.util.TreeMap;
 public final class ThreatDevCheck {
 	private static final boolean ENABLED = Boolean.getBoolean("summy_threat.devcheck");
 	private static final boolean BETRAYAL_CHECK = Boolean.getBoolean("summy_threat.betrayalcheck");
+	private static final boolean LEADER_CHECK = Boolean.getBoolean("summy_threat.leadercheck");
 	// 主菜单阶段要留给玩家创建/选择 DevCheckWorld 的时间；30 秒会在世界创建前
 	// 就把客户端关掉，因此这里放宽到 10 分钟，总运行上限放宽到 20 分钟。
 	private static final int IDLE_STOP_TICKS = 12000;
@@ -110,6 +111,11 @@ public final class ThreatDevCheck {
 				case 294 -> FAILURES.addAll(ArmorPenetrationDevCheck.start(player));
 				case 296 -> FAILURES.addAll(KubeJSCompatDevCheck.run(player));
 				case 298 -> FAILURES.addAll(ClosureRuleDevCheck.run(player));
+				case 299 -> {
+					if (LEADER_CHECK) {
+						FAILURES.addAll(LeaderAbilityDevCheck.run(player));
+					}
+				}
 				case 300 -> {
 					if (BETRAYAL_CHECK) {
 						FAILURES.addAll(BetrayalIntegrationDevCheck.run(player));

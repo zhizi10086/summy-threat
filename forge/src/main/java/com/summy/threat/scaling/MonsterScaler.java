@@ -9,6 +9,9 @@ import com.summy.threat.api.event.ThreatScalePostEvent;
 import com.summy.threat.api.event.ThreatScalePreEvent;
 import com.summy.threat.eximus.EximusArchetype;
 import com.summy.threat.eximus.EximusShield;
+import com.summy.threat.leader.LeaderAbilityState;
+import com.summy.threat.leader.LeaderAbilityTexts;
+import com.summy.threat.leader.LegendaryResistance;
 import com.summy.threat.pcf.CdfManager;
 import com.summy.threat.pcf.PcfManager;
 import com.summy.threat.pcf.SpawnRegion;
@@ -276,8 +279,11 @@ public final class MonsterScaler {
 					oldArchetype, newArchetype));
 		}
 
-		// TL 能力：新怪按 TL 区间抽取（0/1/2/3/4；卓越者 +1）；已有标签（残留 / 命令覆盖）则保留
-		if (AbilityEffects.enabled()) {
+		// 区域首领使用独立能力标签，旧存档中的普通 TL 能力立即迁移清除
+		if (kind == Kind.LEADER) {
+			AbilityEffects.setAbilities(entity, tl, "");
+			LeaderAbilityState.ensure(entity, Math.max(10, tl));
+		} else if (AbilityEffects.enabled()) {
 			if (!data.contains(TAG_ABILITIES)) {
 				int extra = kind == Kind.EXIMUS ? 1 : 0;
 				boolean necroEligible = allowNecro && entity.getMobType() == MobType.UNDEAD
@@ -291,6 +297,7 @@ public final class MonsterScaler {
 
 		// 卓越者核心机制：卓越护盾（新刷满盾；残留按剩余比例保留）
 		EximusShield.refresh(entity, tl, kind == Kind.EXIMUS);
+		LegendaryResistance.refresh(entity);
 
 		if (kind != Kind.NORMAL) {
 			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}，卓越护盾 {}，能力 {}",
@@ -366,7 +373,11 @@ public final class MonsterScaler {
 					entity.getPersistentData().getString(TAG_ARCHETYPE))));
 		}
 		out.append(Component.literal(" 能力="));
-		out.append(AbilityTexts.join(entity.getPersistentData().getString(TAG_ABILITIES), "·"));
+		if (kind == Kind.LEADER) {
+			out.append(LeaderAbilityTexts.join(LeaderAbilityState.abilities(entity), "·"));
+		} else {
+			out.append(AbilityTexts.join(entity.getPersistentData().getString(TAG_ABILITIES), "·"));
+		}
 		return out;
 	}
 

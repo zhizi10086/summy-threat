@@ -1,6 +1,7 @@
 package com.summy.threat.compat.jade;
 
 import com.summy.threat.eximus.EximusShield;
+import com.summy.threat.leader.LeaderAbilityState;
 import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -15,6 +16,7 @@ public enum EntityAbilityDataProvider implements IServerDataProvider<EntityAcces
 	public static final String KEY_TL = "tl";
 	public static final String KEY_KIND = "kind";
 	public static final String KEY_ABILITIES = "abilities";
+	public static final String KEY_LEADER_ABILITIES = "leader_abilities";
 	public static final String KEY_ARCHETYPE = "archetype";
 	public static final String KEY_SHIELD = "eximus_shield";
 	public static final String KEY_SHIELD_MAX = "eximus_shield_max";
@@ -42,6 +44,10 @@ public enum EntityAbilityDataProvider implements IServerDataProvider<EntityAcces
 		String abilities = persistent.getString(MonsterScaler.TAG_ABILITIES);
 		if (!abilities.isEmpty()) {
 			data.putString(KEY_ABILITIES, abilities);
+		}
+		String leaderAbilities = LeaderAbilityState.csv(mob);
+		if (!leaderAbilities.isEmpty()) {
+			data.putString(KEY_LEADER_ABILITIES, leaderAbilities);
 		}
 	}
 

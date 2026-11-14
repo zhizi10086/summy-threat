@@ -5,6 +5,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
+import com.summy.threat.leader.LeaderAbilityState;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -72,9 +73,12 @@ public final class SpawnAudit {
 			return;
 		}
 		ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
-		add("%s | join=%s | tl=%d | pcf=%.2f | cdf=%.2f | region=%s | abilities=%s | archetype=%s"
+		String leaderAbilities = LeaderAbilityState.csv(entity);
+		add(("%s | join=%s | tl=%d | pcf=%.2f | cdf=%.2f | region=%s | abilities=%s"
+						+ " | leader_abilities=%s | archetype=%s")
 				.formatted(id, kind, tl, pcf, cdf, region,
 						abilities == null || abilities.isEmpty() ? "-" : abilities,
+						leaderAbilities.isEmpty() ? "-" : leaderAbilities,
 						archetype == null || archetype.isEmpty() ? "-" : archetype));
 	}
 

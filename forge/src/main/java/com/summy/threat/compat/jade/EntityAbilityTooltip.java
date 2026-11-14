@@ -2,6 +2,7 @@ package com.summy.threat.compat.jade;
 
 import com.summy.threat.ability.AbilityTexts;
 import com.summy.threat.eximus.EximusArchetype;
+import com.summy.threat.leader.LeaderAbilityTexts;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -58,6 +59,10 @@ public enum EntityAbilityTooltip implements IEntityComponentProvider {
 			if (!csv.isEmpty()) {
 				tooltip.add(AbilityTexts.join(csv, "·"));
 			}
+		}
+		String leader = data.getString(EntityAbilityDataProvider.KEY_LEADER_ABILITIES);
+		if (!leader.isEmpty()) {
+			tooltip.add(LeaderAbilityTexts.joinCsv(leader, "·"));
 		}
 	}
 

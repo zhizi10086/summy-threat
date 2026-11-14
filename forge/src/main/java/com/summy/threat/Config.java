@@ -252,6 +252,8 @@ public final class Config {
 
 	private static final List<String> DEFAULT_REDUCED_REGENERATION_ENTITY_IDS =
 			List.of("minecraft:ender_dragon");
+	private static final List<String> DEFAULT_IMMUNE_NEGATIVE_EFFECTS = List.of(
+			"minecraft:blindness", "minecraft:darkness", "minecraft:nausea", "minecraft:levitation");
 
 	/** 玩家承伤日志开关（效仿 SRA 的 log_trigger） */
 	public static final ForgeConfigSpec.BooleanValue LOG_PLAYER_TAKEN;
@@ -264,6 +266,17 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue REDUCED_REGENERATION_PERCENT_PER_SECOND;
 	/** 使用低恢复比例的实体类型 ID 列表 */
 	public static final ForgeConfigSpec.ConfigValue<List<? extends String>> REDUCED_REGENERATION_ENTITY_IDS;
+
+	/** 区域首领基础传奇抗性总开关 */
+	public static final ForgeConfigSpec.BooleanValue LEGENDARY_RESISTANCE_ENABLED;
+	/** 非免疫负面 MobEffect 的玩家可见等级上限 */
+	public static final ForgeConfigSpec.IntValue LEGENDARY_NEGATIVE_EFFECT_LEVEL_CAP;
+	/** 基础传奇抗性直接免疫的负面 MobEffect ID */
+	public static final ForgeConfigSpec.ConfigValue<List<? extends String>> LEGENDARY_IMMUNE_NEGATIVE_EFFECTS;
+	/** 基础传奇抗性的击退抗性加成 */
+	public static final ForgeConfigSpec.DoubleValue LEGENDARY_KNOCKBACK_RESISTANCE;
+	/** 是否允许基础传奇抗性同时提供 SR 背叛免疫标签 */
+	public static final ForgeConfigSpec.BooleanValue LEGENDARY_BETRAYAL_IMMUNE;
 
 	public static final ForgeConfigSpec SPEC;
 
@@ -585,6 +598,27 @@ public final class Config {
 				.defineListAllowEmpty("reduced_regeneration_entity_ids",
 						DEFAULT_REDUCED_REGENERATION_ENTITY_IDS,
 						element -> element instanceof String);
+		builder.pop();
+
+		builder.comment("区域首领基础传奇抗性：永久被动防护层，不是实际护盾。")
+				.push("legendary_resistance");
+		LEGENDARY_RESISTANCE_ENABLED = builder
+				.comment("是否启用区域首领基础传奇抗性")
+				.define("enable", true);
+		LEGENDARY_NEGATIVE_EFFECT_LEVEL_CAP = builder
+				.comment("其它负面 MobEffect 的玩家可见等级上限；4 对应内部 amplifier=3")
+				.defineInRange("negative_effect_level_cap", 4, 1, 10);
+		LEGENDARY_IMMUNE_NEGATIVE_EFFECTS = builder
+				.comment("直接免疫的负面 MobEffect ID 列表；未知 ID 忽略并只警告一次")
+				.defineListAllowEmpty("immune_negative_effects",
+						DEFAULT_IMMUNE_NEGATIVE_EFFECTS,
+						element -> element instanceof String);
+		LEGENDARY_KNOCKBACK_RESISTANCE = builder
+				.comment("基础传奇抗性提供的 KNOCKBACK_RESISTANCE 加成")
+				.defineInRange("knockback_resistance_bonus", 1.0D, 0.0D, 1.0D);
+		LEGENDARY_BETRAYAL_IMMUNE = builder
+				.comment("是否写入 SR 背叛免疫标签；SR 接口等待对方发布后生效")
+				.define("betrayal_immune", true);
 		builder.pop();
 
 		SPEC = builder.build();

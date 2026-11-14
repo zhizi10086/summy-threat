@@ -5,11 +5,15 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.summy.threat.Config;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityId;
 import com.summy.threat.armor.PlayerEximusShield;
 import com.summy.threat.eximus.EximusArchetype;
+import com.summy.threat.leader.LeaderAbilityId;
+import com.summy.threat.leader.LeaderAbilityState;
+import com.summy.threat.leader.LeaderAbilityTexts;
 import com.summy.threat.combat.ArmorDamageFormula;
 import com.summy.threat.pcf.CdfManager;
 import com.summy.threat.pcf.PcfManager;
@@ -41,6 +45,7 @@ import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.Locale;
+import java.util.List;
 
 /**
  * 调试 / 测量命令：{@code /summythreat ...}（OP 2 级）。
@@ -61,6 +66,10 @@ import java.util.Locale;
  * </ul>
  */
 public final class SummyThreatCommand {
+	private static final SimpleCommandExceptionType ERROR_LEADER =
+			new SimpleCommandExceptionType(Component.literal(
+					"目标必须是已数值化的区域首领"));
+
 	private SummyThreatCommand() {
 	}
 
@@ -164,6 +173,19 @@ public final class SummyThreatCommand {
 						.then(Commands.argument("target", EntityArgument.entity())
 								.then(Commands.argument("id", StringArgumentType.word())
 										.executes(SummyThreatCommand::setAbility))))
+				.then(Commands.literal("leaderability")
+						.then(Commands.argument("target", EntityArgument.entity())
+								.executes(SummyThreatCommand::showLeaderAbility)
+								.then(Commands.literal("clear")
+										.executes(SummyThreatCommand::clearLeaderAbility))
+								.then(Commands.literal("random")
+										.executes(SummyThreatCommand::randomLeaderAbility))
+								.then(Commands.literal("set")
+										.then(Commands.argument("first", StringArgumentType.word())
+												.executes(ctx -> setLeaderAbility(ctx, null))
+												.then(Commands.argument("second", StringArgumentType.word())
+														.executes(ctx -> setLeaderAbility(ctx,
+																StringArgumentType.getString(ctx, "second"))))))))
 				.then(Commands.literal("shield")
 						.executes(SummyThreatCommand::showShield)
 						.then(Commands.argument("value", IntegerArgumentType.integer(0, 100))
@@ -474,6 +496,11 @@ public final class SummyThreatCommand {
 			source.sendFailure(Component.literal("kind 只支持 normal / eximus / leader"));
 			return 0;
 		}
+		if ("leader".equals(kind) && ability != null) {
+			source.sendFailure(Component.literal(
+					"区域首领请先生成，再使用 /summythreat leaderability 设置能力"));
+			return 0;
+		}
 
 		Vec3 pos = source.getPosition();
 		created.moveTo(pos.x, pos.y, pos.z, source.getRotation().y, 0.0F);
@@ -530,6 +557,11 @@ public final class SummyThreatCommand {
 			ctx.getSource().sendFailure(Component.literal("目标尚未被数值化（先 /summythreat spawn 或开启全局 TL）"));
 			return 0;
 		}
+		if (MonsterScaler.kindOf(living) == MonsterScaler.Kind.LEADER) {
+			ctx.getSource().sendFailure(Component.literal(
+					"区域首领使用独立能力表；请使用 /summythreat leaderability"));
+			return 0;
+		}
 		int tl = living.getPersistentData().getInt(MonsterScaler.TAG_TL);
 		if ("clear".equalsIgnoreCase(raw)) {
 			AbilityEffects.setAbilities(living, tl, "");
@@ -544,6 +576,70 @@ public final class SummyThreatCommand {
 		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] ")
 				.append(MonsterScaler.describe(living)), true);
 		return 1;
+	}
+
+	private static int showLeaderAbility(CommandContext<CommandSourceStack> ctx)
+			throws CommandSyntaxException {
+		LivingEntity target = leaderTarget(ctx);
+		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] 首领能力：")
+				.append(LeaderAbilityTexts.join(LeaderAbilityState.abilities(target), "·")), false);
+		return 1;
+	}
+
+	private static int clearLeaderAbility(CommandContext<CommandSourceStack> ctx)
+			throws CommandSyntaxException {
+		LivingEntity target = leaderTarget(ctx);
+		LeaderAbilityState.clear(target);
+		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] 已清空首领能力"), true);
+		return 1;
+	}
+
+	private static int randomLeaderAbility(CommandContext<CommandSourceStack> ctx)
+			throws CommandSyntaxException {
+		LivingEntity target = leaderTarget(ctx);
+		List<LeaderAbilityId> rolled = LeaderAbilityState.randomize(target,
+				target.getPersistentData().getInt(MonsterScaler.TAG_TL));
+		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] 已重抽首领能力：")
+				.append(LeaderAbilityTexts.join(rolled, "·")), true);
+		return 1;
+	}
+
+	private static int setLeaderAbility(CommandContext<CommandSourceStack> ctx, String second)
+			throws CommandSyntaxException {
+		LivingEntity target = leaderTarget(ctx);
+		LeaderAbilityId first = LeaderAbilityId.byId(
+				StringArgumentType.getString(ctx, "first"));
+		LeaderAbilityId other = second == null ? null : LeaderAbilityId.byId(second);
+		if (first == null || (second != null && other == null)) {
+			ctx.getSource().sendFailure(Component.literal("未知区域首领能力 ID"));
+			return 0;
+		}
+		List<LeaderAbilityId> values = other == null ? List.of(first) : List.of(first, other);
+		if (other != null && first.equals(other)) {
+			ctx.getSource().sendFailure(Component.literal("不能重复指定同一首领能力"));
+			return 0;
+		}
+		if (other != null && values.stream().noneMatch(LeaderAbilityId::aura)) {
+			ctx.getSource().sendFailure(Component.literal("两项首领能力至少需要一项光环"));
+			return 0;
+		}
+		LeaderAbilityState.setAbilities(target, values);
+		ctx.getSource().sendSuccess(() -> Component.literal("[Summy Threat] 已设置首领能力：")
+				.append(LeaderAbilityTexts.join(values, "·")), true);
+		return 1;
+	}
+
+	private static LivingEntity leaderTarget(CommandContext<CommandSourceStack> ctx)
+			throws CommandSyntaxException {
+		Entity entity = EntityArgument.getEntity(ctx, "target");
+		if (!(entity instanceof LivingEntity living)) {
+			throw ERROR_LEADER.create();
+		}
+		if (!living.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED)
+				|| MonsterScaler.kindOf(living) != MonsterScaler.Kind.LEADER) {
+			throw ERROR_LEADER.create();
+		}
+		return living;
 	}
 
 	private static int showShield(CommandContext<CommandSourceStack> ctx) {

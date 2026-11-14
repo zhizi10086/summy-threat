@@ -5,8 +5,9 @@ Forge 1.20.1 的"属性与怪物机制改造"模组，承载四块内容：
 1. **属性上限抬升**（已实现）
 2. **护甲减伤公式替换**（已实现）
 3. **基础数值表**：怪物侧 TL 缩放（护甲 / 生命 / 攻击）、区域首领与 Boss 倍率、生态分档、
-   玩家护甲重填、测量命令（已实现，2026-10-16）；**TL 数值、PCF/CDF、TL 能力、卓越者与 8 个原型已实装；
-   Boss 硬编码攻击接管、单次穿甲与临时削甲已实装；完整刷新链路、领袖 / Boss / 超级 Boss 专属能力池仍未实装**
+   玩家护甲重填、测量命令（已实现，2026-10-16）；**TL 数值、PCF/CDF、TL 能力、卓越者与 8 个原型、
+   区域首领 12 项专用能力已实装；Boss 硬编码攻击接管、单次穿甲与临时削甲已实装；
+   区域首领自然刷新、Boss / 超级 Boss 专属能力池仍未实装**
 4. **回响下界合金（强化下界合金）**：锻造台升级的 4 件护甲 + 卓越者精华（已实现，2026-10-17；
    贴图/模型复用原版下界合金；四件独特能力已实装）
 
@@ -58,13 +59,13 @@ EA = A + (A×T)/15
 ## 已实现③：基础数值表 + 生态分档 + 测量命令
 
 口径唯一来源是内部《Summy Threat — 核心数值系统交接文档》v2.35 的 §4~§8。
-当前已实装数值表、PCF/CDF、TL 能力池、卓越护盾、8 个卓越者原型与 5% 自然刷新；
-完整刷新链路与领袖 / Boss / 超级 Boss 专属能力池仍未实装。
+当前已实装数值表、PCF/CDF、TL 能力池、卓越护盾、8 个卓越者原型、5% 自然刷新与
+区域首领 12 项专用能力；区域首领自然刷新、Boss / 超级 Boss 能力池仍未实装。
 
-**当前状态（v2.45）**：
+**当前状态（v2.48）**：
 
-- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、末影龙 / 凋灵 / 古守硬编码攻击接管、显式单次穿甲与临时削甲、可选 KubeJS 全配置/生成/自定义能力与原型 API、回响下界合金四件、玩家护盾 HUD、承伤日志、可配置再生、Mod Boss 自动反推与 SR 2.0 背叛联调。
-- 未完成：领袖 / Boss / 超级 Boss 能力池、卓越者精华/星渊棱晶获取、回响套正式贴图/模型。
+- 已完成：TL 数值、PCF/CDF 与 TL 合成、6 预设档 + 手动 free 档、卓越护盾、TL 能力、8 个卓越者原型高风险平衡档、区域首领 12 项专用能力与基础传奇抗性、末影龙 / 凋灵 / 古守硬编码攻击接管、显式单次穿甲与临时削甲、可选 KubeJS 全配置/生成/自定义能力与原型 API、回响下界合金四件、玩家护盾 HUD、承伤日志、可配置再生、Mod Boss 自动反推与 SR 2.0 背叛联调。
+- 未完成：区域首领自然刷新入口、Boss / 超级 Boss 能力池与传奇动作/升级抗性、卓越者精华/星渊棱晶获取、回响套正式贴图/模型。
 - SR 2.0 起，定值真伤增伤与 SE 死神祝福已统一由 SR 的 `exact_damage_gets_multiplier` 接管；ST 旧兼容层已移除。
 - 历史验证记录保留原样；以后续“当前状态”与内部《缺失项清单》为准。
 
@@ -77,11 +78,13 @@ EA = A + (A×T)/15
 | 生命 | M(TL)（1.0 → 48.0，v2.7）× E(TL)（1.20 → 2.20，卓越者）× 首领 / Boss 固定倍率 |
 | 攻击 | A(TL)（1.0 → 16.44，v2.9）× 卓越者 1.25；区域首领 21.93 / 9.40 / 8.0；Boss 3.29 / 4.0 / 3.0。末影龙 10/5、凋灵头颅与爆炸、古守激光固定段与 thorns 继承生成时攻击倍率 |
 | 移速 / 经验 | 卓越者 +5%；经验 ×2（`LivingExperienceDropEvent`） |
-| Jade 提示（可选） | 装 Jade 11.13+ 时两行显示：`[Summy Threat] TL 20 卓越者·烈焰`（普通单位不显示类型；卓越者追加原型名）/ `迅捷·力量`（能力名按解锁 TL 阶段上色：4-7 白、8-11 蓝、12-15 紫、16-20 金）；未装零影响 |
+| Jade 提示（可选） | 装 Jade 11.13+ 时两行显示类型与能力；区域首领从独立 `leader_abilities` 读取名称。能力名按解锁 TL 阶段上色：4-7 白、8-11 蓝、12-15 紫、16-20 金；未装零影响 |
 | 卓越者原型 | 8 个专属原型；高风险平衡档：烈焰 70/10 格、剧毒 9/秒、电涌 50×3 落点、震荡 30/柱、吸血 18/秒并提供多目标叠加回血与缓慢 I、磁力 15/秒并拉拽 0.25/tick；冰霜与守护保持现有强度。电涌 3 秒追踪 + 1 秒锁定，云团 1.5 秒预警 + 完整 10 秒生效显示 |
 | Boss 缩放 | **TL 曲线**（TL0 = 原版、TL20 = 现口径；监守者 TL0/10/20 = 500 / 7,620 / 35,000 血） |
 | PCF / CDF | 玩家四因子 PCF（装备 / Boss / 探索 / 资源，5 秒平滑）+ 区块 CDF（每秒上升、无玩家衰减、区块 NBT 持久化）；区域倍率与区域首领 TL 上限按文档生效 |
 | TL 能力 | 按 TL 区间抽 0/1/2/3/4 个（卓越者 +1），14 个效果；`/summythreat spawn … <ability>` 覆盖、`/summythreat ability` 挂载 |
+| 区域首领能力 | 独立 12 项（5 光环 + 7 主动），固定 2 项且至少 1 项光环；TL10/12/14 分段解锁；`/summythreat leaderability` 查看、重抽或调试指定；普通 TL 能力接口拒绝首领 |
+| 基础传奇抗性 | 当前仅 `Kind.LEADER` 实装：非护盾、+1.0 击退抗性、失明/黑暗/反胃/漂浮免疫、其它负面效果上限 4 级；SR 背叛过滤仍等待接口回复 |
 | 比例型能力 | 吸血 / 荆棘 / 熔火 / 腐蚀以**减伤前伤害**为基数（护甲与吸收盾之前）；吸血每次至少回复自身最大生命 0.5% |
 | 投射物与荆棘冷却 | 吸血 / 熔火 / 腐蚀对**近战与投射物**（所有 `Projectile`，排除投掷药水）主命中生效；荆棘按**攻击者全局 0.25 秒**冷却；追加段结算后恢复 `max(旧帧, 结果帧)`，防止被取消的 ember 追加段造成每 tick 连击 |
 | 穿甲 / 削甲 | 后台 A → 临时削甲/腐蚀 → 本次穿甲 → EA；穿甲仅由内部显式命中入口提供；腐蚀默认每层 10%、最多 3 层、持续 6 秒，加法合计 −30% |
@@ -120,7 +123,8 @@ free 必须由玩家显式选择，即使安装了 SR/SE/SRA 也允许强制使�
 /summythreat spawnstats [on|off|reset] 查看/控制刷怪与卓越者词条审计
 /summythreat spawn <实体ID> <tl> [eximus|leader] [pcf]     定点召唤一只已数值化的怪
 /summythreat eximus <实体ID> [tl] [原型|能力] [原型|能力]   直接召唤指定原型卓越者（默认当前全局 TL，未开启则 20）
-/summythreat ability <目标> <id|clear>                    给已数值化目标挂载 / 清除单个 TL 能力
+/summythreat ability <目标> <id|clear>                    给已数值化普通/卓越者挂载 / 清除单个 TL 能力
+/summythreat leaderability <目标> [clear|random|set ...]  查看、清空、重抽或调试设置区域首领能力
 /summythreat shield [0-100]                             查看/设置自己的玩家卓越护盾（调试用）
 /summythreat stats [玩家]       查看计量：有效 DPS / 击杀耗时 / 无视护甲占比 / 护盾吸收 / 承伤 / 致死次数
 ```
@@ -205,6 +209,11 @@ Forge 原生 **SERVER 档**（不是自研 JSON），由 Forge 自动同步给�
 | `tl_abilities.regeneration_percent_per_second` | double | `1.0`（每秒恢复 1% 最大生命） | 0.0 ~ 100.0 |
 | `tl_abilities.reduced_regeneration_percent_per_second` | double | `0.25`（低恢复名单每秒 0.25%） | 0.0 ~ 100.0 |
 | `tl_abilities.reduced_regeneration_entity_ids` | string list | `["minecraft:ender_dragon"]` | 实体类型 ID |
+| `legendary_resistance.enable` | boolean | `true` | 无 |
+| `legendary_resistance.negative_effect_level_cap` | int | `4`（玩家可见等级） | 1 ~ 10 |
+| `legendary_resistance.immune_negative_effects` | string list | 失明 / 黑暗 / 反胃 / 漂浮 | MobEffect ID |
+| `legendary_resistance.knockback_resistance_bonus` | double | `1.0` | 0.0 ~ 1.0 |
+| `legendary_resistance.betrayal_immune` | boolean | `true`（写入等待 SR 读取的标签） | 无 |
 
 文件位置：存档内 `serverconfig/summy_threat-server.toml`（SERVER 档按世界存放）。
 
@@ -226,9 +235,12 @@ SR 2.0+ 负责七罪/七德/最终倍率、思想/咒印/魔眼/王冠条件层�
 
 ```powershell
 gradlew runClient -Pdevcheck --args="--quickPlaySingleplayer DevCheckWorld"
+gradlew runClient -Pleadercheck --args="--quickPlaySingleplayer LeaderCheckWorld"
 ```
 
-`-Pdevcheck` 只在开发客户端生效；公开仓库只包含 DevCheck 源码，不包含内部测试世界与脚本。粒子审美、前摇可读性、云团颜色辨识度等复杂视觉项仍由人工核验。
+`-Pdevcheck` / `-Pleadercheck` 只在开发客户端生效；公开仓库只包含 DevCheck 源码，
+不包含内部测试世界与脚本。`-Pleadercheck` 额外开启区域首领能力专项断言。粒子审美、
+前摇可读性、云团颜色辨识度等复杂视觉项仍由人工核验。
 
 刷怪审计使用真实事件判断，不依赖视觉：
 

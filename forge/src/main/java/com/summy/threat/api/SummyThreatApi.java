@@ -146,6 +146,7 @@ public final class SummyThreatApi {
 		if (!isScaled(entity)) {
 			throw new IllegalStateException("实体尚未数值化");
 		}
+		rejectLeaderAbilityWrite(entity);
 		List<String> normalized = new ArrayList<>();
 		for (String raw : ids) {
 			AbilityId id = AbilityId.byId(raw);
@@ -160,6 +161,7 @@ public final class SummyThreatApi {
 	}
 
 	public static boolean addAbility(LivingEntity entity, String id) {
+		rejectLeaderAbilityWrite(entity);
 		AbilityId ability = AbilityId.byId(id);
 		if (ability == null) {
 			throw new IllegalArgumentException("未知能力 ID：" + id);
@@ -174,6 +176,7 @@ public final class SummyThreatApi {
 	}
 
 	public static boolean removeAbility(LivingEntity entity, String id) {
+		rejectLeaderAbilityWrite(entity);
 		String normalized = id == null ? "" : id.trim().toLowerCase(Locale.ROOT);
 		List<String> current = abilities(entity);
 		boolean removed = current.remove(normalized);
@@ -184,6 +187,7 @@ public final class SummyThreatApi {
 	}
 
 	public static void clearAbilities(LivingEntity entity) {
+		rejectLeaderAbilityWrite(entity);
 		AbilityEffects.setAbilities(entity, tl(entity), "");
 	}
 
@@ -227,6 +231,10 @@ public final class SummyThreatApi {
 			living.getPersistentData().putString(MonsterScaler.TAG_ARCHETYPE, normalized);
 		}
 		if (abilities != null && !abilities.isEmpty()) {
+			if (parsedKind == MonsterScaler.Kind.LEADER) {
+				throw new IllegalArgumentException(
+						"区域首领能力使用独立标签，不能通过 TL 能力参数写入");
+			}
 			List<String> normalized = new ArrayList<>();
 			for (String raw : abilities) {
 				AbilityId id = AbilityId.byId(raw);
@@ -319,5 +327,11 @@ public final class SummyThreatApi {
 			}
 		}
 		return out;
+	}
+
+	private static void rejectLeaderAbilityWrite(LivingEntity entity) {
+		if (MonsterScaler.kindOf(entity) == MonsterScaler.Kind.LEADER) {
+			throw new IllegalStateException("区域首领能力使用独立标签，不能写入普通 TL 能力");
+		}
 	}
 }

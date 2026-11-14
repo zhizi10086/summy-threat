@@ -73,7 +73,8 @@ minecraft {
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
             // 只有显式加 -Pdevcheck 时才打开客户端自检；测试脚本会自动停止客户端。
-            if (project.hasProperty('devcheck') || project.hasProperty('betrayalcheck')) {
+            if (project.hasProperty('devcheck') || project.hasProperty('betrayalcheck')
+                    || project.hasProperty('leadercheck')) {
                 property 'summy_threat.devcheck', 'true'
             }
             if (project.hasProperty('betrayalcheck')) {
@@ -87,6 +88,9 @@ minecraft {
             }
             if (project.hasProperty('rangecheck')) {
                 property 'summy_threat.rangecheck', 'true'
+            }
+            if (project.hasProperty('leadercheck')) {
+                property 'summy_threat.leadercheck', 'true'
             }
             // A11 玩家攻击测试环境：只准备木桩与装备，不自动退出。
             if (project.hasProperty('attacktest') || project.hasProperty('attacktest.stats')
@@ -328,7 +332,8 @@ jar {
     // refmap 既在 resources 里（供 dev 运行），又被 MixinGradle 加进 jar，去重即可
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     if (!project.hasProperty('devcheck') && !project.hasProperty('stormcheck')
-            && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')) {
+            && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')
+            && !project.hasProperty('leadercheck')) {
         exclude 'com/summy/threat/devcheck/**'
     }
     manifest {
@@ -351,7 +356,8 @@ jar {
 // JarJar 会重新打包主 jar；同样把 devcheck 排除在正式产物之外。
 tasks.named('jarJar') {
     if (!project.hasProperty('devcheck') && !project.hasProperty('stormcheck')
-            && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')) {
+            && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')
+            && !project.hasProperty('leadercheck')) {
         exclude 'com/summy/threat/devcheck/**'
     }
 }
