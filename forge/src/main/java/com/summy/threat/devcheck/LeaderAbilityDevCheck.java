@@ -6,6 +6,7 @@ import com.summy.threat.leader.LeaderAbilityState;
 import com.summy.threat.leader.LeaderActiveEffects;
 import com.summy.threat.leader.LeaderAuraEffects;
 import com.summy.threat.leader.LeaderTargeting;
+import com.summy.threat.leader.LeaderVisuals;
 import com.summy.threat.leader.LegendaryResistance;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
@@ -59,6 +60,42 @@ final class LeaderAbilityDevCheck {
 		}
 		check(failures, "首领能力 ID 唯一", ids.size() == LeaderAbilityId.values().length,
 				"unique=" + ids.size());
+		boolean auraWeightsOk = true;
+		String auraWeightDetail = "";
+		for (LeaderAbilityId id : LeaderAbilityId.auraValues()) {
+			if (Math.abs(id.weight() - 0.4D) > 1.0E-6D) {
+				auraWeightsOk = false;
+				auraWeightDetail = id + "=" + id.weight();
+				break;
+			}
+		}
+		check(failures, "5 项光环权重统一为 0.4", auraWeightsOk, auraWeightDetail);
+		boolean activeWeightsOk = true;
+		String activeWeightDetail = "";
+		for (LeaderAbilityId id : LeaderAbilityId.activeValues()) {
+			if (Math.abs(id.weight() - 1.0D) > 1.0E-6D) {
+				activeWeightsOk = false;
+				activeWeightDetail = id + "=" + id.weight();
+				break;
+			}
+		}
+		check(failures, "7 项主动能力权重保持 1.0", activeWeightsOk, activeWeightDetail);
+		int visualProfiles = 0;
+		for (LeaderAbilityId id : LeaderAbilityId.values()) {
+			if (LeaderVisuals.supports(id) && id.color() != 0) {
+				visualProfiles++;
+			}
+		}
+		check(failures, "12 项首领能力均配置有效视觉与颜色",
+				visualProfiles == LeaderAbilityId.values().length,
+				"profiles=" + visualProfiles);
+		check(failures, "5 项光环视觉半径与效果距离一致",
+				LeaderVisuals.auraRadius(LeaderAbilityId.COMMAND_AURA) == 8.0D
+						&& LeaderVisuals.auraRadius(LeaderAbilityId.INTIMIDATION_AURA) == 6.0D
+						&& LeaderVisuals.auraRadius(LeaderAbilityId.BASTION_AURA) == 8.0D
+						&& LeaderVisuals.auraRadius(LeaderAbilityId.SUPPRESSION_AURA) == 6.0D
+						&& LeaderVisuals.auraRadius(LeaderAbilityId.BLOODLUST_AURA) == 8.0D,
+				"");
 
 		RandomSource random = RandomSource.create(0x5A17C0DEL);
 		boolean tl10Ok = true;
@@ -77,6 +114,25 @@ final class LeaderAbilityDevCheck {
 			}
 		}
 		check(failures, "TL10 首领能力固定一光环加一自由能力且不重复", tl10Ok, tl10Detail);
+
+		RandomSource weightRandom = RandomSource.create(0x7714A11L);
+		int secondAuraCount = 0;
+		boolean weightedFirstAuraOk = true;
+		for (int i = 0; i < 100_000; i++) {
+			List<LeaderAbilityId> rolled = LeaderAbilityPool.roll(14, weightRandom);
+			if (rolled.size() != 2 || !rolled.get(0).aura()) {
+				weightedFirstAuraOk = false;
+				break;
+			}
+			if (rolled.get(1).aura()) {
+				secondAuraCount++;
+			}
+		}
+		double secondAuraRatio = secondAuraCount / 100_000.0D;
+		check(failures, "TL14 首槽仍固定为光环", weightedFirstAuraOk, "");
+		check(failures, "TL14 第二槽光环概率降至约 18.6%",
+				secondAuraRatio >= 0.17D && secondAuraRatio <= 0.20D,
+				"ratio=" + secondAuraRatio);
 
 		boolean suppressionAvailable = false;
 		for (LeaderAbilityId id : LeaderAbilityPool.eligible(12)) {

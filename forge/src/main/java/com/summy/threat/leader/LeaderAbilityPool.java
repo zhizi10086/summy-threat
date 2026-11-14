@@ -40,14 +40,14 @@ public final class LeaderAbilityPool {
 	}
 
 	private static LeaderAbilityId removeWeighted(List<LeaderAbilityId> pool, RandomSource random) {
-		int total = 0;
+		double total = 0.0D;
 		for (LeaderAbilityId id : pool) {
-			total += Math.max(1, id.weight());
+			total += Math.max(0.000001D, id.weight());
 		}
-		int pick = random.nextInt(Math.max(1, total));
+		double pick = random.nextDouble() * Math.max(0.000001D, total);
 		for (int i = 0; i < pool.size(); i++) {
 			LeaderAbilityId id = pool.get(i);
-			pick -= Math.max(1, id.weight());
+			pick -= Math.max(0.000001D, id.weight());
 			if (pick < 0) {
 				pool.remove(i);
 				return id;

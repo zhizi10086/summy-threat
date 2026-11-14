@@ -3,10 +3,8 @@ package com.summy.threat.leader;
 import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.scaling.MonsterScaler;
-import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.LivingEntity;
@@ -19,7 +17,6 @@ import net.minecraftforge.event.entity.living.MobEffectEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -141,11 +138,7 @@ public final class LegendaryResistance {
 			return;
 		}
 		normalizeEffects(entity);
-		if (entity.level() instanceof ServerLevel level) {
-			level.sendParticles(new DustParticleOptions(new Vector3f(1.0F, 0.92F, 0.58F), 0.8F),
-					entity.getX(), entity.getY() + entity.getBbHeight() * 0.65D, entity.getZ(),
-					2, 0.45D, 0.35D, 0.45D, 0.01D);
-		}
+		LeaderVisuals.legendaryResistance(entity);
 	}
 
 	@SubscribeEvent

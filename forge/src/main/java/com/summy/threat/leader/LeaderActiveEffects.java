@@ -5,7 +5,6 @@ import com.summy.threat.combat.ArmorShred;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
@@ -34,7 +33,6 @@ import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import org.joml.Vector3f;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -194,6 +192,7 @@ public final class LeaderActiveEffects {
 				double strength = 0.12D * (1.0D - Math.max(0.0D, Math.min(1.0D, resistance)));
 				Vec3 direction = flat.normalize().scale(strength);
 				control(pull.target(), direction.x, direction.z, 0.0D);
+				LeaderVisuals.gravityPull(owner, pull.target());
 			}
 			return false;
 		});
@@ -290,7 +289,11 @@ public final class LeaderActiveEffects {
 	private static void tickTectonic(LivingEntity owner, long now) {
 		TectonicCast cast = TECTONIC.get(owner.getUUID());
 		if (cast != null) {
-			warnTectonic(owner, cast);
+			long elapsed = now - (cast.triggerTick() - 20L);
+			if (elapsed >= 0L && elapsed % 2L == 0L
+					&& owner.level() instanceof ServerLevel level) {
+				LeaderVisuals.tectonicWarning(level, cast.point(), elapsed);
+			}
 			if (now >= cast.triggerTick()) {
 				resolveTectonic(owner, cast);
 				TECTONIC.remove(owner.getUUID());
@@ -304,11 +307,21 @@ public final class LeaderActiveEffects {
 		Vec3 point = LeaderTargeting.currentTarget(owner).position();
 		TECTONIC.put(owner.getUUID(), new TectonicCast(now + 20L, point));
 		READY.put(cooldownKey(owner, LeaderAbilityId.TECTONIC_RUPTURE), now + 160L);
+		if (owner.level() instanceof ServerLevel level) {
+			LeaderVisuals.tectonicWarning(level, point, 0L);
+			LeaderVisuals.play(level, point, SoundEvents.POINTED_DRIPSTONE_LAND, 0.85F, 0.65F);
+		}
 	}
 
 	private static void tickArmor(LivingEntity owner, long now) {
 		ArmorCast cast = ARMOR.get(owner.getUUID());
 		if (cast != null) {
+			long elapsed = now - (cast.triggerTick() - 16L);
+			if (now < cast.triggerTick() && elapsed % 2L == 0L
+					&& cast.target().isAlive()
+					&& owner.level() instanceof ServerLevel level) {
+				LeaderVisuals.armorWarning(level, cast.target(), elapsed);
+			}
 			if (now >= cast.triggerTick()) {
 				LivingEntity target = cast.target();
 				if (target.isAlive() && target.level() == owner.level()
@@ -321,7 +334,13 @@ public final class LeaderActiveEffects {
 					if (landed) {
 						ArmorShred.applyCorrosion(target);
 					}
-					particles(owner, cast.triggerTick(), target.position(), 0xB7442E, 18);
+					if (owner.level() instanceof ServerLevel level) {
+						LeaderVisuals.armorImpact(level, target);
+						LeaderVisuals.play(level, target.position(), SoundEvents.ANVIL_LAND,
+								1.0F, 0.55F);
+						LeaderVisuals.play(level, target.position(), SoundEvents.DEEPSLATE_BREAK,
+								0.8F, 0.7F);
+					}
 				}
 				ARMOR.remove(owner.getUUID());
 			}
@@ -334,11 +353,19 @@ public final class LeaderActiveEffects {
 		}
 		ARMOR.put(owner.getUUID(), new ArmorCast(now + 16L, target));
 		READY.put(cooldownKey(owner, LeaderAbilityId.ARMOR_BREAKER), now + 140L);
+		if (owner.level() instanceof ServerLevel level) {
+			LeaderVisuals.play(level, target.position(), SoundEvents.ANVIL_HIT, 0.75F, 0.65F);
+		}
 	}
 
 	private static void tickRay(LivingEntity owner, long now) {
 		RayCast cast = RAY.get(owner.getUUID());
 		if (cast != null) {
+			long elapsed = now - (cast.triggerTick() - 25L);
+			if (now < cast.triggerTick() && elapsed % 2L == 0L
+					&& owner.level() instanceof ServerLevel level) {
+				LeaderVisuals.rayCharge(level, owner, cast.origin(), cast.direction(), elapsed);
+			}
 			if (now >= cast.triggerTick()) {
 				resolveRay(owner, cast);
 				RAY.remove(owner.getUUID());
@@ -357,11 +384,20 @@ public final class LeaderActiveEffects {
 		}
 		RAY.put(owner.getUUID(), new RayCast(now + 25L, origin, diff.normalize()));
 		READY.put(cooldownKey(owner, LeaderAbilityId.HUNT_RAY), now + 180L);
+		if (owner.level() instanceof ServerLevel level) {
+			LeaderVisuals.rayCharge(level, owner, origin, diff.normalize(), 0L);
+			LeaderVisuals.play(level, origin, SoundEvents.BEACON_POWER_SELECT, 0.75F, 1.25F);
+		}
 	}
 
 	private static void tickGravity(LivingEntity owner, long now) {
 		GravityCast cast = GRAVITY.get(owner.getUUID());
 		if (cast != null) {
+			long elapsed = now - (cast.triggerTick() - 20L);
+			if (now < cast.triggerTick() && elapsed % 2L == 0L
+					&& owner.level() instanceof ServerLevel level) {
+				LeaderVisuals.gravityWarning(level, owner.position(), elapsed);
+			}
 			if (now >= cast.triggerTick()) {
 				resolveGravity(owner, now);
 				GRAVITY.remove(owner.getUUID());
@@ -374,11 +410,22 @@ public final class LeaderActiveEffects {
 		}
 		GRAVITY.put(owner.getUUID(), new GravityCast(now + 20L));
 		READY.put(cooldownKey(owner, LeaderAbilityId.GRAVITY_PULSE), now + 160L);
+		if (owner.level() instanceof ServerLevel level) {
+			LeaderVisuals.gravityWarning(level, owner.position(), 0L);
+			LeaderVisuals.play(level, owner.position(), SoundEvents.AMETHYST_BLOCK_RESONATE,
+					0.8F, 0.7F);
+		}
 	}
 
 	private static void tickPhase(LivingEntity owner, long now) {
 		PhaseCast cast = PHASE.get(owner.getUUID());
 		if (cast != null) {
+			long elapsed = now - (cast.triggerTick() - 16L);
+			if (now < cast.triggerTick() && elapsed % 2L == 0L
+					&& owner.level() instanceof ServerLevel level) {
+				LeaderVisuals.phaseWarning(level, cast.start(), cast.end(),
+						cast.direction(), elapsed);
+			}
 			if (now >= cast.triggerTick()) {
 				resolvePhase(owner, cast);
 				PHASE.remove(owner.getUUID());
@@ -400,6 +447,10 @@ public final class LeaderActiveEffects {
 		Vec3 end = clipEndpoint(owner, start, start.add(direction.scale(distance)));
 		PHASE.put(owner.getUUID(), new PhaseCast(now + 16L, start, end, direction, target));
 		READY.put(cooldownKey(owner, LeaderAbilityId.PHASE_LUNGE), now + 180L);
+		if (owner.level() instanceof ServerLevel level) {
+			LeaderVisuals.phaseWarning(level, start, end, direction, 0L);
+			LeaderVisuals.play(level, start, SoundEvents.TRIDENT_RIPTIDE_1, 0.75F, 0.8F);
+		}
 	}
 
 	private static void tickIron(LivingEntity owner, long now) {
@@ -407,6 +458,8 @@ public final class LeaderActiveEffects {
 		if (state != null) {
 			if (now >= state.endTick()) {
 				IRON.remove(owner.getUUID());
+			} else if (owner.tickCount % 3 == 0) {
+				LeaderVisuals.ironGuard(owner, state.hits());
 			}
 			return;
 		}
@@ -417,7 +470,10 @@ public final class LeaderActiveEffects {
 		}
 		IRON.put(owner.getUUID(), new IronState(now + 60L, 0));
 		READY.put(cooldownKey(owner, LeaderAbilityId.IRON_GUARD), now + 220L);
-		particles(owner, now, owner.position(), 0xD9B74C, 14);
+		LeaderVisuals.ironGuard(owner, 0);
+		if (owner.level() instanceof ServerLevel level) {
+			LeaderVisuals.play(level, owner.position(), SoundEvents.ANVIL_PLACE, 0.7F, 1.2F);
+		}
 	}
 
 	private static void tickCollapse(LivingEntity owner, long now) {
@@ -431,6 +487,10 @@ public final class LeaderActiveEffects {
 			COLLAPSE.put(owner.getUUID(),
 					new CollapseState(now + 20L, now + 20L, now + 180L, point));
 			READY.put(cooldownKey(owner, LeaderAbilityId.COLLAPSE_FIELD), now + 240L);
+			if (owner.level() instanceof ServerLevel level) {
+				LeaderVisuals.collapseWarning(level, point, 0L);
+				LeaderVisuals.play(level, point, SoundEvents.DEEPSLATE_BREAK, 0.8F, 0.6F);
+			}
 			return;
 		}
 		if (now >= state.endTick()) {
@@ -438,7 +498,10 @@ public final class LeaderActiveEffects {
 			return;
 		}
 		if (now < state.warningEnd()) {
-			particles(owner, now, state.point(), 0x694C34, 6);
+			long elapsed = now - (state.warningEnd() - 20L);
+			if (elapsed % 2L == 0L && owner.level() instanceof ServerLevel level) {
+				LeaderVisuals.collapseWarning(level, state.point(), elapsed);
+			}
 			return;
 		}
 		List<LivingEntity> targets = targetsAt(owner, state.point(), 5.0D);
@@ -461,7 +524,17 @@ public final class LeaderActiveEffects {
 			}
 			COLLAPSE.put(owner.getUUID(), new CollapseState(state.warningEnd(),
 					state.nextDamage() + 20L, state.endTick(), state.point()));
-			particles(owner, now, state.point(), 0x5A3E2C, 18);
+			if (owner.level() instanceof ServerLevel level) {
+				LeaderVisuals.collapsePulse(level, state.point());
+				if ((now - state.warningEnd()) % 40L == 0L) {
+					LeaderVisuals.play(level, state.point(), SoundEvents.GRAVEL_HIT,
+							0.55F, 0.55F);
+				}
+			}
+		}
+		if ((now - state.warningEnd()) % 10L == 0L
+				&& owner.level() instanceof ServerLevel level) {
+			LeaderVisuals.collapseBorder(level, state.point());
 		}
 	}
 
@@ -477,12 +550,14 @@ public final class LeaderActiveEffects {
 		}
 		for (LivingEntity target : lineTargets(owner, cast.origin(), end, 0.5D)) {
 			target.invulnerableTime = 0;
-			skillHurt(owner, target, owner.damageSources().indirectMagic(owner, owner),
-					skillDamage(owner, target, 60.0D));
+			if (skillHurt(owner, target, owner.damageSources().indirectMagic(owner, owner),
+					skillDamage(owner, target, 60.0D))) {
+				LeaderVisuals.hitFlash(target, LeaderAbilityId.HUNT_RAY.color());
+			}
 		}
-		lineParticles(level, cast.origin(), end, 0xF3E6A1);
+		LeaderVisuals.rayImpact(level, cast.origin(), end);
 		level.playSound(null, cast.origin().x, cast.origin().y, cast.origin().z,
-				SoundEvents.BEACON_ACTIVATE, SoundSource.HOSTILE, 0.55F, 1.6F);
+				SoundEvents.BEACON_ACTIVATE, SoundSource.HOSTILE, 0.95F, 1.35F);
 	}
 
 	private static void resolveGravity(LivingEntity owner, long now) {
@@ -499,9 +574,11 @@ public final class LeaderActiveEffects {
 				PULLS.add(new PullState(target, owner.getUUID(), now + 10L));
 			}
 		}
-		particles(owner, now, owner.position(), 0xA56BE8, 28);
-		level.playSound(null, owner.getX(), owner.getY(), owner.getZ(),
-				SoundEvents.BEACON_DEACTIVATE, SoundSource.HOSTILE, 0.6F, 0.75F);
+		LeaderVisuals.gravityImpact(level, owner.position());
+		LeaderVisuals.play(level, owner.position(), SoundEvents.AMETHYST_BLOCK_CHIME,
+				0.9F, 1.15F);
+		LeaderVisuals.play(level, owner.position(), SoundEvents.BEACON_DEACTIVATE,
+				0.9F, 0.65F);
 	}
 
 	private static void resolvePhase(LivingEntity owner, PhaseCast cast) {
@@ -528,14 +605,14 @@ public final class LeaderActiveEffects {
 				control(locked, cast.direction().x * 0.8D, cast.direction().z * 0.8D, 0.25D);
 			}
 		}
-		lineParticles(level, cast.start(), cast.end(), 0xE8C44D);
+		LeaderVisuals.phaseImpact(level, cast.start(), cast.end(), cast.direction());
 		BlockPos endPos = BlockPos.containing(cast.end());
 		int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
 				endPos.getX(), endPos.getZ());
 		double y = Math.max(cast.start().y, Math.min(cast.start().y + 1.0D, ground));
 		owner.moveTo(cast.end().x, y, cast.end().z, owner.getYRot(), owner.getXRot());
-		level.playSound(null, cast.start().x, cast.start().y, cast.start().z,
-				SoundEvents.ENDER_DRAGON_FLAP, SoundSource.HOSTILE, 0.7F, 1.1F);
+		LeaderVisuals.play(level, cast.start(), SoundEvents.TRIDENT_RIPTIDE_3, 1.0F, 0.9F);
+		LeaderVisuals.play(level, cast.start(), SoundEvents.ENDER_DRAGON_FLAP, 0.8F, 1.0F);
 	}
 
 	private static void resolveIronCounter(LivingEntity owner, long now) {
@@ -547,9 +624,9 @@ public final class LeaderActiveEffects {
 			skillHurt(owner, target, owner.damageSources().mobAttack(owner),
 					skillDamage(owner, target, 60.0D));
 		}
-		particles(owner, now, owner.position(), 0xFFD45A, 32);
-		level.playSound(null, owner.getX(), owner.getY(), owner.getZ(),
-				SoundEvents.BELL_BLOCK, SoundSource.HOSTILE, 0.8F, 0.75F);
+		LeaderVisuals.ironCounter(owner);
+		LeaderVisuals.play(level, owner.position(), SoundEvents.BELL_BLOCK, 1.0F, 0.65F);
+		LeaderVisuals.play(level, owner.position(), SoundEvents.ANVIL_LAND, 0.9F, 0.55F);
 	}
 
 	@SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
@@ -584,6 +661,7 @@ public final class LeaderActiveEffects {
 		if (sourceEntity instanceof LivingEntity attacker
 				&& LeaderTargeting.isTarget(owner, attacker)) {
 			int hits = state.hits() + 1;
+			LeaderVisuals.ironHit(owner, hits);
 			if (hits >= 3) {
 				IRON_PENDING.add(owner.getUUID());
 				IRON.remove(owner.getUUID());
@@ -634,20 +712,9 @@ public final class LeaderActiveEffects {
 						TECTONIC_SLOW, SLOW_NAME, -0.30D);
 			}
 		}
-		level.sendParticles(new DustParticleOptions(new Vector3f(0.66F, 0.50F, 0.25F), 1.2F),
-				cast.point().x, cast.point().y + 0.15D, cast.point().z,
-				36, 2.2D, 0.2D, 2.2D, 0.04D);
-		level.playSound(null, cast.point().x, cast.point().y, cast.point().z,
-				SoundEvents.GENERIC_EXPLODE, SoundSource.HOSTILE, 0.65F, 0.75F);
-	}
-
-	private static void warnTectonic(LivingEntity owner, TectonicCast cast) {
-		if (!(owner.level() instanceof ServerLevel level)) {
-			return;
-		}
-		level.sendParticles(new DustParticleOptions(new Vector3f(0.72F, 0.53F, 0.24F), 0.9F),
-				cast.point().x, cast.point().y + 0.05D, cast.point().z,
-				8, 1.8D, 0.05D, 1.8D, 0.0D);
+		LeaderVisuals.tectonicImpact(level, cast.point());
+		LeaderVisuals.play(level, cast.point(), SoundEvents.GENERIC_EXPLODE, 0.95F, 0.6F);
+		LeaderVisuals.play(level, cast.point(), SoundEvents.GRAVEL_BREAK, 0.8F, 0.55F);
 	}
 
 	private static void applySlow(LivingEntity owner, LivingEntity target, long now, long duration,
@@ -735,34 +802,6 @@ public final class LeaderActiveEffects {
 		}
 		Vec3 direction = end.subtract(start);
 		return hit.getLocation().subtract(offset).subtract(direction.normalize().scale(0.35D));
-	}
-
-	private static void lineParticles(ServerLevel level, Vec3 start, Vec3 end, int color) {
-		Vec3 direction = end.subtract(start);
-		double length = direction.length();
-		if (length <= 1.0E-5D) {
-			return;
-		}
-		Vec3 step = direction.scale(1.0D / length);
-		Vector3f rgb = rgb(color);
-		for (double distance = 0.0D; distance <= length; distance += 0.5D) {
-			Vec3 point = start.add(step.scale(distance));
-			level.sendParticles(new DustParticleOptions(rgb, 0.8F),
-					point.x, point.y, point.z, 1, 0.02D, 0.02D, 0.02D, 0.0D);
-		}
-	}
-
-	private static void particles(LivingEntity owner, long now, Vec3 point, int color, int count) {
-		if (owner.level() instanceof ServerLevel level) {
-			level.sendParticles(new DustParticleOptions(rgb(color), 1.0F),
-					point.x, point.y + 0.2D, point.z,
-					count, 1.2D, 0.35D, 1.2D, 0.02D);
-		}
-	}
-
-	private static Vector3f rgb(int color) {
-		return new Vector3f(((color >> 16) & 0xFF) / 255.0F,
-				((color >> 8) & 0xFF) / 255.0F, (color & 0xFF) / 255.0F);
 	}
 
 	private static float skillDamage(LivingEntity owner, LivingEntity target, double base) {

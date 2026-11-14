@@ -1,7 +1,6 @@
 package com.summy.threat.leader;
 
 import com.summy.threat.scaling.MonsterScaler;
-import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
@@ -21,7 +20,6 @@ import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -215,6 +213,7 @@ public final class LeaderAuraEffects {
 						SoundEvents.RAVAGER_ROAR, SoundSource.HOSTILE, 0.55F, 1.2F);
 			}
 		}
+		LeaderVisuals.auraTargets(leader, abilityFor(kind), candidates);
 
 		Source source = new Source(leader.getUUID(), kind);
 		SOURCE_LEVELS.put(source, leader.level().dimension());
@@ -362,23 +361,10 @@ public final class LeaderAuraEffects {
 	}
 
 	private static void emitParticles(LivingEntity leader, List<LeaderAbilityId> abilities) {
-		if (!(leader.level() instanceof ServerLevel level)) {
-			return;
+		for (LeaderAbilityId id : abilities) {
+			if (id.aura()) {
+				LeaderVisuals.auraLeader(leader, id);
+			}
 		}
-		int color = 0xFFD45A;
-		if (abilities.contains(LeaderAbilityId.INTIMIDATION_AURA)) {
-			color = 0xD86955;
-		} else if (abilities.contains(LeaderAbilityId.BASTION_AURA)) {
-			color = 0xE5B84B;
-		} else if (abilities.contains(LeaderAbilityId.SUPPRESSION_AURA)) {
-			color = 0xB9A46B;
-		} else if (abilities.contains(LeaderAbilityId.BLOODLUST_AURA)) {
-			color = 0xC43D37;
-		}
-		Vector3f rgb = new Vector3f(((color >> 16) & 0xFF) / 255.0F,
-				((color >> 8) & 0xFF) / 255.0F, (color & 0xFF) / 255.0F);
-		level.sendParticles(new DustParticleOptions(rgb, 0.8F),
-				leader.getX(), leader.getY() + leader.getBbHeight() * 0.5D, leader.getZ(),
-				6, 0.9D, 0.55D, 0.9D, 0.01D);
 	}
 }
