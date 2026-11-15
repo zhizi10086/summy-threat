@@ -62,17 +62,21 @@ public final class ThreatDevCheck {
 	private static final boolean ENABLED = Boolean.getBoolean("summy_threat.devcheck");
 	private static final boolean BETRAYAL_CHECK = Boolean.getBoolean("summy_threat.betrayalcheck");
 	private static final boolean LEADER_CHECK = Boolean.getBoolean("summy_threat.leadercheck");
+	private static final boolean EQUIPMENT_CHECK = Boolean.getBoolean("summy_threat.equipmentcheck");
 	// 主菜单阶段要留给玩家创建/选择 DevCheckWorld 的时间；30 秒会在世界创建前
 	// 就把客户端关掉，因此这里放宽到 10 分钟，总运行上限放宽到 20 分钟。
 	private static final int IDLE_STOP_TICKS = 12000;
 	private static final int TOTAL_STOP_TICKS = 24000;
-	private static final int CLIENT_STOP_TICK = LEADER_CHECK ? 240 : 1520;
+	private static final int CLIENT_STOP_TICK = EQUIPMENT_CHECK ? 400 : LEADER_CHECK ? 240 : 1520;
 	private static final List<String> FAILURES = new ArrayList<>();
 	private static int serverTick;
 	private static int clientTick;
 	private static int idleTicks;
 	private static int totalClientTicks;
 	private static boolean finished;
+	private static boolean equipmentRan;
+	private static int equipmentStableTicks;
+	private static Map<String, Object> equipmentConfigOriginal;
 	private static double baseSpeed;
 	private static int checks;
 	private static Zombie chestEximus;
@@ -93,6 +97,27 @@ public final class ThreatDevCheck {
 		ServerPlayer player = event.getServer().getPlayerList().getPlayers().get(0);
 		serverTick++;
 		try {
+			if (EQUIPMENT_CHECK) {
+				switch (serverTick) {
+					case 20 -> {
+						prepareWorld(player);
+						equipmentConfigOriginal = EquipmentDropDevCheck.prepareDeterministicConfig();
+					}
+					default -> {
+					}
+				}
+				// KubeJS 启动期保存配置会触发一次异步重载；连续稳定后再落断言。
+				if (!equipmentRan && serverTick >= 100) {
+					equipmentStableTicks = Config.SPEC.isLoaded() ? equipmentStableTicks + 1 : 0;
+				}
+				if (serverTick >= 200 && equipmentStableTicks >= 80 && !equipmentRan) {
+					equipmentRan = true;
+					FAILURES.addAll(EquipmentDropSrIntegrationDevCheck.run(player));
+					EquipmentDropDevCheck.restoreConfig(equipmentConfigOriginal);
+					equipmentConfigOriginal = null;
+				}
+				return;
+			}
 			if (LEADER_CHECK) {
 				switch (serverTick) {
 					case 20 -> prepareWorld(player);
@@ -132,6 +157,12 @@ public final class ThreatDevCheck {
 					if (BETRAYAL_CHECK) {
 						FAILURES.addAll(BetrayalIntegrationDevCheck.run(player));
 					}
+				}
+				case 100 -> equipmentConfigOriginal = EquipmentDropDevCheck.prepareDeterministicConfig();
+				case 320 -> FAILURES.addAll(EquipmentDropSrIntegrationDevCheck.run(player));
+				case 321 -> {
+					EquipmentDropDevCheck.restoreConfig(equipmentConfigOriginal);
+					equipmentConfigOriginal = null;
 				}
 				case 340 -> FAILURES.addAll(ArmorPenetrationDevCheck.checkShortWindow());
 				case 430 -> FAILURES.addAll(ArmorPenetrationDevCheck.finish());
@@ -709,6 +740,9 @@ public final class ThreatDevCheck {
 		}
 		finished = true;
 		log("===== " + reason + "：检查 " + checks + " 项，失败 " + FAILURES.size() + " 项 =====");
+		if (EQUIPMENT_CHECK) {
+			log("[EQUIPMENT] FAIL=" + FAILURES.size());
+		}
 		for (String failure : FAILURES) {
 			log("FAILED｜" + failure);
 		}

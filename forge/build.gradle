@@ -77,8 +77,13 @@ minecraft {
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
             // 只有显式加 -Pdevcheck 时才打开客户端自检；测试脚本会自动停止客户端。
             if (project.hasProperty('devcheck') || project.hasProperty('betrayalcheck')
-                    || project.hasProperty('leadercheck')) {
+                    || project.hasProperty('leadercheck') || project.hasProperty('equipmentcheck')) {
                 property 'summy_threat.devcheck', 'true'
+                // 允许 SR 的 dev-only 联调事务入口在真实玩家环境中执行。
+                property 'summy.devcheck', 'true'
+            }
+            if (project.hasProperty('equipmentcheck')) {
+                property 'summy_threat.equipmentcheck', 'true'
             }
             if (project.hasProperty('betrayalcheck')) {
                 property 'summy_threat.betrayalcheck', 'true'
@@ -134,6 +139,11 @@ minecraft {
             property 'forge.logging.console.level', 'debug'
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
+            if (project.hasProperty('devcheck') || project.hasProperty('equipmentcheck')) {
+                property 'summy_threat.devcheck', 'true'
+                // SR 的测试事务入口同时要求公共 devcheck 开关。
+                property 'summy.devcheck', 'true'
+            }
         }
     }
 }

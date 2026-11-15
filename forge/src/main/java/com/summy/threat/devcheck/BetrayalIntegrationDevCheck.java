@@ -26,6 +26,8 @@ final class BetrayalIntegrationDevCheck {
 	private static final String SLOT_SIZING = "com.summy.reliquary.effect.SlotSizing";
 	private static final String BETRAYAL = "com.summy.reliquary.effect.Betrayal";
 	private static final String TARGET_TAG = "summy_reliquary:betrayal_target";
+	private static final String RESISTANCE_TAG = "summy_threat:legendary_resistance";
+	private static final String IMMUNE_TAG = "summy_threat:legendary_resistance_betrayal_immune";
 
 	private BetrayalIntegrationDevCheck() {
 	}
@@ -94,6 +96,53 @@ final class BetrayalIntegrationDevCheck {
 					"shielded=" + shieldedTagged);
 			check(failures, "背叛联调：普通攻击者转火背叛目标", far.getTarget() == near,
 					"target=" + far.getTarget());
+
+			// SR 2.0.1 只读取第二个标签；基础传奇抗性标签本身不应参与过滤。
+			invokeVoid(BETRAYAL, "clear");
+			invokeVoid(BETRAYAL, "setChanceForTest", new Class<?>[]{Double.class}, 100.0D);
+			invokeVoid(FLAGS, "setBetrayalCooldownUntil",
+					new Class<?>[]{ServerPlayer.class, long.class}, player, 0L);
+			Zombie immuneCandidate = spawn(level, player, 1.0D);
+			Zombie baseOnly = spawn(level, player, 2.0D);
+			Zombie normalCandidate = spawn(level, player, 3.0D);
+			mobs.add(immuneCandidate);
+			mobs.add(baseOnly);
+			mobs.add(normalCandidate);
+			immuneCandidate.getPersistentData().putBoolean(IMMUNE_TAG, true);
+			baseOnly.getPersistentData().putBoolean(RESISTANCE_TAG, true);
+			invokeVoid(BETRAYAL, "tickPlayer", new Class<?>[]{ServerPlayer.class}, player);
+			now = level.getGameTime();
+			boolean immuneTagged = immuneCandidate.getPersistentData().getLong(TARGET_TAG) > now;
+			boolean baseOnlyTagged = baseOnly.getPersistentData().getLong(TARGET_TAG) > now;
+			check(failures, "背叛联调：免疫候选被过滤", !immuneTagged,
+					"immune=" + immuneTagged);
+			check(failures, "背叛联调：仅基础传奇抗性仍可被选靶", baseOnlyTagged,
+					"baseOnly=" + baseOnlyTagged);
+
+			baseOnly.getPersistentData().putBoolean(IMMUNE_TAG, true);
+			invokeVoid(BETRAYAL, "tickPlayer", new Class<?>[]{ServerPlayer.class}, player);
+			check(failures, "背叛联调：靶子中途免疫立即结束",
+					baseOnly.getPersistentData().getLong(TARGET_TAG) <= level.getGameTime(),
+					"targetTag=" + baseOnly.getPersistentData().getLong(TARGET_TAG));
+
+			// 攻击者中途获得免疫后，应恢复其原目标，不继续被强制改为靶子。
+			invokeVoid(BETRAYAL, "clear");
+			invokeVoid(BETRAYAL, "setChanceForTest", new Class<?>[]{Double.class}, 100.0D);
+			invokeVoid(FLAGS, "setBetrayalCooldownUntil",
+					new Class<?>[]{ServerPlayer.class, long.class}, player, 0L);
+			Zombie attackerTarget = spawn(level, player, 1.0D);
+			Zombie immuneAttacker = spawn(level, player, 4.0D);
+			mobs.add(attackerTarget);
+			mobs.add(immuneAttacker);
+			invokeVoid(BETRAYAL, "tickPlayer", new Class<?>[]{ServerPlayer.class}, player);
+			check(failures, "背叛联调：普通攻击者已转火",
+					immuneAttacker.getTarget() == attackerTarget,
+					"target=" + immuneAttacker.getTarget());
+			immuneAttacker.getPersistentData().putBoolean(IMMUNE_TAG, true);
+			invokeVoid(BETRAYAL, "tickPlayer", new Class<?>[]{ServerPlayer.class}, player);
+			check(failures, "背叛联调：免疫攻击者恢复原目标",
+					immuneAttacker.getTarget() == null,
+					"target=" + immuneAttacker.getTarget());
 
 			Mob owner = EntityType.ZOMBIE.create(level);
 			if (owner == null) {

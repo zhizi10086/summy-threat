@@ -216,6 +216,17 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue LEADER_MONUMENT_EXTRA_CHANCE;
 	public static final ForgeConfigSpec.DoubleValue LEADER_BASTION_EXTRA_CHANCE;
 
+	/** 卓越精华 / 星渊棱晶基础掉落。 */
+	public static final ForgeConfigSpec.BooleanValue EQUIPMENT_DROPS_ENABLE;
+	public static final ForgeConfigSpec.BooleanValue EQUIPMENT_DROPS_REQUIRE_PLAYER_KILL;
+	public static final ForgeConfigSpec.DoubleValue EXIMUS_ESSENCE_CHANCE_PERCENT;
+	public static final ForgeConfigSpec.DoubleValue LEADER_ESSENCE_CHANCE_PERCENT;
+	public static final ForgeConfigSpec.IntValue BOSS_ESSENCE_COUNT_LOW_TL;
+	public static final ForgeConfigSpec.IntValue BOSS_ESSENCE_COUNT_HIGH_TL;
+	public static final ForgeConfigSpec.DoubleValue BOSS_PRISM_CHANCE_LOW_TL_PERCENT;
+	public static final ForgeConfigSpec.IntValue BOSS_PRISM_COUNT_HIGH_TL;
+	public static final ForgeConfigSpec.IntValue BOSS_PRISM_TL_THRESHOLD;
+
 	private static final List<String> DEFAULT_MOD_MATERIAL_IDS = List.of(
 			"summy_reliquary:sin_fragment_pride",
 			"summy_reliquary:sin_fragment_gluttony",
@@ -565,6 +576,37 @@ public final class Config {
 		LEADER_BASTION_EXTRA_CHANCE = builder
 				.comment("堡垒前两只保底首领外，每只额外蛮兵升级为首领的概率")
 				.defineInRange("bastion_extra_chance", 0.10D, 0.0D, 1.0D);
+		builder.pop();
+
+		builder.comment("卓越精华与星渊棱晶的基础死亡掉落；材料直接生成受保护掉落物，不进入事件掉落列表。")
+				.push("equipment_drops");
+		EQUIPMENT_DROPS_ENABLE = builder
+				.comment("是否启用两种材料的基础掉落")
+				.define("enable", true);
+		EQUIPMENT_DROPS_REQUIRE_PLAYER_KILL = builder
+				.comment("是否要求有效的玩家击杀归属；关闭后允许无玩家归属的死亡产生材料")
+				.define("require_player_kill", true);
+		EXIMUS_ESSENCE_CHANCE_PERCENT = builder
+				.comment("卓越者掉落 1 个卓越精华的百分比")
+				.defineInRange("eximus_essence_chance_percent", 50.0D, 0.0D, 100.0D);
+		LEADER_ESSENCE_CHANCE_PERCENT = builder
+				.comment("区域首领掉落 1 个卓越精华的百分比")
+				.defineInRange("leader_essence_chance_percent", 75.0D, 0.0D, 100.0D);
+		BOSS_ESSENCE_COUNT_LOW_TL = builder
+				.comment("Boss 低于共享阈值时固定掉落的卓越精华数量")
+				.defineInRange("boss_essence_count_low_tl", 1, 0, 16);
+		BOSS_ESSENCE_COUNT_HIGH_TL = builder
+				.comment("Boss 达到共享阈值时固定掉落的卓越精华数量")
+				.defineInRange("boss_essence_count_high_tl", 2, 0, 16);
+		BOSS_PRISM_CHANCE_LOW_TL_PERCENT = builder
+				.comment("Boss 低于共享阈值时掉落 1 个星渊棱晶的百分比")
+				.defineInRange("boss_prism_chance_low_tl_percent", 10.0D, 0.0D, 100.0D);
+		BOSS_PRISM_COUNT_HIGH_TL = builder
+				.comment("Boss 达到共享阈值时固定掉落的星渊棱晶数量")
+				.defineInRange("boss_prism_count_high_tl", 1, 0, 8);
+		BOSS_PRISM_TL_THRESHOLD = builder
+				.comment("Boss 精华数量与星渊棱晶档位的共享 TL 阈值")
+				.defineInRange("boss_prism_tl_threshold", 10, 0, 20);
 		builder.pop();
 
 		builder.comment("调试：全局 TL（-2 = 完全关闭；-1 = 自动 PCF/CDF；0~20 = 手动覆盖）。运行期用 /summythreat tl 修改，重启复位。")
