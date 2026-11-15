@@ -67,7 +67,8 @@ public final class ThreatDevCheck {
 	// 就把客户端关掉，因此这里放宽到 10 分钟，总运行上限放宽到 20 分钟。
 	private static final int IDLE_STOP_TICKS = 12000;
 	private static final int TOTAL_STOP_TICKS = 24000;
-	private static final int CLIENT_STOP_TICK = EQUIPMENT_CHECK ? 400 : LEADER_CHECK ? 240 : 1520;
+	private static final int CLIENT_STOP_TICK = EQUIPMENT_CHECK ? 400
+			: BETRAYAL_CHECK ? 180 : LEADER_CHECK ? 240 : 1520;
 	private static final List<String> FAILURES = new ArrayList<>();
 	private static int serverTick;
 	private static int clientTick;
@@ -115,6 +116,15 @@ public final class ThreatDevCheck {
 					FAILURES.addAll(EquipmentDropSrIntegrationDevCheck.run(player));
 					EquipmentDropDevCheck.restoreConfig(equipmentConfigOriginal);
 					equipmentConfigOriginal = null;
+				}
+				return;
+			}
+			if (BETRAYAL_CHECK) {
+				switch (serverTick) {
+					case 20 -> prepareWorld(player);
+					case 100 -> FAILURES.addAll(BetrayalIntegrationDevCheck.run(player));
+					default -> {
+					}
 				}
 				return;
 			}
