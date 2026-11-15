@@ -151,7 +151,7 @@ SummyThreatConfig.snapshot()
 ```js
 const changes = {}
 changes['player_challenge_factor.resource_weight'] = 0.31
-changes['region_tl_cap.normal_biome'] = 8
+changes['magic_resistance.hard_cap_percent'] = 85.0
 SummyThreatConfig.setMany(changes)
 ```
 

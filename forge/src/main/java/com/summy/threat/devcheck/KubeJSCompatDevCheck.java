@@ -144,10 +144,13 @@ final class KubeJSCompatDevCheck {
 		String regenListKey = "tl_abilities.reduced_regeneration_entity_ids";
 		String modBossAttackKey = "boss_health.default_mod_boss_attack";
 		String equipmentThresholdKey = "equipment_drops.boss_prism_tl_threshold";
+		String magicCapKey = "magic_resistance.hard_cap_percent";
+		String magicTableKey = "magic_resistance.leader_boss_tl20";
 
 		Map<String, Object> original = new LinkedHashMap<>();
 		for (String key : List.of(booleanKey, integerKey, doubleKey, stringKey, enumKey, listKey,
-				regenDoubleKey, regenListKey, modBossAttackKey, equipmentThresholdKey)) {
+				regenDoubleKey, regenListKey, modBossAttackKey, equipmentThresholdKey,
+				magicCapKey, magicTableKey)) {
 			original.put(key, ThreatConfigApi.get(key));
 		}
 		ThreatDevCheck.checkDetailed("配置 API 分组枚举",
@@ -155,7 +158,12 @@ final class KubeJSCompatDevCheck {
 						&& ThreatConfigApi.keys("boss_health")
 						.contains("boss_health.auto_calculate_mod_boss")
 						&& ThreatConfigApi.keys("equipment_drops")
-						.contains("equipment_drops.boss_prism_tl_threshold"),
+						.contains("equipment_drops.boss_prism_tl_threshold")
+						&& ThreatConfigApi.keys("magic_resistance").size() == 66
+						&& ThreatConfigApi.keys("magic_resistance")
+						.contains("magic_resistance.normal_tl0")
+						&& ThreatConfigApi.keys("magic_resistance")
+						.contains("magic_resistance.leader_boss_tl20"),
 				"groups=" + ThreatConfigApi.groups().size());
 		ThreatDevCheck.checkDetailed("配置 API 六种声明类型识别",
 				"boolean".equals(ThreatConfigApi.type(booleanKey))
@@ -164,11 +172,13 @@ final class KubeJSCompatDevCheck {
 						&& "string".equals(ThreatConfigApi.type(stringKey))
 						&& "enum".equals(ThreatConfigApi.type(enumKey))
 						&& "list".equals(ThreatConfigApi.type(listKey))
-						&& "integer".equals(ThreatConfigApi.type(equipmentThresholdKey)),
+						&& "integer".equals(ThreatConfigApi.type(equipmentThresholdKey))
+						&& "double".equals(ThreatConfigApi.type(magicCapKey)),
 				List.of(ThreatConfigApi.type(booleanKey), ThreatConfigApi.type(integerKey),
 						ThreatConfigApi.type(doubleKey), ThreatConfigApi.type(stringKey),
 						ThreatConfigApi.type(enumKey), ThreatConfigApi.type(listKey),
-						ThreatConfigApi.type(equipmentThresholdKey)).toString());
+						ThreatConfigApi.type(equipmentThresholdKey),
+						ThreatConfigApi.type(magicCapKey)).toString());
 
 		boolean changedBoolean = !(Boolean) original.get(booleanKey);
 		int oldInteger = ((Number) original.get(integerKey)).intValue();
@@ -186,6 +196,8 @@ final class KubeJSCompatDevCheck {
 		changes.put(regenListKey, List.of("MINECRAFT:ENDER_DRAGON", "minecraft:wither"));
 		changes.put(modBossAttackKey, 2.5D);
 		changes.put(equipmentThresholdKey, 11);
+		changes.put(magicCapKey, 85.0D);
+		changes.put(magicTableKey, 58.0D);
 		int oldEvents = EventProbe.apiConfigChanged;
 		try {
 			Map<String, Object> written = ThreatConfigApi.setMany(changes);
@@ -200,7 +212,9 @@ final class KubeJSCompatDevCheck {
 					&& List.of("MINECRAFT:ENDER_DRAGON", "minecraft:wither")
 							.equals(ThreatConfigApi.get(regenListKey))
 					&& Math.abs(((Number) ThreatConfigApi.get(modBossAttackKey)).doubleValue() - 2.5D) < 1.0E-6D
-					&& ((Number) ThreatConfigApi.get(equipmentThresholdKey)).intValue() == 11;
+					&& ((Number) ThreatConfigApi.get(equipmentThresholdKey)).intValue() == 11
+					&& Math.abs(((Number) ThreatConfigApi.get(magicCapKey)).doubleValue() - 85.0D) < 1.0E-6D
+					&& Math.abs(((Number) ThreatConfigApi.get(magicTableKey)).doubleValue() - 58.0D) < 1.0E-6D;
 			ThreatDevCheck.checkDetailed("配置 API 六种类型 setMany 可写",
 					allWritten && written.size() == changes.size(), written.toString());
 			ThreatDevCheck.checkDetailed("config.changed 单次触发",

@@ -287,6 +287,17 @@ public final class Config {
 	/** 是否允许基础传奇抗性同时提供 SR 背叛免疫标签 */
 	public static final ForgeConfigSpec.BooleanValue LEGENDARY_BETRAYAL_IMMUNE;
 
+	/** 魔法抗性总开关 */
+	public static final ForgeConfigSpec.BooleanValue MAGIC_RESISTANCE_ENABLED;
+	/** 法抗表是否乘当前生态档的 r_hp */
+	public static final ForgeConfigSpec.BooleanValue MAGIC_RESISTANCE_SCALE_WITH_ENVIRONMENT_HP;
+	/** 法抗最终硬上限（百分比） */
+	public static final ForgeConfigSpec.DoubleValue MAGIC_RESISTANCE_HARD_CAP_PERCENT;
+	/** 普通、卓越者、区域首领/Boss 三套独立 TL 表 */
+	public static final ForgeConfigSpec.DoubleValue[] NORMAL_MAGIC_RESISTANCE_PER_TL;
+	public static final ForgeConfigSpec.DoubleValue[] EXIMUS_MAGIC_RESISTANCE_PER_TL;
+	public static final ForgeConfigSpec.DoubleValue[] LEADER_BOSS_MAGIC_RESISTANCE_PER_TL;
+
 	public static final ForgeConfigSpec SPEC;
 
 	static {
@@ -344,6 +355,30 @@ public final class Config {
 		CORROSION_DURATION_SECONDS = builder
 				.comment("TL 腐蚀每层持续时间（秒）")
 				.defineInRange("corrosion_duration_seconds", 6, 1, 60);
+		builder.pop();
+
+		builder.comment(
+				"TL 魔法抗性：只作用于仅绕过护甲、但不绕过保护附魔/抗性/无敌帧等效果的伤害。",
+				"最终法抗 = 表值 × r_hp（可关闭）后再受硬上限约束；玩家目标不读取本组配置。")
+				.push("magic_resistance");
+		MAGIC_RESISTANCE_ENABLED = builder
+				.comment("是否启用 TL 魔法抗性")
+				.define("enable", true);
+		MAGIC_RESISTANCE_SCALE_WITH_ENVIRONMENT_HP = builder
+				.comment("法抗表值是否乘当前生态档的 r_hp；默认先缩放再应用硬上限")
+				.define("scale_with_environment_hp", true);
+		MAGIC_RESISTANCE_HARD_CAP_PERCENT = builder
+				.comment("法抗最终硬上限（百分比）；默认 90 表示至少保留 10% 魔法伤害")
+				.defineInRange("hard_cap_percent", 90.0D, 0.0D, 100.0D);
+		NORMAL_MAGIC_RESISTANCE_PER_TL = defineMagicResistanceTable(builder, "normal",
+				new double[]{0.0D, 0.0D, 0.0D, 1.0D, 2.0D, 3.0D, 5.0D, 7.0D, 9.0D, 11.0D,
+						14.0D, 17.0D, 20.0D, 23.0D, 26.0D, 30.0D, 34.0D, 39.0D, 44.0D, 49.0D, 55.0D});
+		EXIMUS_MAGIC_RESISTANCE_PER_TL = defineMagicResistanceTable(builder, "eximus",
+				new double[]{5.0D, 5.0D, 5.0D, 6.0D, 7.0D, 8.0D, 10.0D, 12.0D, 14.0D, 16.0D,
+						19.0D, 22.0D, 25.0D, 28.0D, 31.0D, 35.0D, 39.0D, 44.0D, 49.0D, 54.0D, 60.0D});
+		LEADER_BOSS_MAGIC_RESISTANCE_PER_TL = defineMagicResistanceTable(builder, "leader_boss",
+				new double[]{40.0D, 41.0D, 42.0D, 43.0D, 44.0D, 45.0D, 46.0D, 47.0D, 48.0D, 49.0D,
+						50.0D, 51.0D, 52.0D, 53.0D, 54.0D, 55.0D, 56.0D, 57.0D, 58.0D, 59.0D, 60.0D});
 		builder.pop();
 
 		builder.comment(
@@ -670,5 +705,18 @@ public final class Config {
 	}
 
 	private Config() {
+	}
+
+	/** 三列法抗表均声明为 21 个独立配置值，禁止一列推导另一列。 */
+	private static ForgeConfigSpec.DoubleValue[] defineMagicResistanceTable(
+			ForgeConfigSpec.Builder builder, String prefix, double[] defaults) {
+		if (defaults.length != 21) {
+			throw new IllegalArgumentException("法抗 TL 表必须包含 21 项：" + prefix);
+		}
+		ForgeConfigSpec.DoubleValue[] values = new ForgeConfigSpec.DoubleValue[21];
+		for (int tl = 0; tl < defaults.length; tl++) {
+			values[tl] = builder.defineInRange(prefix + "_tl" + tl, defaults[tl], 0.0D, 100.0D);
+		}
+		return values;
 	}
 }

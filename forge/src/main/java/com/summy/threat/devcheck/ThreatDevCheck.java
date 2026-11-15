@@ -63,12 +63,13 @@ public final class ThreatDevCheck {
 	private static final boolean BETRAYAL_CHECK = Boolean.getBoolean("summy_threat.betrayalcheck");
 	private static final boolean LEADER_CHECK = Boolean.getBoolean("summy_threat.leadercheck");
 	private static final boolean EQUIPMENT_CHECK = Boolean.getBoolean("summy_threat.equipmentcheck");
+	private static final boolean MAGIC_CHECK = Boolean.getBoolean("summy_threat.magiccheck");
 	// 主菜单阶段要留给玩家创建/选择 DevCheckWorld 的时间；30 秒会在世界创建前
 	// 就把客户端关掉，因此这里放宽到 10 分钟，总运行上限放宽到 20 分钟。
 	private static final int IDLE_STOP_TICKS = 12000;
 	private static final int TOTAL_STOP_TICKS = 24000;
 	private static final int CLIENT_STOP_TICK = EQUIPMENT_CHECK ? 400
-			: BETRAYAL_CHECK ? 180 : LEADER_CHECK ? 240 : 1520;
+			: BETRAYAL_CHECK ? 180 : LEADER_CHECK ? 240 : MAGIC_CHECK ? 140 : 1520;
 	private static final List<String> FAILURES = new ArrayList<>();
 	private static int serverTick;
 	private static int clientTick;
@@ -98,6 +99,15 @@ public final class ThreatDevCheck {
 		ServerPlayer player = event.getServer().getPlayerList().getPlayers().get(0);
 		serverTick++;
 		try {
+			if (MAGIC_CHECK) {
+				switch (serverTick) {
+					case 20 -> prepareWorld(player);
+					case 60 -> FAILURES.addAll(MagicResistanceDevCheck.run(player));
+					default -> {
+					}
+				}
+				return;
+			}
 			if (EQUIPMENT_CHECK) {
 				switch (serverTick) {
 					case 20 -> {
@@ -155,6 +165,7 @@ public final class ThreatDevCheck {
 				case 280 -> checkRandomness(player);
 				case 285 -> checkRegionMultipliers(player);
 				case 292 -> FAILURES.addAll(BossHardcodedDamageDevCheck.run(player));
+				case 293 -> FAILURES.addAll(MagicResistanceDevCheck.run(player));
 				case 294 -> FAILURES.addAll(ArmorPenetrationDevCheck.start(player));
 				case 296 -> FAILURES.addAll(KubeJSCompatDevCheck.run(player));
 				case 298 -> FAILURES.addAll(ClosureRuleDevCheck.run(player));

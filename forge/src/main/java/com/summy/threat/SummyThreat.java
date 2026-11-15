@@ -8,6 +8,7 @@ import com.summy.threat.armor.EchoArmorEffects;
 import com.summy.threat.armor.PlayerEximusShield;
 import com.summy.threat.api.ThreatConfigApi;
 import com.summy.threat.combat.BossHardcodedDamageScaling;
+import com.summy.threat.combat.MagicResistance;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.eximus.EximusSpawner;
 import com.summy.threat.eximus.EximusShield;
@@ -75,6 +76,7 @@ public class SummyThreat {
 		// 游戏事件总线：数值化 / 计量 / 命令 / 玩家护甲重填 / 开服时判定档位
 		MinecraftForge.EVENT_BUS.register(SummyThreat.class);
 		MinecraftForge.EVENT_BUS.register(MonsterScaler.class);
+		MinecraftForge.EVENT_BUS.register(MagicResistance.class);
 		MinecraftForge.EVENT_BUS.register(AbilityEffects.class);
 		MinecraftForge.EVENT_BUS.register(EchoArmorEffects.class);
 		MinecraftForge.EVENT_BUS.register(PlayerEximusShield.class);

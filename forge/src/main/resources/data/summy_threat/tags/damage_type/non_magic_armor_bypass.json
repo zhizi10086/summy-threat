@@ -1,0 +1,15 @@
+{
+  "values": [
+    "minecraft:on_fire",
+    "minecraft:in_wall",
+    "minecraft:cramming",
+    "minecraft:drown",
+    "minecraft:fly_into_wall",
+    "minecraft:fall",
+    "minecraft:freeze",
+    "minecraft:stalagmite",
+    "minecraft:starve",
+    "minecraft:outside_border",
+    "minecraft:generic"
+  ]
+}
