@@ -443,29 +443,31 @@ def archiveModuleDirectory = project.minecraft_version.startsWith('1.21.1')
 
 // 构建结束后把 reobf 后的 jar 复制到 JAR/<Minecraft版本>/<加载器目录>
 tasks.named('build') {
-    doLast {
-        def releaseDir = resolveJarArchive(archiveModuleDirectory)
-        releaseDir.mkdirs()
-        // 开启 JarJar 后，真正可发布的产物是 reobfJarJar（含嵌套的 MixinExtras）
-        def reobfTask = tasks.findByName('reobfJarJar') ?: tasks.named('reobfJar').get()
-        def jarFile = null
-        if (reobfTask.hasProperty('output')) {
-            def output = reobfTask.property('output')
-            if (output instanceof File) {
-                jarFile = output
+    if (!project.hasProperty('internalPreview')) {
+        doLast {
+            def releaseDir = resolveJarArchive(archiveModuleDirectory)
+            releaseDir.mkdirs()
+            // 开启 JarJar 后，真正可发布的产物是 reobfJarJar（含嵌套的 MixinExtras）
+            def reobfTask = tasks.findByName('reobfJarJar') ?: tasks.named('reobfJar').get()
+            def jarFile = null
+            if (reobfTask.hasProperty('output')) {
+                def output = reobfTask.property('output')
+                if (output instanceof File) {
+                    jarFile = output
+                }
             }
-        }
-        if (jarFile == null) {
-            jarFile = (file('build/reobfJarJar').listFiles() ?: file('build/reobfJar').listFiles())
-                    ?.find { it.name.endsWith('.jar') }
-        }
-        if (jarFile == null || !jarFile.exists()) {
-            throw new GradleException('找不到 reobfJar 的输出 jar')
-        }
-        copy {
-            from jarFile
-            rename { "${project.archives_base_name}-${project.mod_version}.jar" }
-            into releaseDir
+            if (jarFile == null) {
+                jarFile = (file('build/reobfJarJar').listFiles() ?: file('build/reobfJar').listFiles())
+                        ?.find { it.name.endsWith('.jar') }
+            }
+            if (jarFile == null || !jarFile.exists()) {
+                throw new GradleException('找不到 reobfJar 的输出 jar')
+            }
+            copy {
+                from jarFile
+                rename { "${project.archives_base_name}-${project.mod_version}.jar" }
+                into releaseDir
+            }
         }
     }
 }
