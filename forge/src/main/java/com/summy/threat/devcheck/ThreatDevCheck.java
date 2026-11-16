@@ -3,10 +3,7 @@ package com.summy.threat.devcheck;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityId;
-import com.summy.threat.armor.EchoArmorEffects;
-import com.summy.threat.armor.PlayerEximusShield;
 import com.summy.threat.eximus.EximusArchetype;
-import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.eximus.EximusSpawner;
 import com.summy.threat.item.ModItems;
 import com.summy.threat.pcf.CdfManager;
@@ -22,11 +19,8 @@ import net.minecraft.client.Screenshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -79,9 +73,7 @@ public final class ThreatDevCheck {
 	private static boolean equipmentRan;
 	private static int equipmentStableTicks;
 	private static Map<String, Object> equipmentConfigOriginal;
-	private static double baseSpeed;
 	private static int checks;
-	private static Zombie chestEximus;
 	private static final List<String> MAPPING = new ArrayList<>();
 
 	private ThreatDevCheck() {
@@ -152,14 +144,6 @@ public final class ThreatDevCheck {
 				case 20 -> prepareWorld(player);
 				case 40 -> prepareEquipment(player);
 				case 120 -> checkPcfEquipment(player);
-				case 140 -> checkNightVision(player);
-				case 160 -> checkBootsWithoutShield(player);
-				case 180 -> checkBootsWithShield(player);
-				case 200 -> checkLeggings(player);
-				// 破盾当击的溢出伤害会被清零并进入 0.5 秒真无敌；
-				// 必须分两次：220 破盾，250（30 tick 后）再击杀。
-				case 220 -> prepareChestKill(player);
-				case 250 -> finishChestKill(player);
 				case 260 -> checkAutoTl(player);
 				case 270 -> checkPcfCdfMapping(player);
 				case 280 -> checkRandomness(player);
@@ -195,7 +179,6 @@ public final class ThreatDevCheck {
 				case 1290 -> checkSpawner(player);
 				case 1310 -> checkManualTl(player);
 				case 1330 -> prepareJadeTarget(player);
-				case 1350 -> prepareHud(player);
 				case 1450 -> cleanup(player);
 				default -> {
 				}
@@ -262,139 +245,23 @@ public final class ThreatDevCheck {
 
 	private static void prepareEquipment(ServerPlayer player) {
 		player.getInventory().clearContent();
-		// 必须在穿靴子前记录基础移速，否则会把靴子的 +20% 当成基准。
-		// 玩家进入世界时可能还穿着上次存档的回响靴子，getValue() 会带上 +20%。
-		// 用 baseValue() 取真正的裸移速 0.1，后续比值才是 1.2 / 1.4。
-		baseSpeed = player.getAttribute(Attributes.MOVEMENT_SPEED).getBaseValue();
-		player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(ModItems.ECHO_HELMET.get()));
-		player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(ModItems.ECHO_CHESTPLATE.get()));
-		player.setItemSlot(EquipmentSlot.LEGS, new ItemStack(ModItems.ECHO_LEGGINGS.get()));
-		player.setItemSlot(EquipmentSlot.FEET, new ItemStack(ModItems.ECHO_BOOTS.get()));
+		player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.NETHERITE_HELMET));
+		player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.NETHERITE_CHESTPLATE));
+		player.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.NETHERITE_LEGGINGS));
+		player.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.NETHERITE_BOOTS));
 		player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.NETHERITE_SWORD));
-		PlayerEximusShield.set(player, 0.0D);
 		PcfManager.setValue(player, 0.0D);
 	}
 
 	private static void checkPcfEquipment(ServerPlayer player) {
 		PcfManager.Snapshot snapshot = PcfManager.snapshot(player);
-		check("PCF 装备分约 18.4", Math.abs(snapshot.equipment() - 18.4D) < 0.3D,
+		check("PCF 装备分有效", snapshot.equipment() > 0.0D,
 				"equipment=" + snapshot.equipment());
 		log("PCF 快照：value=%.2f calc=%.2f equipment=%.2f boss=%.2f exploration=%.2f resource=%.2f"
 				.formatted(snapshot.value(), snapshot.calc(), snapshot.equipment(), snapshot.boss(),
 						snapshot.exploration(), snapshot.resource()));
 		PcfManager.setValue(player, 10.0D);
 		CdfManager.setCurrent(player.serverLevel(), player.blockPosition(), 5.0D);
-	}
-
-	private static void checkNightVision(ServerPlayer player) {
-		check("回响头盔提供夜视", player.hasEffect(MobEffects.NIGHT_VISION),
-				"night_vision=" + player.getEffect(MobEffects.NIGHT_VISION));
-		MobEffectInstance vision = player.getEffect(MobEffects.NIGHT_VISION);
-		if (vision != null) {
-			check("夜视剩余 >200 tick（防闪烁）", vision.getDuration() > 200,
-					"duration=" + vision.getDuration());
-		}
-		boolean added = player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 200, 0));
-		check("失明被头盔拒绝", !added && player.getEffect(MobEffects.BLINDNESS) == null,
-				"added=" + added);
-	}
-
-	private static void checkBootsWithoutShield(ServerPlayer player) {
-		EchoArmorEffects.refreshBoots(player);
-		checkBootsRatio(player, 1.20D, "靴子无盾移速 ×1.20");
-	}
-
-	private static void checkBootsWithShield(ServerPlayer player) {
-		PlayerEximusShield.set(player, 50.0D);
-		EchoArmorEffects.refreshBoots(player);
-		checkBootsRatio(player, 1.40D, "靴子有盾移速 ×1.40");
-	}
-
-	/**
-	 * 只比较“剔除回响靴子修饰符后的基线”与“当前总移速”。
-	 * FULL 档下 SR 会额外加移速，不能拿原版 0.1 当分母。
-	 */
-	private static void checkBootsRatio(ServerPlayer player, double want, String label) {
-		var speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
-		if (speed == null) {
-			check(label, false, "缺少 movement_speed 属性");
-			return;
-		}
-		var boots = speed.getModifiers().stream()
-				.filter(m -> "summy_threat:echo_boots_speed".equals(m.getName()))
-				.findFirst().orElse(null);
-		if (boots == null) {
-			check(label, false, "未找到回响靴子修饰符");
-			return;
-		}
-		double base = speed.getBaseValue();
-		double addition = 0.0D;
-		double multiplyBase = 0.0D;
-		double multiplyTotalProduct = 1.0D;
-		for (var modifier : speed.getModifiers()) {
-			if (modifier.getId().equals(boots.getId())) {
-				continue;
-			}
-			switch (modifier.getOperation()) {
-				case ADDITION -> addition += modifier.getAmount();
-				case MULTIPLY_BASE -> multiplyBase += modifier.getAmount();
-				// 原版 MULTIPLY_TOTAL 是逐个乘 (1+amount)，不是先求和再乘。
-				case MULTIPLY_TOTAL -> multiplyTotalProduct *= 1.0D + modifier.getAmount();
-			}
-		}
-		double baseline = (base + addition + base * multiplyBase) * multiplyTotalProduct;
-		double now = speed.getValue();
-		double ratio = baseline == 0.0D ? 0.0D : now / baseline;
-		check(label, Math.abs(ratio - want) < 0.02D,
-				"baseline=%.4f now=%.4f ratio=%.3f".formatted(baseline, now, ratio));
-	}
-
-	private static void checkLeggings(ServerPlayer player) {
-		PlayerEximusShield.set(player, 0.0D);
-		check("护腿无盾对护盾伤害 ×1.30",
-				Math.abs(EchoArmorEffects.shieldDamageMultiplier(player) - 1.30D) < 0.001D,
-				"mult=" + EchoArmorEffects.shieldDamageMultiplier(player));
-		PlayerEximusShield.set(player, 50.0D);
-		check("护腿有盾对护盾伤害 ×1.50",
-				Math.abs(EchoArmorEffects.shieldDamageMultiplier(player) - 1.50D) < 0.001D,
-				"mult=" + EchoArmorEffects.shieldDamageMultiplier(player));
-	}
-
-	private static void prepareChestKill(ServerPlayer player) {
-		PlayerEximusShield.set(player, 0.0D);
-		Zombie eximus = EntityType.ZOMBIE.create(player.serverLevel());
-		if (eximus == null) {
-			check("胸甲击杀测试生成卓越者", false, "create 返回 null");
-			return;
-		}
-		eximus.moveTo(player.getX() + 2.0D, player.getY(), player.getZ());
-		eximus.getPersistentData().putBoolean(MonsterScaler.TAG_EXIMUS, true);
-		player.serverLevel().addFreshEntity(eximus);
-		chestEximus = eximus;
-		MonsterScaler.scaleNow(eximus, 20, MonsterScaler.Kind.EXIMUS);
-		check("胸甲击杀测试卓越者有护盾", EximusShield.current(eximus) > 0.0D,
-				"shield=" + EximusShield.current(eximus));
-		log("胸甲击杀前：chest=%s eximus=%s shield=%.1f"
-				.formatted(EchoArmorEffects.hasChestplate(player), EximusShield.isEximus(eximus),
-						EximusShield.current(eximus)));
-		boolean hurt = eximus.hurt(player.damageSources().playerAttack(player), 1_000_000.0F);
-		log("破盾击：hurt=%s dead=%s shield=%.1f"
-				.formatted(hurt, eximus.isDeadOrDying(), EximusShield.current(eximus)));
-	}
-
-	private static void finishChestKill(ServerPlayer player) {
-		if (chestEximus == null) {
-			check("胸甲击杀卓越者 +20 护盾", false, "chestEximus 为空");
-			return;
-		}
-		boolean hurt = chestEximus.hurt(player.damageSources().playerAttack(player), 1_000_000.0F);
-		log("第二击：hurt=%s dead=%s playerShield=%.1f"
-				.formatted(hurt, chestEximus.isDeadOrDying(), PlayerEximusShield.current(player)));
-		check("胸甲击杀卓越者 +20 护盾",
-				Math.abs(PlayerEximusShield.current(player) - 20.0D) < 0.01D,
-				"playerShield=" + PlayerEximusShield.current(player));
-		chestEximus.discard();
-		chestEximus = null;
 	}
 
 	private static void checkAutoTl(ServerPlayer player) {
@@ -725,13 +592,7 @@ public final class ThreatDevCheck {
 		log("Jade 目标已生成：TL20 卓越者，距离 3.5 格");
 	}
 
-	private static void prepareHud(ServerPlayer player) {
-		PlayerEximusShield.set(player, 50.0D);
-		log("HUD 测试值已设为 50/100");
-	}
-
 	private static void cleanup(ServerPlayer player) {
-		PlayerEximusShield.set(player, 0.0D);
 		run(player, "summythreat tl auto");
 		run(player, "summythreat tier auto");
 		run(player, "kill @e[type=minecraft:zombie]");

@@ -8,11 +8,9 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
-/**
- * 本模组的最小网络层：只同步“玩家卓越护盾”当前值，供客户端青色 HUD 使用。
- */
+/** 本模组最小网络层：同步 KJS 展示元数据与装备客户端配置快照。 */
 public final class ModNetwork {
-	private static final String PROTOCOL = "2";
+	private static final String PROTOCOL = "3";
 	public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
 			.named(new ResourceLocation(SummyThreat.MOD_ID, "main"))
 			.networkProtocolVersion(() -> PROTOCOL)
@@ -25,22 +23,11 @@ public final class ModNetwork {
 
 	public static void register() {
 		int id = 0;
-		CHANNEL.messageBuilder(ShieldSyncPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
-				.encoder(ShieldSyncPacket::encode)
-				.decoder(ShieldSyncPacket::decode)
-				.consumerMainThread(ShieldSyncPacket::handle)
-				.add();
 		CHANNEL.messageBuilder(RegistrySyncPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
 				.encoder(RegistrySyncPacket::encode)
 				.decoder(RegistrySyncPacket::decode)
 				.consumerMainThread(RegistrySyncPacket::handle)
 				.add();
-	}
-
-	public static void sendShield(ServerPlayer player, double value) {
-		if (player != null) {
-			CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ShieldSyncPacket(value));
-		}
 	}
 
 	public static void sendRegistry(ServerPlayer player) {

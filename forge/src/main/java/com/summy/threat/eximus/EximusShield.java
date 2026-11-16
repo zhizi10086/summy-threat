@@ -3,7 +3,6 @@ package com.summy.threat.eximus;
 import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.ability.AbilityEffects;
-import com.summy.threat.armor.EchoArmorEffects;
 import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -257,12 +256,7 @@ public final class EximusShield {
 		if (current <= 0.0D || amount <= 0.0F) {
 			return;
 		}
-		double shieldDamage = amount;
-		if (event.getSource().getEntity() instanceof Player player) {
-			// 护腿只加速护盾消耗；溢出生命的伤害仍按原始 amount 计算。
-			shieldDamage *= EchoArmorEffects.shieldDamageMultiplier(player);
-		}
-		double absorbed = Math.min(current, shieldDamage);
+		double absorbed = Math.min(current, amount);
 		double left = current - absorbed;
 		double healthDamage = Math.max(0.0D, amount - Math.min(current, amount));
 		victim.getPersistentData().putDouble(TAG_SHIELD, left);

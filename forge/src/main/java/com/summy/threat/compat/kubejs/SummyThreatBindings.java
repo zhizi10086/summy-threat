@@ -89,14 +89,6 @@ public final class SummyThreatBindings {
 		return SummyThreatApi.setCdf(level, pos, value);
 	}
 
-	public static double playerShield(ServerPlayer player) {
-		return SummyThreatApi.playerShield(player);
-	}
-
-	public static double setPlayerShield(ServerPlayer player, double value) {
-		return SummyThreatApi.setPlayerShield(player, value);
-	}
-
 	public static double eximusShield(LivingEntity entity) {
 		return SummyThreatApi.eximusShield(entity);
 	}

@@ -2,7 +2,6 @@ package com.summy.threat.api;
 
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityId;
-import com.summy.threat.armor.PlayerEximusShield;
 import com.summy.threat.combat.ArmorPenetration;
 import com.summy.threat.combat.ArmorShred;
 import com.summy.threat.eximus.EximusArchetype;
@@ -154,15 +153,6 @@ public final class SummyThreatApi {
 		}
 		CdfManager.setCurrent(level, pos, value);
 		return value;
-	}
-
-	public static double playerShield(ServerPlayer player) {
-		return PlayerEximusShield.current(player);
-	}
-
-	public static double setPlayerShield(ServerPlayer player, double value) {
-		PlayerEximusShield.set(player, value);
-		return PlayerEximusShield.current(player);
 	}
 
 	public static double eximusShield(LivingEntity entity) {

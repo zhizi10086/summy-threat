@@ -4,8 +4,6 @@ import com.summy.threat.armor.PlayerArmorRefill;
 import com.summy.threat.attribute.AttributeCaps;
 import com.summy.threat.command.SummyThreatCommand;
 import com.summy.threat.ability.AbilityEffects;
-import com.summy.threat.armor.EchoArmorEffects;
-import com.summy.threat.armor.PlayerEximusShield;
 import com.summy.threat.api.ThreatConfigApi;
 import com.summy.threat.combat.BossHardcodedDamageScaling;
 import com.summy.threat.combat.MagicResistance;
@@ -62,7 +60,7 @@ public class SummyThreat {
 		context.registerConfig(ModConfig.Type.SERVER, Config.SPEC);
 
 		IEventBus modBus = context.getModEventBus();
-		// 物品注册（回响下界合金四件 + 卓越者精华）
+		// B15 材料注册。
 		ModItems.ITEMS.register(modBus);
 		// 创造页注入：BuildCreativeModeTabContentsEvent 是 **模组总线** 事件（IModBusEvent），
 		// 挂在 Forge 总线上不会被调用（第一版就踩了这个坑，物品注册成功但创造页里找不到）。
@@ -78,8 +76,6 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(MonsterScaler.class);
 		MinecraftForge.EVENT_BUS.register(MagicResistance.class);
 		MinecraftForge.EVENT_BUS.register(AbilityEffects.class);
-		MinecraftForge.EVENT_BUS.register(EchoArmorEffects.class);
-		MinecraftForge.EVENT_BUS.register(PlayerEximusShield.class);
 		MinecraftForge.EVENT_BUS.register(EximusShield.class);
 		MinecraftForge.EVENT_BUS.register(EximusArchetypeEffects.class);
 		MinecraftForge.EVENT_BUS.register(EximusSpawner.class);
@@ -132,22 +128,15 @@ public class SummyThreat {
 	@SubscribeEvent
 	public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
 		if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+			// B15 已删除玩家卓越护盾；旧存档只清理残留键，不读取或迁移数值。
+			player.getPersistentData().remove("summy_threat:player_eximus_shield");
 			com.summy.threat.network.ModNetwork.sendRegistry(player);
 		}
 	}
 
-	/** 把本轮新物品放进对应原版创造页（护甲 → 战斗，精华 → 材料），方便测试期取用 */
+	/** 把 B15 材料放入原版材料创造页。 */
 	public static void onBuildCreativeTabContents(BuildCreativeModeTabContentsEvent event) {
-		if (event.getTabKey() == CreativeModeTabs.COMBAT) {
-			event.accept(ModItems.ECHO_HELMET.get());
-			event.accept(ModItems.ECHO_CHESTPLATE.get());
-			event.accept(ModItems.ECHO_LEGGINGS.get());
-			event.accept(ModItems.ECHO_BOOTS.get());
-			if (!loggedCombatTab) {
-				loggedCombatTab = true;
-				LOGGER.info("[Summy Threat] 已向原版「战斗」创造页注入 4 件回响下界合金护甲");
-			}
-		} else if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
+		if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
 			event.accept(ModItems.EXIMUS_ESSENCE.get());
 			event.accept(ModItems.ABYSSAL_STAR_PRISM.get());
 			if (!loggedIngredientsTab) {
@@ -158,6 +147,5 @@ public class SummyThreat {
 	}
 
 	/** 创造页注入只打一次日志（避免每次打开创造界面都刷屏） */
-	private static boolean loggedCombatTab;
 	private static boolean loggedIngredientsTab;
 }

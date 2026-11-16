@@ -253,7 +253,7 @@ public final class AttackTestHarness {
 		player.teleportTo(player.serverLevel(), 300.0D, 100.0D, 0.0D, 0.0F, 0.0F);
 		// 天使线需要七罪全部赎罪，否则对应饰品无法使用。
 		run(player, "summyreliquary sin all redeem");
-		equipEchoArmor(player);
+		equipNetheriteArmor(player);
 		// 玩家名替代 @s：单人集成服里 /summyreliquary 的 @s 解析不稳定。
 		run(player, "effect give " + name + " summy_enchantment:strength 999999 1 true");
 		// angel 是 PLAYER_ONLY 命令，不接受玩家名参数；由当前玩家自己执行。
@@ -292,7 +292,7 @@ public final class AttackTestHarness {
 		clearPlayer(player);
 		// performReset 会传送到重生点；回到测试平台。
 		player.teleportTo(player.serverLevel(), 300.0D, 100.0D, 0.0D, 0.0F, 0.0F);
-		equipEchoArmor(player);
+		equipNetheriteArmor(player);
 		run(player, "effect give " + name + " summy_enchantment:strength 999999 1 true");
 		run(player, "summyreliquary sin all on");
 		run(player, "summyreliquary demon grant " + name);
@@ -437,17 +437,17 @@ public final class AttackTestHarness {
 		return ForgeRegistries.ITEMS.containsKey(new ResourceLocation("summy-reliquary", "holy_light"));
 	}
 
-	private static void equipEchoArmor(ServerPlayer player) {
-		player.setItemSlot(EquipmentSlot.HEAD, enchanted(ModItems.ECHO_HELMET.get(),
+	private static void equipNetheriteArmor(ServerPlayer player) {
+		player.setItemSlot(EquipmentSlot.HEAD, enchanted(net.minecraft.world.item.Items.NETHERITE_HELMET,
 				"summy_enchantment:health_boost", "5"));
-		player.setItemSlot(EquipmentSlot.CHEST, enchanted(ModItems.ECHO_CHESTPLATE.get(),
+		player.setItemSlot(EquipmentSlot.CHEST, enchanted(net.minecraft.world.item.Items.NETHERITE_CHESTPLATE,
 				"summy_enchantment:health_boost", "5",
 				"summy_enchantment:dead_mans_heart", "1",
 				"summy_enchantment:calamity", "1",
 				"summy_enchantment:deaths_blessing", "1"));
-		player.setItemSlot(EquipmentSlot.LEGS, enchanted(ModItems.ECHO_LEGGINGS.get(),
+		player.setItemSlot(EquipmentSlot.LEGS, enchanted(net.minecraft.world.item.Items.NETHERITE_LEGGINGS,
 				"summy_enchantment:health_boost", "5"));
-		player.setItemSlot(EquipmentSlot.FEET, enchanted(ModItems.ECHO_BOOTS.get(),
+		player.setItemSlot(EquipmentSlot.FEET, enchanted(net.minecraft.world.item.Items.NETHERITE_BOOTS,
 				"summy_enchantment:health_boost", "5"));
 	}
 

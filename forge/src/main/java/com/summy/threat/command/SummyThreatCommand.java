@@ -9,7 +9,6 @@ import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.summy.threat.Config;
 import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityId;
-import com.summy.threat.armor.PlayerEximusShield;
 import com.summy.threat.eximus.EximusArchetype;
 import com.summy.threat.leader.LeaderAbilityId;
 import com.summy.threat.leader.LeaderAbilityState;
@@ -62,7 +61,6 @@ import java.util.List;
  *         flame / frost / poison / storm / shock / guardian / vampire / magnet，
  *         {@code clear} 清空原型，{@code none} 抑制 TL 能力。</li>
  *     <li>{@code stats [玩家]}：查看计量结果（有效 DPS / 击杀耗时 / 无视护甲占比 / 承伤）。</li>
- *     <li>{@code shield [0-100]}：查看或设置自己的玩家卓越护盾（调试用）。</li>
  * </ul>
  */
 public final class SummyThreatCommand {
@@ -186,10 +184,6 @@ public final class SummyThreatCommand {
 												.then(Commands.argument("second", StringArgumentType.word())
 														.executes(ctx -> setLeaderAbility(ctx,
 																StringArgumentType.getString(ctx, "second"))))))))
-				.then(Commands.literal("shield")
-						.executes(SummyThreatCommand::showShield)
-						.then(Commands.argument("value", IntegerArgumentType.integer(0, 100))
-								.executes(ctx -> setShield(ctx, IntegerArgumentType.getInteger(ctx, "value")))))
 				.then(Commands.literal("armor")
 						.executes(ctx -> showArmor(ctx, ctx.getSource().getPlayer()))
 						.then(Commands.argument("player", EntityArgument.player())
@@ -662,31 +656,6 @@ public final class SummyThreatCommand {
 			throw ERROR_LEADER.create();
 		}
 		return living;
-	}
-
-	private static int showShield(CommandContext<CommandSourceStack> ctx) {
-		ServerPlayer player = ctx.getSource().getPlayer();
-		if (player == null) {
-			ctx.getSource().sendFailure(Component.literal("该命令必须由玩家执行"));
-			return 0;
-		}
-		ctx.getSource().sendSuccess(() -> Component.literal(
-				"[Summy Threat] 玩家卓越护盾 = %.0f / %.0f".formatted(
-						PlayerEximusShield.current(player), PlayerEximusShield.MAX_SHIELD)), false);
-		return 1;
-	}
-
-	private static int setShield(CommandContext<CommandSourceStack> ctx, int value) {
-		ServerPlayer player = ctx.getSource().getPlayer();
-		if (player == null) {
-			ctx.getSource().sendFailure(Component.literal("该命令必须由玩家执行"));
-			return 0;
-		}
-		PlayerEximusShield.set(player, value);
-		ctx.getSource().sendSuccess(() -> Component.literal(
-				"[Summy Threat] 玩家卓越护盾已设为 %.0f / %.0f".formatted(
-						PlayerEximusShield.current(player), PlayerEximusShield.MAX_SHIELD)), true);
-		return 1;
 	}
 
 	private static int showStats(CommandContext<CommandSourceStack> ctx, ServerPlayer player) {
