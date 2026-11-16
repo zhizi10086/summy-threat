@@ -12,4 +12,5 @@ run/
 saves/
 world*/
 *.log
+logs/
 _internal/
