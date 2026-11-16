@@ -6,6 +6,7 @@
   "refmap": "summy-threat.refmap.json",
   "mixins": [
     "AttributeInstanceMixin",
+    "ItemStackMixin",
     "LivingEntityMixin",
     "PathNavigationAccessor",
     "RangedAttributeAccessor"
