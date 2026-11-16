@@ -33,6 +33,24 @@ public final class StarPrismRoller {
 				armor, melee, ranged));
 	}
 
+	public static boolean hasCandidates(PrismRollMode mode, PrismRollSettings settings,
+			WeightProvider weights) {
+		for (EquipmentCategory category : EquipmentCategory.values()) {
+			boolean found = false;
+			for (StarPrismTier tier : StarPrismTier.values()) {
+				if (settings.weight(mode, tier) > 0.0D
+						&& !candidates(category, tier, weights).isEmpty()) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	private static String choose(EquipmentCategory category, PrismRollMode mode,
 			PrismRollSettings settings, WeightProvider weights, Random random) {
 		List<StarPrismTier> tiers = new ArrayList<>();

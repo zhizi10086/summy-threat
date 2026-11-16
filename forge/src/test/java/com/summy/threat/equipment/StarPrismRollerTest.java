@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StarPrismRollerTest {
@@ -57,5 +58,15 @@ class StarPrismRollerTest {
 				settings, onlyT3Armor, new Random(3L));
 
 		assertTrue(result.isEmpty());
+	}
+
+	@Test
+	void candidatePrecheckDoesNotConsumeRandomness() {
+		PrismRollSettings settings = new PrismRollSettings(1.0D, 1.0D, 1.0D,
+				1.0D, 1.0D, 1.0D);
+		assertTrue(StarPrismRoller.hasCandidates(PrismRollMode.STANDARD,
+				settings, affix -> 1.0D));
+		assertFalse(StarPrismRoller.hasCandidates(PrismRollMode.ADVANCED,
+				settings, affix -> 0.0D));
 	}
 }
