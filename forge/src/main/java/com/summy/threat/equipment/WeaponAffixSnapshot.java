@@ -29,7 +29,11 @@ public record WeaponAffixSnapshot(int level, List<String> affixes) {
 		int level = EximusEquipmentData.upgradeLevel(equipment);
 		List<String> affixes = new ArrayList<>(2);
 		for (int slot = 0; slot < Math.min(level, EximusEquipmentData.SLOT_COUNT); slot++) {
-			StarPrismData.read(EximusEquipmentData.prismTag(equipment, slot)).ifPresent(data -> {
+			CompoundTag prism = EximusEquipmentData.prismTag(equipment, slot);
+			if (prism.contains("tag", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+				prism = prism.getCompound("tag");
+			}
+			StarPrismData.read(prism).ifPresent(data -> {
 				if (!data.revealed() || data.pendingRefresh() != null) {
 					return;
 				}

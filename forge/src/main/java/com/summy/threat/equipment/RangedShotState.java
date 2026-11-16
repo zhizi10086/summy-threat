@@ -10,11 +10,17 @@ public final class RangedShotState {
 	private final boolean siderealAim;
 	private final boolean terminalStarShot;
 	private final boolean markCapable;
+	private final String weaponKey;
 	private final Set<String> claimed = new HashSet<>();
 	private long lastActivity;
 
 	public RangedShotState(UUID shotId, boolean siderealAim, boolean terminalStarShot,
 			boolean markCapable, long now) {
+		this(shotId, siderealAim, terminalStarShot, markCapable, now, "");
+	}
+
+	public RangedShotState(UUID shotId, boolean siderealAim, boolean terminalStarShot,
+			boolean markCapable, long now, String weaponKey) {
 		if (shotId == null) {
 			throw new IllegalArgumentException("shotId");
 		}
@@ -22,6 +28,7 @@ public final class RangedShotState {
 		this.siderealAim = siderealAim;
 		this.terminalStarShot = terminalStarShot;
 		this.markCapable = markCapable;
+		this.weaponKey = weaponKey == null ? "" : weaponKey;
 		this.lastActivity = now;
 	}
 
@@ -39,6 +46,10 @@ public final class RangedShotState {
 
 	public boolean markCapable() {
 		return markCapable;
+	}
+
+	public String weaponKey() {
+		return weaponKey;
 	}
 
 	public boolean claim(String effectId) {

@@ -74,11 +74,6 @@ public final class EquipmentTooltipHandler {
 							.append(affixValues(affix));
 				}
 			}
-			if (category != EquipmentCategory.ARMOR) {
-				line.append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY))
-						.append(translation("summy_threat.tooltip.weapon_locked",
-								ChatFormatting.DARK_GRAY));
-			}
 			tooltip.add(line);
 		}
 		if (!Screen.hasShiftDown()) {
@@ -130,10 +125,8 @@ public final class EquipmentTooltipHandler {
 			tooltip.add(Component.translatable("summy_threat.tooltip.active_category",
 							Component.translatable("summy_threat.tooltip.category." + category.id()))
 					.withStyle(ChatFormatting.DARK_GRAY));
-			if (category != EquipmentCategory.ARMOR) {
-				tooltip.add(translation("summy_threat.tooltip.weapon_locked",
-						ChatFormatting.DARK_GRAY));
-			}
+			tooltip.add(translation("summy_threat.tooltip.disassemble_all",
+					ChatFormatting.DARK_GRAY));
 		}
 		if (!Screen.hasShiftDown()) {
 			tooltip.add(translation("summy_threat.tooltip.shift_values", ChatFormatting.DARK_GRAY));

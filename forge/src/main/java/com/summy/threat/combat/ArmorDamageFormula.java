@@ -1,6 +1,8 @@
 package com.summy.threat.combat;
 
 import com.summy.threat.Config;
+import com.summy.threat.equipment.ArmorReductionContext;
+import com.summy.threat.equipment.WeaponDamageMath;
 import com.summy.threat.scaling.ScalingState;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
@@ -103,7 +105,12 @@ public final class ArmorDamageFormula {
 		double toughness = attributeValue(entity, Attributes.ARMOR_TOUGHNESS);
 		double penetrated = armor * (1.0D - ArmorPenetration.percentFor(entity, source));
 		armor = Math.max(0.0D, penetrated);
-		return amount * (1.0D - reductionFor(entity, armor, toughness));
+		double reduction = reductionFor(entity, armor, toughness);
+		if (source != null) {
+			reduction = WeaponDamageMath.reduceArmorReduction(reduction,
+					ArmorReductionContext.consume(entity, source));
+		}
+		return amount * (1.0D - reduction);
 	}
 
 	/** 取属性原始 double 值；实体没有该属性时按 0（模组生物可能不带这两个属性） */

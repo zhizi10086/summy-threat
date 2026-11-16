@@ -8,6 +8,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingEquipmentChangeEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -35,9 +36,26 @@ public final class WeaponRuntimeService {
 		}
 		WeaponRuntimeState state = state(player);
 		ItemStack mainhand = player.getMainHandItem();
-		boolean melee = EquipmentTypeResolver.category(mainhand) == EquipmentCategory.MELEE;
+		EquipmentCategory category = EquipmentTypeResolver.category(mainhand);
+		boolean melee = category == EquipmentCategory.MELEE;
+		boolean ranged = category == EquipmentCategory.RANGED;
 		state.changeMainhand(melee ? weaponKey(mainhand) : "");
+		state.changeRangedMainhand(ranged ? weaponKey(mainhand) : "");
 		WeaponPlayerAttributes.refresh(player, state);
+	}
+
+	@SubscribeEvent
+	public static void onEquipmentChange(LivingEquipmentChangeEvent event) {
+		if (event.getSlot().getType() == net.minecraft.world.entity.EquipmentSlot.Type.HAND
+				&& event.getEntity() instanceof ServerPlayer player) {
+			WeaponRuntimeState state = state(player);
+			EquipmentCategory category = EquipmentTypeResolver.category(player.getMainHandItem());
+			state.changeMainhand(category == EquipmentCategory.MELEE
+					? weaponKey(player.getMainHandItem()) : "");
+			state.changeRangedMainhand(category == EquipmentCategory.RANGED
+					? weaponKey(player.getMainHandItem()) : "");
+			WeaponPlayerAttributes.refresh(player, state);
+		}
 	}
 
 	@SubscribeEvent
@@ -64,6 +82,12 @@ public final class WeaponRuntimeService {
 	@SubscribeEvent
 	public static void onConfigChanged(ThreatConfigChangedEvent event) {
 		STATES.clear();
+		var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+		if (server != null) {
+			for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+				WeaponPlayerAttributes.clear(player);
+			}
+		}
 	}
 
 	@SubscribeEvent
@@ -91,8 +115,20 @@ public final class WeaponRuntimeService {
 		}
 		double percent = StarPrismConfig.doubleValue(
 				"melee.abyssal_pursuit.damage_per_stack_percent");
-		return 1.0D + state(player).pursuitMultiplier(target.getUUID(), weaponKey,
+		return state(player).pursuitMultiplier(target.getUUID(), weaponKey,
 				now(player), StarPrismConfig.intValue("melee.abyssal_pursuit.reset_ticks"),
+				percent);
+	}
+
+	public static double rangedPursuitMultiplier(ServerPlayer player, LivingEntity target,
+			String weaponKey) {
+		if (!enabled() || player == null || target == null) {
+			return 0.0D;
+		}
+		double percent = StarPrismConfig.doubleValue(
+				"ranged.abyssal_hunt_arrow.damage_per_stack_percent");
+		return state(player).pursuitMultiplier(target.getUUID(), weaponKey,
+				now(player), StarPrismConfig.intValue("ranged.abyssal_hunt_arrow.reset_ticks"),
 				percent);
 	}
 
@@ -104,6 +140,16 @@ public final class WeaponRuntimeService {
 		return state(player).pursuitHit(target.getUUID(), weaponKey, now(player),
 				StarPrismConfig.intValue("melee.abyssal_pursuit.max_stacks"),
 				StarPrismConfig.intValue("melee.abyssal_pursuit.reset_ticks"));
+	}
+
+	public static int addRangedPursuitStack(ServerPlayer player, LivingEntity target,
+			String weaponKey) {
+		if (!enabled() || player == null || target == null) {
+			return 0;
+		}
+		return state(player).pursuitHit(target.getUUID(), weaponKey, now(player),
+				StarPrismConfig.intValue("ranged.abyssal_hunt_arrow.max_stacks"),
+				StarPrismConfig.intValue("ranged.abyssal_hunt_arrow.reset_ticks"));
 	}
 
 	public static boolean advanceStarfire(ServerPlayer player) {
@@ -128,12 +174,26 @@ public final class WeaponRuntimeService {
 				+ stack.getDamageValue() + "|" + Objects.hashCode(stack.getTag());
 	}
 
+	public static void syncMainhand(ServerPlayer player, ItemStack stack) {
+		if (player == null) {
+			return;
+		}
+		state(player).changeMainhand(EquipmentTypeResolver.category(stack)
+				== EquipmentCategory.MELEE ? weaponKey(stack) : "");
+		state(player).changeRangedMainhand(EquipmentTypeResolver.category(stack)
+				== EquipmentCategory.RANGED ? weaponKey(stack) : "");
+	}
+
 	public static void clear(ServerPlayer player) {
 		if (player == null) {
 			return;
 		}
 		STATES.remove(player.getUUID());
 		WeaponPlayerAttributes.clear(player);
+	}
+
+	public static boolean enabled() {
+		return WeaponRuntimeService.enabledInternal();
 	}
 
 	private static WeaponRuntimeState state(ServerPlayer player) {
@@ -144,7 +204,7 @@ public final class WeaponRuntimeService {
 		return player.server.overworld().getGameTime();
 	}
 
-	private static boolean enabled() {
+	private static boolean enabledInternal() {
 		return Config.SPEC.isLoaded() && Config.EXIMUS_EQUIPMENT_ENABLED.get()
 				&& Config.STAR_PRISM_ENABLED.get();
 	}

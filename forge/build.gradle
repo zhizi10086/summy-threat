@@ -78,7 +78,7 @@ minecraft {
             // 只有显式加 -Pdevcheck 时才打开客户端自检；测试脚本会自动停止客户端。
             if (project.hasProperty('devcheck') || project.hasProperty('betrayalcheck')
                     || project.hasProperty('leadercheck') || project.hasProperty('equipmentcheck')
-                    || project.hasProperty('magiccheck')) {
+                    || project.hasProperty('magiccheck') || project.hasProperty('weaponcheck')) {
                 property 'summy_threat.devcheck', 'true'
                 // 允许 SR 的 dev-only 联调事务入口在真实玩家环境中执行。
                 property 'summy.devcheck', 'true'
@@ -103,6 +103,9 @@ minecraft {
             }
             if (project.hasProperty('magiccheck')) {
                 property 'summy_threat.magiccheck', 'true'
+            }
+            if (project.hasProperty('weaponcheck')) {
+                property 'summy_threat.weaponcheck', 'true'
             }
             // A11 玩家攻击测试环境：只准备木桩与装备，不自动退出。
             if (project.hasProperty('attacktest') || project.hasProperty('attacktest.stats')
@@ -143,13 +146,17 @@ minecraft {
             property 'forge.logging.console.level', 'debug'
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
-            if (project.hasProperty('devcheck') || project.hasProperty('equipmentcheck')) {
+            if (project.hasProperty('devcheck') || project.hasProperty('equipmentcheck')
+                    || project.hasProperty('weaponcheck')) {
                 property 'summy_threat.devcheck', 'true'
                 // SR 的测试事务入口同时要求公共 devcheck 开关。
                 property 'summy.devcheck', 'true'
             }
             if (project.hasProperty('equipmentcheck')) {
                 property 'summy_threat.equipmentcheck', 'true'
+            }
+            if (project.hasProperty('weaponcheck')) {
+                property 'summy_threat.weaponcheck', 'true'
             }
         }
     }
@@ -395,7 +402,7 @@ jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     if (!project.hasProperty('devcheck') && !project.hasProperty('stormcheck')
             && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')
-            && !project.hasProperty('leadercheck')) {
+            && !project.hasProperty('leadercheck') && !project.hasProperty('weaponcheck')) {
         exclude 'com/summy/threat/devcheck/**'
     }
     manifest {
@@ -419,7 +426,7 @@ jar {
 tasks.named('jarJar') {
     if (!project.hasProperty('devcheck') && !project.hasProperty('stormcheck')
             && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')
-            && !project.hasProperty('leadercheck')) {
+            && !project.hasProperty('leadercheck') && !project.hasProperty('weaponcheck')) {
         exclude 'com/summy/threat/devcheck/**'
     }
 }

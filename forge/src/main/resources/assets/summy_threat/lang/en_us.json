@@ -254,7 +254,7 @@
   "summy_threat.tooltip.category.armor": "Armor",
   "summy_threat.tooltip.category.melee": "Melee",
   "summy_threat.tooltip.category.ranged": "Ranged",
-  "summy_threat.tooltip.weapon_locked": "Weapon function is not yet enabled",
+  "summy_threat.tooltip.disassemble_all": "Synchronized disassembly of all embedded prisms",
   "summy_threat.tooltip.affix.invalid": "Invalid affix",
   "summy_threat.tooltip.affix.unavailable": "No active affix for this category",
   "summy_threat.tooltip.affix.no_values": "No available value",

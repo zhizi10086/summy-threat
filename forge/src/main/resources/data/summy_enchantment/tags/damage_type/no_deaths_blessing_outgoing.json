@@ -1,0 +1,20 @@
+{
+  "replace": false,
+  "values": [
+    { "id": "summy-reliquary:holy_light", "required": false },
+    { "id": "summy-reliquary:revelation_light", "required": false },
+    { "id": "summy-reliquary:godhead_aura", "required": false },
+    { "id": "summy-reliquary:holy_light_burst", "required": false },
+    { "id": "summy-reliquary:hellfire", "required": false },
+    { "id": "summy-reliquary:demon_flame", "required": false },
+    { "id": "summy-reliquary:pact_shatter", "required": false },
+    { "id": "summy-reliquary:abyss_aura", "required": false },
+    { "id": "summy-reliquary:golden_razor", "required": false },
+    { "id": "summy-reliquary:sacrifice", "required": false },
+    { "id": "summy-reliquary:sacrifice_self", "required": false },
+    { "id": "summy-reliquary-apocrypha:apoptosis_element", "required": false },
+    { "id": "summy-reliquary-apocrypha:holy_arrow", "required": false },
+    { "id": "summy-reliquary-apocrypha:new_testament_arrow", "required": false },
+    { "id": "summy_threat:star_prism_magic", "required": false }
+  ]
+}

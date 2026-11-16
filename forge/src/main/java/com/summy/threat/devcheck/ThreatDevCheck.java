@@ -60,12 +60,13 @@ public final class ThreatDevCheck {
 	private static final boolean BETRAYAL_CHECK = Boolean.getBoolean("summy_threat.betrayalcheck");
 	private static final boolean LEADER_CHECK = Boolean.getBoolean("summy_threat.leadercheck");
 	private static final boolean EQUIPMENT_CHECK = Boolean.getBoolean("summy_threat.equipmentcheck");
+	private static final boolean WEAPON_CHECK = Boolean.getBoolean("summy_threat.weaponcheck");
 	private static final boolean MAGIC_CHECK = Boolean.getBoolean("summy_threat.magiccheck");
 	// 主菜单阶段要留给玩家创建/选择 DevCheckWorld 的时间；30 秒会在世界创建前
 	// 就把客户端关掉，因此这里放宽到 10 分钟，总运行上限放宽到 20 分钟。
 	private static final int IDLE_STOP_TICKS = 12000;
 	private static final int TOTAL_STOP_TICKS = 24000;
-	private static final int CLIENT_STOP_TICK = EQUIPMENT_CHECK ? 400
+	private static final int CLIENT_STOP_TICK = WEAPON_CHECK ? 400 : EQUIPMENT_CHECK ? 400
 			: BETRAYAL_CHECK ? 180 : LEADER_CHECK ? 240 : MAGIC_CHECK ? 140 : 1520;
 	private static final List<String> FAILURES = new ArrayList<>();
 	private static int serverTick;
@@ -127,6 +128,16 @@ public final class ThreatDevCheck {
 						&& serverTick > b15EquipmentStartTick) {
 					b15EquipmentTicked = true;
 					FAILURES.addAll(EquipmentSystemDevCheck.tick(player));
+				}
+				return;
+			}
+			if (WEAPON_CHECK) {
+				switch (serverTick) {
+					case 20 -> prepareWorld(player);
+					case 40 -> prepareEquipment(player);
+					case 80 -> WeaponSystemDevCheck.run(player);
+					default -> {
+					}
 				}
 				return;
 			}
@@ -226,6 +237,10 @@ public final class ThreatDevCheck {
 			equipmentClientRan = true;
 			checkEquipmentClientTooltips(client);
 		}
+		if (WEAPON_CHECK && clientTick >= 300 && !equipmentClientRan) {
+			equipmentClientRan = true;
+			checkWeaponClientTooltips(client);
+		}
 		if (clientTick == 1370) {
 			screenshot(client, "st_devcheck_jade");
 		} else if (clientTick == 1390) {
@@ -244,10 +259,10 @@ public final class ThreatDevCheck {
 		String prismText = prism.getTooltipLines(client.player, TooltipFlag.Default.NORMAL)
 				.stream().map(net.minecraft.network.chat.Component::getString)
 				.reduce("", (left, right) -> left + "\n" + right);
-		check("B15 客户端棱晶提示显示三系与武器锁定",
+		check("B15 客户端棱晶提示显示三系",
 				(prismText.contains("星铸甲胄") || prismText.contains("Astral Plating"))
-						&& (prismText.contains("武器功能尚未启用")
-								|| prismText.contains("Weapon function is not yet enabled"))
+						&& !prismText.contains("武器功能尚未启用")
+						&& !prismText.contains("Weapon function is not yet enabled")
 						&& prismText.contains("[T1]"),
 				prismText);
 
@@ -261,6 +276,36 @@ public final class ThreatDevCheck {
 				(armorText.contains("槽位 1") || armorText.contains("Slot 1"))
 						&& (armorText.contains("当前激活类别") || armorText.contains("Active category")),
 				armorText);
+	}
+
+	private static void checkWeaponClientTooltips(Minecraft client) {
+		ItemStack prism = new ItemStack(ModItems.ABYSSAL_STAR_PRISM.get());
+		StarPrismData.write(prism, new StarPrismData(StarPrismData.SCHEMA, true, null,
+				"astral_plating", "prism_edge", "starlit_bowstring"));
+		String prismText = prism.getTooltipLines(client.player, TooltipFlag.Default.NORMAL)
+				.stream().map(net.minecraft.network.chat.Component::getString)
+				.reduce("", (left, right) -> left + "\n" + right);
+		check("武器检查：棱晶提示不再显示武器锁定",
+				!prismText.contains("武器功能尚未启用")
+						&& !prismText.contains("Weapon function is not yet enabled"),
+				prismText);
+
+		ItemStack weapon = EximusEquipmentData.withUpgradeLevel(
+				new ItemStack(Items.NETHERITE_SWORD), 2);
+		weapon = EximusEquipmentData.withPrism(weapon, 0, prism);
+		ItemStack second = new ItemStack(ModItems.ABYSSAL_STAR_PRISM.get());
+		StarPrismData.write(second, new StarPrismData(StarPrismData.SCHEMA, true, null,
+				"star_mantle", "astral_haste", "sidereal_aim"));
+		weapon = EximusEquipmentData.withPrism(weapon, 1, second);
+		String weaponText = weapon.getTooltipLines(client.player, TooltipFlag.Default.NORMAL)
+				.stream().map(net.minecraft.network.chat.Component::getString)
+				.reduce("", (left, right) -> left + "\n" + right);
+		check("武器检查：近战显示槽位 1/2 与同步拆卸",
+				(weaponText.contains("槽位 1") || weaponText.contains("Slot 1"))
+						&& (weaponText.contains("槽位 2") || weaponText.contains("Slot 2"))
+						&& (weaponText.contains("同步拆卸")
+								|| weaponText.contains("Synchronized disassembly")),
+				weaponText);
 	}
 
 	private static void prepareWorld(ServerPlayer player) {
@@ -663,6 +708,9 @@ public final class ThreatDevCheck {
 		log("===== " + reason + "：检查 " + checks + " 项，失败 " + FAILURES.size() + " 项 =====");
 		if (EQUIPMENT_CHECK) {
 			log("[EQUIPMENT] FAIL=" + FAILURES.size());
+		}
+		if (WEAPON_CHECK) {
+			log("[WEAPON] FAIL=" + FAILURES.size());
 		}
 		for (String failure : FAILURES) {
 			log("FAILED｜" + failure);

@@ -22,8 +22,6 @@ public final class WeaponPlayerAttributes {
 			UUID.fromString("6f5c1a2e-0018-4a0b-9d1e-000000000801");
 	private static final UUID ASTRAL_HASTE =
 			UUID.fromString("6f5c1a2e-0018-4a0b-9d1e-000000000802");
-	private static final UUID FIXED_ATTACK_SPEED =
-			UUID.fromString("6f5c1a2e-0018-4a0b-9d1e-000000000803");
 	private static final UUID CONCUSSIVE_KNOCKBACK =
 			UUID.fromString("6f5c1a2e-0018-4a0b-9d1e-000000000804");
 	private static final UUID WEAKPOINT_CRIT_CHANCE =
@@ -39,6 +37,10 @@ public final class WeaponPlayerAttributes {
 			new ResourceLocation("attributeslib", "crit_damage");
 
 	private WeaponPlayerAttributes() {
+	}
+
+	public static boolean externalCritAttributes() {
+		return attribute(CRIT_CHANCE_ID) != null && attribute(CRIT_DAMAGE_ID) != null;
 	}
 
 	public static void refresh(ServerPlayer player, WeaponRuntimeState state) {
@@ -74,9 +76,6 @@ public final class WeaponPlayerAttributes {
 		add(player, Attributes.ATTACK_DAMAGE, PRISM_EDGE_DAMAGE,
 				"summy_threat:weapon/prism_edge", profile.attackDamage(),
 				AttributeModifier.Operation.ADDITION);
-		add(player, Attributes.ATTACK_SPEED, FIXED_ATTACK_SPEED,
-				"summy_threat:weapon/fixed_tier_i", profile.attackSpeedTotal(),
-				AttributeModifier.Operation.MULTIPLY_TOTAL);
 		add(player, Attributes.ATTACK_SPEED, ASTRAL_HASTE,
 				"summy_threat:weapon/astral_haste", profile.attackSpeedBase(),
 				AttributeModifier.Operation.MULTIPLY_BASE);
@@ -102,7 +101,6 @@ public final class WeaponPlayerAttributes {
 		}
 		remove(player, Attributes.ATTACK_DAMAGE, PRISM_EDGE_DAMAGE);
 		remove(player, Attributes.ATTACK_SPEED, ASTRAL_HASTE);
-		remove(player, Attributes.ATTACK_SPEED, FIXED_ATTACK_SPEED);
 		remove(player, Attributes.ATTACK_KNOCKBACK, CONCUSSIVE_KNOCKBACK);
 		remove(player, Attributes.ATTACK_SPEED, PURSUIT_ATTACK_SPEED);
 		remove(player, attribute(CRIT_CHANCE_ID), WEAKPOINT_CRIT_CHANCE);

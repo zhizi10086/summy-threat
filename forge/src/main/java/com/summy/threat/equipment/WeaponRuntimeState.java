@@ -13,6 +13,7 @@ public final class WeaponRuntimeState {
 	private int starfireHits;
 	private int starfallHits;
 	private String mainhand = "";
+	private String rangedMainhand = "";
 
 	public boolean sharedMarkActive(UUID target, long now) {
 		if (markedTarget == null || markedTarget.equals(target) == false) {
@@ -66,6 +67,14 @@ public final class WeaponRuntimeState {
 		}
 	}
 
+	public void changeRangedMainhand(String weapon) {
+		String normalized = weapon == null ? "" : weapon;
+		if (!rangedMainhand.equals(normalized)) {
+			rangedMainhand = normalized;
+			clearPursuit();
+		}
+	}
+
 	public int pursuitStacks() {
 		return pursuitStacks;
 	}
@@ -103,6 +112,7 @@ public final class WeaponRuntimeState {
 		starfireHits = 0;
 		starfallHits = 0;
 		mainhand = "";
+		rangedMainhand = "";
 	}
 
 	private boolean pursuitMatches(UUID target, String weapon, long now, int resetTicks) {

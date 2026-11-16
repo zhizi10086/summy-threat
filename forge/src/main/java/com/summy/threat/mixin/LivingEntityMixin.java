@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.summy.threat.combat.ArmorDamageFormula;
 import com.summy.threat.equipment.ArmorAffixEffects;
+import com.summy.threat.equipment.ArmorReductionContext;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -34,6 +35,10 @@ public abstract class LivingEntityMixin {
 	)
 	private float summyThreat$customArmorFormula(float original, DamageSource source, float amount) {
 		if (!ArmorDamageFormula.enabled()) {
+			double points = ArmorReductionContext.consume((LivingEntity) (Object) this, source);
+			return (float) (original + amount * points / 100.0D);
+		}
+		if (source == null) {
 			return original;
 		}
 		LivingEntity self = (LivingEntity) (Object) this;

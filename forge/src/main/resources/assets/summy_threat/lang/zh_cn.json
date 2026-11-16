@@ -254,7 +254,7 @@
   "summy_threat.tooltip.category.armor": "盔甲",
   "summy_threat.tooltip.category.melee": "近战",
   "summy_threat.tooltip.category.ranged": "远程",
-  "summy_threat.tooltip.weapon_locked": "武器功能尚未启用",
+  "summy_threat.tooltip.disassemble_all": "同步拆卸全部已装棱晶",
   "summy_threat.tooltip.affix.invalid": "无效词条",
   "summy_threat.tooltip.affix.unavailable": "当前类别无可生效词条",
   "summy_threat.tooltip.affix.no_values": "暂无可用数值",

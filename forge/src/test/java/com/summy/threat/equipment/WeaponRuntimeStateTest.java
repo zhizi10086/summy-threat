@@ -107,4 +107,17 @@ class WeaponRuntimeStateTest {
 		assertFalse(state.starfireHit(4));
 		assertFalse(state.starfallHit(3));
 	}
+
+	@Test
+	void rangedWeaponChangeResetsPursuit() {
+		WeaponRuntimeState state = new WeaponRuntimeState();
+		state.changeRangedMainhand("bow-a");
+		state.pursuitHit(TARGET_A, "bow-a", 20L, 5, 100);
+
+		assertEquals(0.15D,
+				state.pursuitMultiplier(TARGET_A, "bow-a", 21L, 100, 15.0D), 1.0E-9D);
+		state.changeRangedMainhand("bow-b");
+		assertEquals(0.0D,
+				state.pursuitMultiplier(TARGET_A, "bow-b", 22L, 100, 15.0D), 1.0E-9D);
+	}
 }

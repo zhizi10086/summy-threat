@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,5 +46,13 @@ class RangedShotStateTest {
 		state.touch(500L);
 		assertFalse(state.expired(6499L, 6000L));
 		assertTrue(state.expired(6500L, 6000L));
+	}
+
+	@Test
+	void shotKeepsLaunchWeaponIdentity() {
+		RangedShotState state = new RangedShotState(UUID.randomUUID(), false, false,
+				false, 10L, "bow-a");
+
+		assertEquals("bow-a", state.weaponKey());
 	}
 }

@@ -43,6 +43,21 @@ class WeaponAffixSnapshotTest {
 				WeaponAffixSnapshot.read(damaged, EquipmentCategory.MELEE));
 	}
 
+	@Test
+	void snapshotReadsPrismsStoredAsSerializedItemStacks() {
+		CompoundTag equipment = EximusEquipmentData.withUpgradeLevel(new CompoundTag(), 2);
+		CompoundTag serialized = new CompoundTag();
+		serialized.putString("id", "summy_threat:abyssal_star_prism");
+		serialized.put("tag", prism("armor", "prism_edge", "starlit_bowstring",
+				true, null));
+		equipment = EximusEquipmentData.withPrism(equipment, 0, serialized);
+
+		WeaponAffixSnapshot snapshot = WeaponAffixSnapshot.read(equipment,
+				EquipmentCategory.MELEE);
+
+		assertEquals(java.util.List.of("prism_edge"), snapshot.affixes());
+	}
+
 	private static CompoundTag prism(String armor, String melee, String ranged,
 			boolean revealed, String pending) {
 		CompoundTag tag = new CompoundTag();

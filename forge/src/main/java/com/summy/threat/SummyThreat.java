@@ -17,6 +17,9 @@ import com.summy.threat.equipment.ArmorEquipmentAttributes;
 import com.summy.threat.equipment.EximusArmorPassives;
 import com.summy.threat.equipment.ArmorAffixEffects;
 import com.summy.threat.equipment.WeaponRuntimeService;
+import com.summy.threat.equipment.MeleeWeaponRuntime;
+import com.summy.threat.equipment.RangedWeaponRuntime;
+import com.summy.threat.equipment.WeaponFinalRuntime;
 import com.summy.threat.equipment.EquipmentConfigValidation;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.eximus.EximusSpawner;
@@ -86,6 +89,9 @@ public class SummyThreat {
 		// 游戏事件总线：数值化 / 计量 / 命令 / 玩家护甲重填 / 开服时判定档位
 		MinecraftForge.EVENT_BUS.register(SummyThreat.class);
 		MinecraftForge.EVENT_BUS.register(MonsterScaler.class);
+		// 武器出伤先于 A37 目标法抗：词条按出伤前基数放大，再进入目标魔法/护甲结算。
+		MinecraftForge.EVENT_BUS.register(MeleeWeaponRuntime.class);
+		MinecraftForge.EVENT_BUS.register(RangedWeaponRuntime.class);
 		MinecraftForge.EVENT_BUS.register(MagicResistance.class);
 		MinecraftForge.EVENT_BUS.register(AbilityEffects.class);
 		MinecraftForge.EVENT_BUS.register(StarPrismService.class);
@@ -114,6 +120,7 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(BossHardcodedDamageScaling.class);
 		// 放在最后注册：与 EximusShield 同为 LOWEST 时后执行，能读到本次护盾吸收量。
 		MinecraftForge.EVENT_BUS.register(CombatMeter.class);
+		MinecraftForge.EVENT_BUS.register(WeaponFinalRuntime.class);
 		net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
 				net.minecraftforge.api.distmarker.Dist.CLIENT,
 				() -> () -> MinecraftForge.EVENT_BUS.register(

@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "summy_threat:star_prism_magic",
+      "required": false
+    }
+  ]
+}
