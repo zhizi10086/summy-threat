@@ -1,8 +1,10 @@
 package com.summy.threat.eximus;
 
 import com.summy.threat.mixin.PathNavigationAccessor;
+import com.summy.threat.equipment.ArmorAffixEffects;
 import com.summy.threat.equipment.ThreatCategory;
 import com.summy.threat.equipment.ThreatHitContext;
+import com.summy.threat.equipment.ThreatMovementContext;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
 import net.minecraft.core.BlockPos;
@@ -432,8 +434,10 @@ public final class EximusArchetypeEffects {
 				Vec3 away = target.position().subtract(owner.position());
 				if (away.lengthSqr() > 1.0E-4D) {
 					Vec3 dir = away.normalize();
-					target.push(dir.x * 1.2D, 0.3D, dir.z * 1.2D);
-					target.hurtMarked = true;
+					ThreatMovementContext.run(target,
+							"eximus_flame:" + owner.getUUID() + ":" + cast.start,
+							now + 20L,
+							() -> pushTarget(target, dir.x * 1.2D, 0.3D, dir.z * 1.2D));
 				}
 			}
 			if ((elapsed & 1L) == 0L) {
@@ -965,8 +969,10 @@ public final class EximusArchetypeEffects {
 				Vec3 away = target.position().subtract(owner.position());
 				if (away.lengthSqr() > 1.0E-4D) {
 					Vec3 dir = away.normalize();
-					target.push(dir.x, 0.25D, dir.z);
-					target.hurtMarked = true;
+					ThreatMovementContext.run(target,
+							"eximus_shock:" + owner.getUUID() + ":" + state.start + ":" + i,
+							now + 20L,
+							() -> pushTarget(target, dir.x, 0.25D, dir.z));
 				}
 			}
 		}
@@ -1073,7 +1079,7 @@ public final class EximusArchetypeEffects {
 			}
 			for (LivingEntity target : targetsAt(owner, new Vec3(cloud.x, cloud.y, cloud.z), CLOUD_EFFECT_RADIUS)) {
 				if (archetype == EximusArchetype.MAGNET && !isBossLike(target)) {
-					pull(target, cloud);
+					pull(owner, target, cloud, now);
 				}
 				if (now < cloud.nextTick || now - CLOUD_HIT.getOrDefault(target.getUUID(), -100L) < 20L) {
 					continue;
@@ -1166,7 +1172,7 @@ public final class EximusArchetypeEffects {
 		return new Vec3(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D);
 	}
 
-	private static void pull(LivingEntity target, Cloud cloud) {
+	private static void pull(LivingEntity owner, LivingEntity target, Cloud cloud, long now) {
 		Vec3 away = new Vec3(cloud.x - target.getX(), 0.0D, cloud.z - target.getZ());
 		if (away.lengthSqr() < 1.0E-4D) {
 			return;
@@ -1176,7 +1182,18 @@ public final class EximusArchetypeEffects {
 		double resistance = Math.max(0.0D, Math.min(1.0D,
 				target.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE)));
 		double strength = MAGNET_PULL_STRENGTH * (1.0D - resistance);
-		target.push(dir.x * strength, 0.0D, dir.z * strength);
+		ThreatMovementContext.run(target,
+				"eximus_magnet:" + owner.getUUID() + ":" + cloud.x + ":" + cloud.y
+						+ ":" + cloud.z + ":" + cloud.armUntil,
+				Math.max(now + 1L, cloud.end),
+				() -> pushTarget(target, dir.x * strength, 0.0D, dir.z * strength));
+	}
+
+	private static void pushTarget(LivingEntity target, double x, double y, double z) {
+		if (target instanceof ServerPlayer player && ArmorAffixEffects.blocksForcedMovement(player)) {
+			return;
+		}
+		target.push(x, y, z);
 		target.hurtMarked = true;
 	}
 

@@ -4,6 +4,7 @@ import com.summy.threat.api.AbilityDefinition;
 import com.summy.threat.api.ArchetypeDefinition;
 import com.summy.threat.api.SummyThreatApi;
 import com.summy.threat.ability.AbilityId;
+import com.summy.threat.equipment.EquipmentClientConfig;
 import com.summy.threat.eximus.EximusArchetype;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -20,8 +21,10 @@ import java.util.function.Supplier;
 /** 服务端 → 客户端：同步 KJS 自定义能力/原型展示元数据。 */
 public record RegistrySyncPacket(CompoundTag data) {
 	public static RegistrySyncPacket current() {
-		return new RegistrySyncPacket(encodeDefinitions(
-				AbilityId.customDefinitions(), EximusArchetype.customDefinitions()));
+		CompoundTag data = encodeDefinitions(
+				AbilityId.customDefinitions(), EximusArchetype.customDefinitions());
+		data.put("equipment_config", EquipmentClientConfig.captureServer());
+		return new RegistrySyncPacket(data);
 	}
 
 	public static void encode(RegistrySyncPacket packet, FriendlyByteBuf buffer) {
@@ -36,8 +39,11 @@ public record RegistrySyncPacket(CompoundTag data) {
 	public static void handle(RegistrySyncPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
 		NetworkEvent.Context context = contextSupplier.get();
 		context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-				() -> () -> SummyThreatApi.replaceClientDefinitions(
-						decodeAbilities(packet.data), decodeArchetypes(packet.data))));
+				() -> () -> {
+					SummyThreatApi.replaceClientDefinitions(
+							decodeAbilities(packet.data), decodeArchetypes(packet.data));
+					EquipmentClientConfig.apply(packet.data.getCompound("equipment_config"));
+				}));
 		context.setPacketHandled(true);
 	}
 

@@ -16,6 +16,7 @@ import net.minecraftforge.event.entity.living.LivingEquipmentChangeEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.util.UUID;
 
@@ -68,6 +69,12 @@ public final class ArmorEquipmentAttributes {
 	@SubscribeEvent
 	public static void onConfigChanged(ThreatConfigChangedEvent event) {
 		WornArmorState.clearAll();
+		var server = ServerLifecycleHooks.getCurrentServer();
+		if (server != null) {
+			for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+				refresh(player);
+			}
+		}
 	}
 
 	@SubscribeEvent

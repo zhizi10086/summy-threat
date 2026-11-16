@@ -15,6 +15,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.ItemAttributeModifierEvent;
 import net.minecraftforge.event.entity.living.LivingEquipmentChangeEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
@@ -35,7 +36,7 @@ public final class EximusArmorAttributes {
 	private EximusArmorAttributes() {
 	}
 
-	@SubscribeEvent
+	@SubscribeEvent(priority = EventPriority.LOWEST)
 	public static void onItemAttributes(ItemAttributeModifierEvent event) {
 		if (!Config.SPEC.isLoaded() || !Config.EXIMUS_EQUIPMENT_ENABLED.get()
 				|| EximusEquipmentData.upgradeLevel(event.getItemStack()) < 1) {
@@ -62,9 +63,10 @@ public final class EximusArmorAttributes {
 
 	@SubscribeEvent
 	public static void onEquipmentChange(LivingEquipmentChangeEvent event) {
-		// 事件属性由原版在装备变化时自动替换；这里只处理从损坏数据恢复为可读物品的情况。
+		// 装备变化由 ItemAttributeModifierEvent 重新生成物品级修正。此处仅先移除
+		// 配置重载时临时写入的同 UUID 手工修正，避免原版随后添加时发生重复 UUID。
 		if (event.getSlot().getType() == EquipmentSlot.Type.ARMOR) {
-			refreshSlot(event.getEntity(), event.getSlot());
+			removeSlot(event.getEntity(), event.getSlot());
 		}
 	}
 
@@ -106,9 +108,7 @@ public final class EximusArmorAttributes {
 		if (index < 0) {
 			return;
 		}
-		remove(entity, Attributes.ARMOR, ARMOR_IDS[index]);
-		remove(entity, Attributes.ARMOR_TOUGHNESS, TOUGHNESS_IDS[index]);
-		remove(entity, Attributes.KNOCKBACK_RESISTANCE, KNOCKBACK_IDS[index]);
+		removeSlot(entity, slot);
 		if (!Config.SPEC.isLoaded() || !Config.EXIMUS_EQUIPMENT_ENABLED.get()) {
 			return;
 		}
@@ -124,6 +124,16 @@ public final class EximusArmorAttributes {
 				"summy_threat:eximus_toughness_manual/" + slot.getName(), TOUGHNESS_BONUS));
 		add(entity, Attributes.KNOCKBACK_RESISTANCE, modifier(KNOCKBACK_IDS[index],
 				"summy_threat:eximus_knockback_manual/" + slot.getName(), KNOCKBACK_BONUS));
+	}
+
+	private static void removeSlot(LivingEntity entity, EquipmentSlot slot) {
+		int index = slotIndex(slot);
+		if (index < 0) {
+			return;
+		}
+		remove(entity, Attributes.ARMOR, ARMOR_IDS[index]);
+		remove(entity, Attributes.ARMOR_TOUGHNESS, TOUGHNESS_IDS[index]);
+		remove(entity, Attributes.KNOCKBACK_RESISTANCE, KNOCKBACK_IDS[index]);
 	}
 
 	private static void add(LivingEntity entity, Attribute attribute, AttributeModifier modifier) {

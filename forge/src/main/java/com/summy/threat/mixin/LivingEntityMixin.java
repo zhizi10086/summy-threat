@@ -1,7 +1,9 @@
 package com.summy.threat.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.summy.threat.combat.ArmorDamageFormula;
+import com.summy.threat.equipment.ArmorAffixEffects;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -36,5 +38,14 @@ public abstract class LivingEntityMixin {
 		}
 		LivingEntity self = (LivingEntity) (Object) this;
 		return (float) ArmorDamageFormula.armorAbsorb(self, source, amount);
+	}
+
+	@ModifyReturnValue(
+			method = "getDamageAfterMagicAbsorb(Lnet/minecraft/world/damagesource/DamageSource;F)F",
+			at = @At("RETURN")
+	)
+	private float summyThreat$applySpellwardPrism(float original, DamageSource source) {
+		LivingEntity self = (LivingEntity) (Object) this;
+		return original * ArmorAffixEffects.spellwardMultiplier(self, source);
 	}
 }

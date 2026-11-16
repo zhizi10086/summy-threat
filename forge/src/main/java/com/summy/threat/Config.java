@@ -415,7 +415,7 @@ public final class Config {
 
 		builder.comment(
 				"玩家护甲重填：按交接文档 §3.1 的逐件表重写原版护甲件（皮革 / 锁链 / 黄金 / 铁 / 钻石 / 下界合金基础）；",
-				"「下界合金（升级后）」= 回响下界合金（本模组物品，锻造台升级获得，逐件 6/11/8/5 与 4/6/5/3）。")
+				"B15 后不再包含回响下界合金；卓越升级通过通用装备 NBT 与物品级属性实现。")
 				.push("player_armor");
 		ENABLE_PLAYER_ARMOR_REFILL = builder
 				.comment("是否启用玩家护甲重填")

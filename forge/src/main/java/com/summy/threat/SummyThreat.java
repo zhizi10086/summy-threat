@@ -14,6 +14,8 @@ import com.summy.threat.equipment.EximusArmorAttributes;
 import com.summy.threat.equipment.PlayerEquipmentCooldowns;
 import com.summy.threat.equipment.ArmorEquipmentAttributes;
 import com.summy.threat.equipment.EximusArmorPassives;
+import com.summy.threat.equipment.ArmorAffixEffects;
+import com.summy.threat.equipment.EquipmentConfigValidation;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.eximus.EximusSpawner;
 import com.summy.threat.eximus.EximusShield;
@@ -76,7 +78,7 @@ public class SummyThreat {
 		// 配置的"首次加载 / 客户端收到服务端同步 / 运行期重载"都会触发 ModConfigEvent，
 		// 在这里统一应用上限：一处入口同时覆盖服务端与客户端。
 		modBus.addListener(SummyThreat::onConfigEvent);
-		// 玩家卓越护盾同步包（青色 HUD 用）
+		// KJS 展示元数据与 B15 只读配置快照同步。
 		ModNetwork.register();
 
 		// 游戏事件总线：数值化 / 计量 / 命令 / 玩家护甲重填 / 开服时判定档位
@@ -90,6 +92,8 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(PlayerEquipmentCooldowns.class);
 		MinecraftForge.EVENT_BUS.register(ArmorEquipmentAttributes.class);
 		MinecraftForge.EVENT_BUS.register(EximusArmorPassives.class);
+		MinecraftForge.EVENT_BUS.register(ArmorAffixEffects.class);
+		MinecraftForge.EVENT_BUS.register(EquipmentConfigValidation.class);
 		MinecraftForge.EVENT_BUS.register(EximusShield.class);
 		MinecraftForge.EVENT_BUS.register(EximusArchetypeEffects.class);
 		MinecraftForge.EVENT_BUS.register(EximusSpawner.class);
@@ -106,6 +110,10 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(BossHardcodedDamageScaling.class);
 		// 放在最后注册：与 EximusShield 同为 LOWEST 时后执行，能读到本次护盾吸收量。
 		MinecraftForge.EVENT_BUS.register(CombatMeter.class);
+		net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+				net.minecraftforge.api.distmarker.Dist.CLIENT,
+				() -> () -> MinecraftForge.EVENT_BUS.register(
+						com.summy.threat.client.EquipmentTooltipHandler.class));
 	}
 
 	private static void onConfigEvent(ModConfigEvent event) {
@@ -118,6 +126,10 @@ public class SummyThreat {
 		ScalingState.refresh();
 		if (!ThreatConfigApi.isApiWriteInProgress()) {
 			ThreatConfigApi.notifyReload(ThreatConfigApi.snapshot());
+		}
+		var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+		if (server != null) {
+			ModNetwork.broadcastRegistry(server);
 		}
 	}
 

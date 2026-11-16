@@ -5,6 +5,8 @@ import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.ability.AbilityId;
 import com.summy.threat.eximus.EximusArchetype;
 import com.summy.threat.eximus.EximusSpawner;
+import com.summy.threat.equipment.EximusEquipmentData;
+import com.summy.threat.equipment.StarPrismData;
 import com.summy.threat.item.ModItems;
 import com.summy.threat.pcf.CdfManager;
 import com.summy.threat.pcf.PcfManager;
@@ -24,6 +26,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.MobSpawnType;
@@ -70,7 +73,10 @@ public final class ThreatDevCheck {
 	private static int idleTicks;
 	private static int totalClientTicks;
 	private static boolean finished;
-	private static boolean equipmentRan;
+	private static boolean b15EquipmentStarted;
+	private static boolean b15EquipmentTicked;
+	private static boolean equipmentClientRan;
+	private static int b15EquipmentStartTick;
 	private static int equipmentStableTicks;
 	private static Map<String, Object> equipmentConfigOriginal;
 	private static int checks;
@@ -104,20 +110,22 @@ public final class ThreatDevCheck {
 				switch (serverTick) {
 					case 20 -> {
 						prepareWorld(player);
-						equipmentConfigOriginal = EquipmentDropDevCheck.prepareDeterministicConfig();
 					}
 					default -> {
 					}
 				}
 				// KubeJS 启动期保存配置会触发一次异步重载；连续稳定后再落断言。
-				if (!equipmentRan && serverTick >= 100) {
+				if (serverTick >= 100) {
 					equipmentStableTicks = Config.SPEC.isLoaded() ? equipmentStableTicks + 1 : 0;
 				}
-				if (serverTick >= 200 && equipmentStableTicks >= 80 && !equipmentRan) {
-					equipmentRan = true;
-					FAILURES.addAll(EquipmentDropSrIntegrationDevCheck.run(player));
-					EquipmentDropDevCheck.restoreConfig(equipmentConfigOriginal);
-					equipmentConfigOriginal = null;
+				if (serverTick >= 200 && equipmentStableTicks >= 80 && !b15EquipmentStarted) {
+					b15EquipmentStarted = true;
+					b15EquipmentStartTick = serverTick;
+					FAILURES.addAll(EquipmentSystemDevCheck.start(player));
+				} else if (b15EquipmentStarted && !b15EquipmentTicked
+						&& serverTick > b15EquipmentStartTick) {
+					b15EquipmentTicked = true;
+					FAILURES.addAll(EquipmentSystemDevCheck.tick(player));
 				}
 				return;
 			}
@@ -213,6 +221,10 @@ public final class ThreatDevCheck {
 		}
 		idleTicks = 0;
 		clientTick++;
+		if (EQUIPMENT_CHECK && clientTick >= 300 && !equipmentClientRan) {
+			equipmentClientRan = true;
+			checkEquipmentClientTooltips(client);
+		}
 		if (clientTick == 1370) {
 			screenshot(client, "st_devcheck_jade");
 		} else if (clientTick == 1390) {
@@ -222,6 +234,32 @@ public final class ThreatDevCheck {
 		} else if (clientTick >= CLIENT_STOP_TICK) {
 			finish(client, "客户端自检结束");
 		}
+	}
+
+	private static void checkEquipmentClientTooltips(Minecraft client) {
+		ItemStack prism = new ItemStack(ModItems.ABYSSAL_STAR_PRISM.get());
+		StarPrismData.write(prism, new StarPrismData(StarPrismData.SCHEMA, true, null,
+				"astral_plating", "prism_edge", "starlit_bowstring"));
+		String prismText = prism.getTooltipLines(client.player, TooltipFlag.Default.NORMAL)
+				.stream().map(net.minecraft.network.chat.Component::getString)
+				.reduce("", (left, right) -> left + "\n" + right);
+		check("B15 客户端棱晶提示显示三系与武器锁定",
+				(prismText.contains("星铸甲胄") || prismText.contains("Astral Plating"))
+						&& (prismText.contains("武器功能尚未启用")
+								|| prismText.contains("Weapon function is not yet enabled"))
+						&& prismText.contains("[T1]"),
+				prismText);
+
+		ItemStack armor = EximusEquipmentData.withUpgradeLevel(
+				new ItemStack(Items.DIAMOND_CHESTPLATE), 2);
+		armor = EximusEquipmentData.withPrism(armor, 0, prism);
+		String armorText = armor.getTooltipLines(client.player, TooltipFlag.Default.NORMAL)
+				.stream().map(net.minecraft.network.chat.Component::getString)
+				.reduce("", (left, right) -> left + "\n" + right);
+		check("B15 客户端装备提示显示编号槽位与激活类别",
+				(armorText.contains("槽位 1") || armorText.contains("Slot 1"))
+						&& (armorText.contains("当前激活类别") || armorText.contains("Active category")),
+				armorText);
 	}
 
 	private static void prepareWorld(ServerPlayer player) {

@@ -2,8 +2,10 @@ package com.summy.threat.leader;
 
 import com.summy.threat.combat.ArmorPenetration;
 import com.summy.threat.combat.ArmorShred;
+import com.summy.threat.equipment.ArmorAffixEffects;
 import com.summy.threat.equipment.ThreatCategory;
 import com.summy.threat.equipment.ThreatHitContext;
+import com.summy.threat.equipment.ThreatMovementContext;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
 import net.minecraft.core.BlockPos;
@@ -68,7 +70,7 @@ public final class LeaderActiveEffects {
 	private record GravityCast(long triggerTick) {
 	}
 
-	private record PullState(LivingEntity target, UUID owner, long until) {
+	private record PullState(LivingEntity target, UUID owner, long until, String movementId) {
 	}
 
 	private record PhaseCast(long triggerTick, Vec3 start, Vec3 end, Vec3 direction,
@@ -194,7 +196,8 @@ public final class LeaderActiveEffects {
 				double resistance = pull.target().getAttributeValue(Attributes.KNOCKBACK_RESISTANCE);
 				double strength = 0.12D * (1.0D - Math.max(0.0D, Math.min(1.0D, resistance)));
 				Vec3 direction = flat.normalize().scale(strength);
-				control(pull.target(), direction.x, direction.z, 0.0D);
+				control(pull.target(), pull.movementId(), pull.until(),
+						direction.x, direction.z, 0.0D);
 				LeaderVisuals.gravityPull(owner, pull.target());
 			}
 			return false;
@@ -591,7 +594,9 @@ public final class LeaderActiveEffects {
 					skillDamage(owner, target, 40.0D));
 			if (landed && MonsterScaler.kindOf(target) != MonsterScaler.Kind.BOSS
 					&& MonsterScaler.kindOf(target) != MonsterScaler.Kind.LEADER) {
-				PULLS.add(new PullState(target, owner.getUUID(), now + 10L));
+				String movementId = "leader_gravity_pulse:" + owner.getUUID() + ":" + now
+						+ ":" + target.getUUID();
+				PULLS.add(new PullState(target, owner.getUUID(), now + 10L, movementId));
 			}
 		}
 		LeaderVisuals.gravityImpact(level, owner.position());
@@ -612,7 +617,10 @@ public final class LeaderActiveEffects {
 			boolean landed = skillHurt(owner, target, owner.damageSources().mobAttack(owner),
 					skillDamage(owner, target, 120.0D));
 			if (landed) {
-				control(target, cast.direction().x * 0.8D, cast.direction().z * 0.8D, 0.25D);
+				control(target, "leader_phase_lunge:" + owner.getUUID() + ":"
+						+ cast.triggerTick(),
+						cast.triggerTick() + 20L,
+						cast.direction().x * 0.8D, cast.direction().z * 0.8D, 0.25D);
 			}
 		}
 		LivingEntity locked = cast.target();
@@ -622,7 +630,10 @@ public final class LeaderActiveEffects {
 			boolean landed = skillHurt(owner, locked, owner.damageSources().mobAttack(owner),
 					skillDamage(owner, locked, 120.0D));
 			if (landed) {
-				control(locked, cast.direction().x * 0.8D, cast.direction().z * 0.8D, 0.25D);
+				control(locked, "leader_phase_lunge:" + owner.getUUID() + ":"
+						+ cast.triggerTick(),
+						cast.triggerTick() + 20L,
+						cast.direction().x * 0.8D, cast.direction().z * 0.8D, 0.25D);
 			}
 		}
 		LeaderVisuals.phaseImpact(level, cast.start(), cast.end(), cast.direction());
@@ -725,7 +736,9 @@ public final class LeaderActiveEffects {
 			boolean landed = skillHurt(owner, target, owner.damageSources().mobAttack(owner),
 					skillDamage(owner, target, 120.0D));
 			if (landed) {
-				pushFromPoint(target, cast.point(), 0.8D, 0.25D);
+				pushFromPoint(target, cast.point(), 0.8D, 0.25D,
+						"leader_tectonic_rupture:" + owner.getUUID() + ":" + cast.triggerTick(),
+						cast.triggerTick() + 20L);
 				applySlow(owner, target, cast.triggerTick(), 40L,
 						TECTONIC_SLOW, SLOW_NAME, -0.30D);
 			}
@@ -749,16 +762,28 @@ public final class LeaderActiveEffects {
 		}
 	}
 
-	private static void pushFromPoint(LivingEntity target, Vec3 point, double horizontal, double vertical) {
+	private static void pushFromPoint(LivingEntity target, Vec3 point, double horizontal,
+			double vertical, String movementId, long expiresAt) {
 		Vec3 diff = new Vec3(target.getX() - point.x, 0.0D, target.getZ() - point.z);
 		if (diff.lengthSqr() < 1.0E-4D) {
 			diff = new Vec3(0.0D, 0.0D, 1.0D);
 		}
 		diff = diff.normalize().scale(horizontal);
-		control(target, diff.x, diff.z, vertical);
+		control(target, movementId, expiresAt, diff.x, diff.z, vertical);
 	}
 
-	private static void control(LivingEntity target, double x, double z, double y) {
+	private static void control(LivingEntity target, String movementId, long expiresAt,
+			double x, double z, double y) {
+		ThreatMovementContext.run(target, movementId, expiresAt, () -> {
+			if (target instanceof net.minecraft.server.level.ServerPlayer player
+					&& ArmorAffixEffects.blocksForcedMovement(player)) {
+				return;
+			}
+			applyControl(target, x, z, y);
+		});
+	}
+
+	private static void applyControl(LivingEntity target, double x, double z, double y) {
 		ControlBudget current = CONTROL.get(target.getUUID());
 		Vec3 base = current == null ? target.getDeltaMovement() : current.base();
 		double dx = x + (current == null ? 0.0D : current.x());

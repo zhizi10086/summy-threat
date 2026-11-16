@@ -11,9 +11,9 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 /** 在 Unbreaking 随机处理之前限制 II 阶护甲原始耐久损失。 */
 @Mixin(ItemStack.class)
 public abstract class ItemStackMixin {
-	@ModifyVariable(method = "hurt", at = @At("HEAD"), argsOnly = true)
-	private int summyThreat$capArmorDurabilityLoss(int amount, RandomSource random,
-			ServerPlayer player) {
+	@ModifyVariable(method = "hurt", at = @At("HEAD"), ordinal = 0, argsOnly = true)
+	private int summyThreat$capArmorDurabilityLoss(int amount, int originalAmount,
+			RandomSource random, ServerPlayer player) {
 		return ArmorDurabilityProtection.capFor((ItemStack) (Object) this, amount, player);
 	}
 }

@@ -21,7 +21,7 @@ public final class ModItems {
 	public static final RegistryObject<Item> EXIMUS_ESSENCE = ITEMS.register("eximus_essence",
 			() -> new Item(new Item.Properties()));
 	public static final RegistryObject<Item> ABYSSAL_STAR_PRISM = ITEMS.register("abyssal_star_prism",
-			() -> new AbyssalStarPrismItem(new Item.Properties().stacksTo(1)));
+			() -> new AbyssalStarPrismItem(new Item.Properties()));
 
 	private ModItems() {
 	}

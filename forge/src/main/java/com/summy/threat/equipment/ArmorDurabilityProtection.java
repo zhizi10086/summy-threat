@@ -23,6 +23,7 @@ public final class ArmorDurabilityProtection {
 	public static int capFor(ItemStack stack, int requested, ServerPlayer player) {
 		if (player == null || stack.isEmpty() || !Config.SPEC.isLoaded()
 				|| !Config.EXIMUS_EQUIPMENT_ENABLED.get()
+				|| !EquipmentConfigValidation.durabilityCapValid()
 				|| !(stack.getItem() instanceof ArmorItem)
 				|| EximusEquipmentData.upgradeLevel(stack) < 2) {
 			return requested;

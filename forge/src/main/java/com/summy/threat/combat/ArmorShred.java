@@ -1,6 +1,7 @@
 package com.summy.threat.combat;
 
 import com.summy.threat.Config;
+import com.summy.threat.equipment.ArmorAffixEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
@@ -39,8 +40,10 @@ public final class ArmorShred {
 		if (!Config.SPEC.isLoaded()) {
 			return;
 		}
+		double stackPercent = ArmorAffixEffects.suppressCorrosionPercent(victim,
+				Config.CORROSION_PER_STACK_PERCENT.get());
 		apply(victim, SOURCE_CORROSION,
-				Config.CORROSION_PER_STACK_PERCENT.get(),
+				stackPercent,
 				Config.CORROSION_MAX_STACKS.get(),
 				Config.CORROSION_DURATION_SECONDS.get() * 20);
 	}

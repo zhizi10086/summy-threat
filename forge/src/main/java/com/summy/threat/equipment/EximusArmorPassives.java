@@ -58,13 +58,11 @@ public final class EximusArmorPassives {
 	public static void onLivingDamage(LivingDamageEvent event) {
 		if (event.isCanceled() || !(event.getEntity() instanceof ServerPlayer player)
 				|| !hasFixed(player, EquipmentSlot.CHEST)
-				|| player.getHealth() >= player.getMaxHealth()
 				|| !validAttack(player, event.getSource())
+				|| !EquipmentConfigValidation.emergencyMendingValid()
 				|| !PlayerEquipmentCooldowns.ready(player, "emergency_mending")) {
 			return;
 		}
-		PlayerEquipmentCooldowns.set(player, "emergency_mending",
-				Config.EMERGENCY_MENDING_COOLDOWN_TICKS.get());
 		PENDING_HEAL.add(player.getUUID());
 	}
 
@@ -78,9 +76,12 @@ public final class EximusArmorPassives {
 	private static void applyMending(ServerPlayer player) {
 		if (!Config.SPEC.isLoaded() || !Config.EXIMUS_EQUIPMENT_ENABLED.get()
 				|| !hasFixed(player, EquipmentSlot.CHEST)
+				|| !EquipmentConfigValidation.emergencyMendingValid()
 				|| player.isDeadOrDying() || player.getHealth() >= player.getMaxHealth()) {
 			return;
 		}
+		PlayerEquipmentCooldowns.set(player, "emergency_mending",
+				Config.EMERGENCY_MENDING_COOLDOWN_TICKS.get());
 		double amount = Math.max(Config.EMERGENCY_MENDING_HEAL_MIN.get(),
 				Math.min(Config.EMERGENCY_MENDING_HEAL_MAX.get(),
 						player.getMaxHealth()
