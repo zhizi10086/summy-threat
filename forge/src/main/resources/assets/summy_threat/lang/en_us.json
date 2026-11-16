@@ -316,7 +316,7 @@
   "summy_threat.tooltip.value.prism_edge": "Attack damage +%1$s",
   "summy_threat.tooltip.value.astral_haste": "Attack speed +%1$s%%",
   "summy_threat.tooltip.value.weakpoint_prism": "Critical chance +%1$s%%; critical multiplier +%2$sx",
-  "summy_threat.tooltip.value.concussive_prism": "Knockback +%1$s; converts %2$s%% damage per 1%% knockback resistance",
+  "summy_threat.tooltip.value.concussive_prism": "Attack knockback +%1$s; up to +%2$s%% damage scaled by target knockback resistance",
   "summy_threat.tooltip.value.breach_constellation": "Armor reduction bypass +%1$s percentage points this hit",
   "summy_threat.tooltip.value.shield_render": "Damage +%1$s%% against Eximus Shield or Legendary Resistance",
   "summy_threat.tooltip.value.void_siphon": "Heal for %1$s%% of health damage dealt",

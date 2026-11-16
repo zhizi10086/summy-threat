@@ -19,17 +19,18 @@ class EquipmentRulesTest {
 	}
 
 	@Test
-	void stageOneOnlyAllowsArmorOperations() {
+	void stageTwoAllowsEveryEquipmentCategory() {
 		assertTrue(EquipmentRules.categoryEnabled(EquipmentCategory.ARMOR));
-		assertFalse(EquipmentRules.categoryEnabled(EquipmentCategory.MELEE));
-		assertFalse(EquipmentRules.categoryEnabled(EquipmentCategory.RANGED));
+		assertTrue(EquipmentRules.categoryEnabled(EquipmentCategory.MELEE));
+		assertTrue(EquipmentRules.categoryEnabled(EquipmentCategory.RANGED));
 	}
 
 	@Test
 	void upgradeRulesEnforceExactNextLevelAndStageGate() {
 		CompoundTag fresh = new CompoundTag();
 		assertTrue(EquipmentRules.canUpgrade(fresh, 1, EquipmentCategory.ARMOR));
-		assertFalse(EquipmentRules.canUpgrade(fresh, 1, EquipmentCategory.MELEE));
+		assertTrue(EquipmentRules.canUpgrade(fresh, 1, EquipmentCategory.MELEE));
+		assertTrue(EquipmentRules.canUpgrade(fresh, 1, EquipmentCategory.RANGED));
 
 		CompoundTag levelOne = EximusEquipmentData.withUpgradeLevel(fresh, 1);
 		assertTrue(EquipmentRules.canUpgrade(levelOne, 2, EquipmentCategory.ARMOR));

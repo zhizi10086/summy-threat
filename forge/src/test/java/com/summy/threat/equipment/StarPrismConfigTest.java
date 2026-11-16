@@ -32,4 +32,10 @@ class StarPrismConfigTest {
 		assertTrue(settings.standardT1() > settings.standardT2());
 		assertTrue(settings.advancedT2() > settings.advancedT1());
 	}
+
+	@Test
+	void concussivePrismConvertsFullKnockbackResistanceToThirtyFivePercent() {
+		assertEquals(35.0D, StarPrismConfig.doubleValue(
+				"melee.concussive_prism.damage_per_resistance_percent"), 1.0E-9D);
+	}
 }

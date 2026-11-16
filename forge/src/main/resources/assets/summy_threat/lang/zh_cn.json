@@ -316,7 +316,7 @@
   "summy_threat.tooltip.value.prism_edge": "攻击力 +%1$s",
   "summy_threat.tooltip.value.astral_haste": "攻击速度 +%1$s%%",
   "summy_threat.tooltip.value.weakpoint_prism": "暴击率 +%1$s%%；暴击倍率 +%2$s×",
-  "summy_threat.tooltip.value.concussive_prism": "击退 +%1$s；击退抗性每 1%% 转化 %2$s%% 增伤",
+  "summy_threat.tooltip.value.concussive_prism": "攻击击退 +%1$s；按目标击退抗性线性转化，最高 +%2$s%% 伤害",
   "summy_threat.tooltip.value.breach_constellation": "本次结算穿甲 %1$s 个百分点",
   "summy_threat.tooltip.value.shield_render": "对卓越护盾或传奇抗性目标伤害 +%1$s%%",
   "summy_threat.tooltip.value.void_siphon": "按已扣除生命伤害吸血 %1$s%%",

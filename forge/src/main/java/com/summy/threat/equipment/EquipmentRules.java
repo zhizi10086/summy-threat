@@ -7,10 +7,9 @@ import java.util.Optional;
 /** 不依赖运行时菜单的装备操作规则；配方与 DevCheck 共用。 */
 public final class EquipmentRules {
 	/**
-	 * 阶段 1 只激活盔甲。阶段 2 将此常量切换为 true 后再开放武器配方，
-	 * 三系词条数据与配置无需迁移。
+	 * 阶段 2 起三系装备全部开放，阶段 3 只补外部模组桥接。
 	 */
-	private static final boolean WEAPONS_ENABLED = false;
+	private static final boolean WEAPONS_ENABLED = true;
 
 	private EquipmentRules() {
 	}

@@ -30,7 +30,7 @@ public final class StarPrismConfigDefinitions {
 			d("melee.weakpoint_prism.crit_chance_percent", 45.0D, 0.0D, 100.0D),
 			d("melee.weakpoint_prism.crit_multiplier_bonus", 0.25D, 0.0D, 100.0D),
 			d("melee.concussive_prism.knockback_bonus", 1.0D, 0.0D, 10.0D),
-			d("melee.concussive_prism.damage_per_resistance_percent", 15.0D, 0.0D, 100.0D),
+			d("melee.concussive_prism.damage_per_resistance_percent", 35.0D, 0.0D, 100.0D),
 			d("melee.breach_constellation.armor_reduction_points", 5.0D, 0.0D, 100.0D),
 			d("melee.shield_render.bonus_percent", 45.0D, 0.0D, 1000.0D),
 			d("melee.void_siphon.lifesteal_percent", 30.0D, 0.0D, 100.0D),
