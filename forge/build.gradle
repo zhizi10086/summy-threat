@@ -255,6 +255,9 @@ jarJar {
 dependencies {
     minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
 
+    // B15 纯数据与规则测试；不进入正式产物。
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+
     // Mixin 注解处理器：Forge 自带运行期 Mixin，这里只要编译期；走本地 Maven 仓库（libs-m2）
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     annotationProcessor 'org.ow2.asm:asm:9.5'
@@ -280,6 +283,10 @@ dependencies {
     compileOnly files('libs/rhino-forge-2001.2.3-build.10.jar')
     // 仅 devcheck 的 AttackTestHarness 用于清空 Curios 栏位；正式 jar 不含 devcheck。
     compileOnly files('libs/curios-forge-5.14.1.jar')
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }
 
 // 把 gradle.properties 的版本号写进 mods.toml
