@@ -7,6 +7,7 @@ import com.summy.threat.ability.AbilityEffects;
 import com.summy.threat.api.ThreatConfigApi;
 import com.summy.threat.combat.BossHardcodedDamageScaling;
 import com.summy.threat.combat.MagicResistance;
+import com.summy.threat.equipment.StarPrismService;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.eximus.EximusSpawner;
 import com.summy.threat.eximus.EximusShield;
@@ -76,6 +77,7 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(MonsterScaler.class);
 		MinecraftForge.EVENT_BUS.register(MagicResistance.class);
 		MinecraftForge.EVENT_BUS.register(AbilityEffects.class);
+		MinecraftForge.EVENT_BUS.register(StarPrismService.class);
 		MinecraftForge.EVENT_BUS.register(EximusShield.class);
 		MinecraftForge.EVENT_BUS.register(EximusArchetypeEffects.class);
 		MinecraftForge.EVENT_BUS.register(EximusSpawner.class);
