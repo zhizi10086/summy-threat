@@ -1,5 +1,7 @@
 package com.summy.threat;
 
+import com.summy.threat.equipment.StarPrismAffixes;
+import com.summy.threat.equipment.StarPrismConfigDefinitions;
 import net.minecraftforge.common.ForgeConfigSpec;
 
 import java.util.List;
@@ -226,6 +228,36 @@ public final class Config {
 	public static final ForgeConfigSpec.DoubleValue BOSS_PRISM_CHANCE_LOW_TL_PERCENT;
 	public static final ForgeConfigSpec.IntValue BOSS_PRISM_COUNT_HIGH_TL;
 	public static final ForgeConfigSpec.IntValue BOSS_PRISM_TL_THRESHOLD;
+
+	// ================= B15 卓越装备与星渊棱晶 =================
+	public static final ForgeConfigSpec.BooleanValue EXIMUS_EQUIPMENT_ENABLED;
+	public static final ForgeConfigSpec.IntValue CLEAR_SIGHT_NIGHT_VISION_LIGHT;
+	public static final ForgeConfigSpec.IntValue EMERGENCY_MENDING_COOLDOWN_TICKS;
+	public static final ForgeConfigSpec.DoubleValue EMERGENCY_MENDING_HEAL_PERCENT;
+	public static final ForgeConfigSpec.DoubleValue EMERGENCY_MENDING_HEAL_MIN;
+	public static final ForgeConfigSpec.DoubleValue EMERGENCY_MENDING_HEAL_MAX;
+	public static final ForgeConfigSpec.DoubleValue SLOWNESS_GUARD_FLOOR_PERCENT;
+	public static final ForgeConfigSpec.DoubleValue STAR_STRIDE_SPEED_PERCENT;
+	public static final ForgeConfigSpec.DoubleValue STAR_STRIDE_STEP_HEIGHT;
+	public static final ForgeConfigSpec.IntValue SHARED_MARK_DURATION_TICKS;
+	public static final ForgeConfigSpec.DoubleValue SHARED_MARK_DAMAGE_PERCENT;
+	public static final ForgeConfigSpec.IntValue ARMOR_DURABILITY_CAP_DIVISOR;
+	public static final ForgeConfigSpec.IntValue ARMOR_DURABILITY_CAP_MIN;
+	public static final ForgeConfigSpec.IntValue ARMOR_DURABILITY_CAP_MAX;
+
+	public static final ForgeConfigSpec.BooleanValue STAR_PRISM_ENABLED;
+	public static final ForgeConfigSpec.DoubleValue STAR_PRISM_STANDARD_TIER_I_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue STAR_PRISM_STANDARD_TIER_II_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue STAR_PRISM_STANDARD_TIER_III_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue STAR_PRISM_ADVANCED_TIER_I_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue STAR_PRISM_ADVANCED_TIER_II_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue STAR_PRISM_ADVANCED_TIER_III_WEIGHT;
+	public static final ForgeConfigSpec.DoubleValue[] STAR_PRISM_AFFIX_WEIGHTS =
+			new ForgeConfigSpec.DoubleValue[StarPrismAffixes.all().size()];
+	public static final ForgeConfigSpec.DoubleValue[] STAR_PRISM_DOUBLE_VALUES =
+			new ForgeConfigSpec.DoubleValue[StarPrismConfigDefinitions.DOUBLE_VALUES.size()];
+	public static final ForgeConfigSpec.IntValue[] STAR_PRISM_INT_VALUES =
+			new ForgeConfigSpec.IntValue[StarPrismConfigDefinitions.INT_VALUES.size()];
 
 	private static final List<String> DEFAULT_MOD_MATERIAL_IDS = List.of(
 			"summy_reliquary:sin_fragment_pride",
@@ -642,6 +674,93 @@ public final class Config {
 		BOSS_PRISM_TL_THRESHOLD = builder
 				.comment("Boss 精华数量与星渊棱晶档位的共享 TL 阈值")
 				.defineInRange("boss_prism_tl_threshold", 10, 0, 20);
+		builder.pop();
+
+		builder.comment("B15 卓越装备：两段升级、四项盔甲固定能力与词条运行时数值。")
+				.push("eximus_equipment");
+		EXIMUS_EQUIPMENT_ENABLED = builder
+				.comment("B15 总开关；关闭后升级、固定能力、耐久保护、棱晶效果与全部装备配方失效，NBT 保留")
+				.define("enable", true);
+		CLEAR_SIGHT_NIGHT_VISION_LIGHT = builder
+				.comment("澄明视界触发夜视的光照等级上限")
+				.defineInRange("clear_sight_night_vision_light", 4, 0, 15);
+		EMERGENCY_MENDING_COOLDOWN_TICKS = builder
+				.comment("应急生息冷却 tick")
+				.defineInRange("emergency_mending_cooldown_ticks", 30, 1, 200);
+		EMERGENCY_MENDING_HEAL_PERCENT = builder
+				.comment("应急生息按最大生命计算的恢复百分比")
+				.defineInRange("emergency_mending_heal_percent", 3.0D, 0.0D, 10.0D);
+		EMERGENCY_MENDING_HEAL_MIN = builder
+				.comment("应急生息最低治疗量")
+				.defineInRange("emergency_mending_heal_min", 1.0D, 0.0D, 20.0D);
+		EMERGENCY_MENDING_HEAL_MAX = builder
+				.comment("应急生息最高治疗量")
+				.defineInRange("emergency_mending_heal_max", 4.0D, 0.0D, 20.0D);
+		SLOWNESS_GUARD_FLOOR_PERCENT = builder
+				.comment("缓速抑制保留的正向移速基准百分比")
+				.defineInRange("slowness_guard_floor_percent", 70.0D, 0.0D, 100.0D);
+		STAR_STRIDE_SPEED_PERCENT = builder
+				.comment("星履提供的移速百分比")
+				.defineInRange("star_stride_speed_percent", 8.0D, 0.0D, 100.0D);
+		STAR_STRIDE_STEP_HEIGHT = builder
+				.comment("星履提供的台阶高度加成")
+				.defineInRange("star_stride_step_height", 0.4D, 0.0D, 2.0D);
+		SHARED_MARK_DURATION_TICKS = builder
+				.comment("星痕刻印/远星标定共享标记持续 tick")
+				.defineInRange("shared_mark_duration_ticks", 80, 20, 400);
+		SHARED_MARK_DAMAGE_PERCENT = builder
+				.comment("共享标记目标后续直接伤害增加百分比")
+				.defineInRange("shared_mark_damage_percent", 10.0D, 0.0D, 100.0D);
+		ARMOR_DURABILITY_CAP_DIVISOR = builder
+				.comment("II 阶护甲单次耐久损耗上限公式除数")
+				.defineInRange("armor_durability_cap_divisor", 100, 1, 1000);
+		ARMOR_DURABILITY_CAP_MIN = builder
+				.comment("II 阶护甲单次耐久损耗下限")
+				.defineInRange("armor_durability_cap_min", 5, 1, 100);
+		ARMOR_DURABILITY_CAP_MAX = builder
+				.comment("II 阶护甲单次耐久损耗上限")
+				.defineInRange("armor_durability_cap_max", 6, 1, 100);
+		builder.pop();
+
+		builder.comment("星渊棱晶抽取、揭示、刷新与全部三系词条数值。")
+				.push("star_prism");
+		STAR_PRISM_ENABLED = builder
+				.comment("棱晶子系统开关；关闭后揭示、刷新、镶嵌和棱晶效果失效，升级与固定能力继续")
+				.define("enable", true);
+		STAR_PRISM_STANDARD_TIER_I_WEIGHT = builder
+				.defineInRange("standard_tier_i_weight", 70.0D, 0.0D, 1000.0D);
+		STAR_PRISM_STANDARD_TIER_II_WEIGHT = builder
+				.defineInRange("standard_tier_ii_weight", 25.0D, 0.0D, 1000.0D);
+		STAR_PRISM_STANDARD_TIER_III_WEIGHT = builder
+				.defineInRange("standard_tier_iii_weight", 5.0D, 0.0D, 1000.0D);
+		STAR_PRISM_ADVANCED_TIER_I_WEIGHT = builder
+				.defineInRange("advanced_tier_i_weight", 35.0D, 0.0D, 1000.0D);
+		STAR_PRISM_ADVANCED_TIER_II_WEIGHT = builder
+				.defineInRange("advanced_tier_ii_weight", 50.0D, 0.0D, 1000.0D);
+		STAR_PRISM_ADVANCED_TIER_III_WEIGHT = builder
+				.defineInRange("advanced_tier_iii_weight", 15.0D, 0.0D, 1000.0D);
+		for (int i = 0; i < STAR_PRISM_AFFIX_WEIGHTS.length; i++) {
+			String id = StarPrismAffixes.all().get(i).id();
+			STAR_PRISM_AFFIX_WEIGHTS[i] = builder
+					.comment("词条 " + id + " 的抽中权重；0 只禁止未来抽取")
+					.defineInRange("weights." + id, 1.0D, 0.0D, 1000.0D);
+		}
+		for (int i = 0; i < STAR_PRISM_DOUBLE_VALUES.length; i++) {
+			StarPrismConfigDefinitions.DoubleDef definition =
+					StarPrismConfigDefinitions.DOUBLE_VALUES.get(i);
+			STAR_PRISM_DOUBLE_VALUES[i] = builder
+					.comment("星渊数值 " + definition.key())
+					.defineInRange("values." + definition.key(), definition.defaultValue(),
+							definition.min(), definition.max());
+		}
+		for (int i = 0; i < STAR_PRISM_INT_VALUES.length; i++) {
+			StarPrismConfigDefinitions.IntDef definition =
+					StarPrismConfigDefinitions.INT_VALUES.get(i);
+			STAR_PRISM_INT_VALUES[i] = builder
+					.comment("星渊整数 " + definition.key())
+					.defineInRange("values." + definition.key(), definition.defaultValue(),
+							definition.min(), definition.max());
+		}
 		builder.pop();
 
 		builder.comment("调试：全局 TL（-2 = 完全关闭；-1 = 自动 PCF/CDF；0~20 = 手动覆盖）。运行期用 /summythreat tl 修改，重启复位。")
