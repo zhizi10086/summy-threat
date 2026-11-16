@@ -19,6 +19,8 @@ import com.summy.threat.equipment.ArmorAffixEffects;
 import com.summy.threat.equipment.WeaponRuntimeService;
 import com.summy.threat.equipment.MeleeWeaponRuntime;
 import com.summy.threat.equipment.RangedWeaponRuntime;
+import com.summy.threat.equipment.TConstructRangedCompat;
+import com.summy.threat.equipment.TetraRangedCompat;
 import com.summy.threat.equipment.WeaponFinalRuntime;
 import com.summy.threat.equipment.EquipmentConfigValidation;
 import com.summy.threat.eximus.EximusArchetypeEffects;
@@ -43,6 +45,7 @@ import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.event.server.ServerStartedEvent;
@@ -92,6 +95,12 @@ public class SummyThreat {
 		// 武器出伤先于 A37 目标法抗：词条按出伤前基数放大，再进入目标魔法/护甲结算。
 		MinecraftForge.EVENT_BUS.register(MeleeWeaponRuntime.class);
 		MinecraftForge.EVENT_BUS.register(RangedWeaponRuntime.class);
+		if (ModList.get().isLoaded("tconstruct")) {
+			MinecraftForge.EVENT_BUS.register(TConstructRangedCompat.class);
+		}
+		if (ModList.get().isLoaded("tetra")) {
+			TetraRangedCompat.register();
+		}
 		MinecraftForge.EVENT_BUS.register(MagicResistance.class);
 		MinecraftForge.EVENT_BUS.register(AbilityEffects.class);
 		MinecraftForge.EVENT_BUS.register(StarPrismService.class);

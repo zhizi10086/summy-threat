@@ -2,6 +2,7 @@ package com.summy.threat.equipment;
 
 import com.summy.threat.Config;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ItemStack;
 
@@ -21,17 +22,30 @@ public final class ArmorDurabilityProtection {
 	}
 
 	public static int capFor(ItemStack stack, int requested, ServerPlayer player) {
-		if (player == null || stack.isEmpty() || !Config.SPEC.isLoaded()
+		return capFor(stack, requested, (LivingEntity) player);
+	}
+
+	public static int capFor(ItemStack stack, int requested, LivingEntity entity) {
+		if (entity == null || stack.isEmpty() || !Config.SPEC.isLoaded()
 				|| !Config.EXIMUS_EQUIPMENT_ENABLED.get()
 				|| !EquipmentConfigValidation.durabilityCapValid()
 				|| !(stack.getItem() instanceof ArmorItem)
 				|| EximusEquipmentData.upgradeLevel(stack) < 2) {
 			return requested;
 		}
-		return capLoss(stack.getMaxDamage(), requested,
+		return capForState(stack.getMaxDamage(), requested,
+				entity instanceof ServerPlayer, true,
 				EximusEquipmentData.upgradeLevel(stack),
 				Config.ARMOR_DURABILITY_CAP_DIVISOR.get(),
 				Config.ARMOR_DURABILITY_CAP_MIN.get(),
 				Config.ARMOR_DURABILITY_CAP_MAX.get());
+	}
+
+	static int capForState(int maxDamage, int requested, boolean serverPlayer,
+			boolean armorItem, int upgradeLevel, int divisor, int min, int max) {
+		if (!serverPlayer || !armorItem) {
+			return requested;
+		}
+		return capLoss(maxDamage, requested, upgradeLevel, divisor, min, max);
 	}
 }

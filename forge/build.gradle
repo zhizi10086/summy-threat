@@ -40,6 +40,14 @@ java {
     }
 }
 
+sourceSets {
+    // 只给 Mixin AP 解析匠魂可选目标；此类目录不会进入正式 JAR或开发运行包。
+    tconstructStub {
+        java.srcDir 'src/tconstructStub/java'
+        compileClasspath = configurations.minecraft
+    }
+}
+
 repositories {
     maven { url = uri("${projectDir}/libs-m2") }
     mavenCentral()
@@ -68,7 +76,15 @@ minecraft {
 
     runs {
         client {
-            workingDirectory project.file('run')
+            workingDirectory project.hasProperty('allcompatdev')
+                    ? project.file('run/compat/all-final')
+                    : project.hasProperty('allcoredev')
+                    ? project.file('run/compat/all-core-final')
+                    : project.hasProperty('tconstructdev')
+                    ? project.file('run/compat/tconstruct-final')
+                    : project.hasProperty('tetradev')
+                    ? project.file('run/compat/tetra-final')
+                    : project.file('run')
             property 'forge.logging.console.level', 'debug'
             // dev 环境里依赖模组自带的 refmap 是 SRG 名，需要重映射成开发映射；
             // 不配这两项时，任何"自己带 mixin 的依赖模组"（例如 AttributeFix）会在装载期抛 NoSuchFieldError。
@@ -78,7 +94,8 @@ minecraft {
             // 只有显式加 -Pdevcheck 时才打开客户端自检；测试脚本会自动停止客户端。
             if (project.hasProperty('devcheck') || project.hasProperty('betrayalcheck')
                     || project.hasProperty('leadercheck') || project.hasProperty('equipmentcheck')
-                    || project.hasProperty('magiccheck') || project.hasProperty('weaponcheck')) {
+                    || project.hasProperty('magiccheck') || project.hasProperty('weaponcheck')
+                    || project.hasProperty('compatcheck')) {
                 property 'summy_threat.devcheck', 'true'
                 // 允许 SR 的 dev-only 联调事务入口在真实玩家环境中执行。
                 property 'summy.devcheck', 'true'
@@ -106,6 +123,10 @@ minecraft {
             }
             if (project.hasProperty('weaponcheck')) {
                 property 'summy_threat.weaponcheck', 'true'
+            }
+            if (project.hasProperty('compatcheck')) {
+                property 'summy_threat.compatcheck', 'true'
+                args '--quickPlaySingleplayer', 'st_check'
             }
             // A11 玩家攻击测试环境：只准备木桩与装备，不自动退出。
             if (project.hasProperty('attacktest') || project.hasProperty('attacktest.stats')
@@ -140,14 +161,22 @@ minecraft {
         }
         server {
             // 神化兼容测试使用独立 run 目录，避免与正式生态测试中的 SE Mixin 组合互相污染。
-            workingDirectory project.hasProperty('apotheosisdev')
+            workingDirectory project.hasProperty('allcompatdev')
+                    ? project.file('run/compat/all-final')
+                    : project.hasProperty('allcoredev')
+                    ? project.file('run/compat/all-core-final')
+                    : project.hasProperty('tconstructdev')
+                    ? project.file('run/compat/tconstruct-final')
+                    : project.hasProperty('tetradev')
+                    ? project.file('run/compat/tetra-final')
+                    : project.hasProperty('apotheosisdev')
                     ? project.file('run/apotheosis')
                     : project.file('run')
             property 'forge.logging.console.level', 'debug'
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
             if (project.hasProperty('devcheck') || project.hasProperty('equipmentcheck')
-                    || project.hasProperty('weaponcheck')) {
+                    || project.hasProperty('weaponcheck') || project.hasProperty('compatcheck')) {
                 property 'summy_threat.devcheck', 'true'
                 // SR 的测试事务入口同时要求公共 devcheck 开关。
                 property 'summy.devcheck', 'true'
@@ -157,6 +186,9 @@ minecraft {
             }
             if (project.hasProperty('weaponcheck')) {
                 property 'summy_threat.weaponcheck', 'true'
+            }
+            if (project.hasProperty('compatcheck')) {
+                property 'summy_threat.compatcheck', 'true'
             }
         }
     }
@@ -175,6 +207,9 @@ configurations {
     attributeFixDev
     kubejsDev
     apotheosisDev
+    tconstructCompatDev
+    tetraCompatDev
+    seCompatDev
 }
 
 dependencies {
@@ -184,6 +219,11 @@ dependencies {
     apotheosisDev fg.deobf('local:Patchouli:1.20.1-85-FORGE')
     apotheosisDev fg.deobf('local:Placebo:1.20.1-8.6.3')
     apotheosisDev fg.deobf('local:ApothicAttributes:1.20.1-1.3.7')
+    tconstructCompatDev fg.deobf('local:TConstruct:1.20.1-3.12.1.231')
+    tconstructCompatDev fg.deobf('local:Mantle:1.20.1-1.11.128')
+    tetraCompatDev fg.deobf('local:tetra:1.20.1-6.17.0')
+    tetraCompatDev fg.deobf('local:mutil:1.20.1-6.3.0')
+    seCompatDev fg.deobf('local:summy-enchantment:1.4.2-forge')
 }
 
 tasks.register('copyAttributeFixDevJar', Copy) {
@@ -221,12 +261,117 @@ tasks.register('copyApotheosisDevJars', Copy) {
     into layout.projectDirectory.dir('run/apotheosis/mods')
 }
 
+def prepareCompatRun = { String name ->
+    def sourceDir = layout.projectDirectory.dir('run')
+    def targetDir = layout.projectDirectory.dir("run/compat/${name}")
+    targetDir.asFile.mkdirs()
+    ['server.properties', 'eula.txt', 'ops.json', 'banned-ips.json',
+     'banned-players.json', 'whitelist.json'].each { fileName ->
+        def source = sourceDir.file(fileName).asFile
+        if (source.isFile()) {
+            copy {
+                from source
+                into targetDir
+            }
+        }
+    }
+}
+
+def compatBaselineFiles = files(
+        'run/calc/reliquary2-dev/summy-reliquary-2.0.1-forge_mapped_official_1.20.1.jar',
+        'run/mods/jade-11.13.3_mapped_official_1.20.1.jar',
+        'run/mods/curios-forge-5.14.1+1.20.1_mapped_official_1.20.1.jar')
+
+// 最终隔离目录只保留本次声明的映射 JAR，避免上一次测试留下的同名/旧版文件污染结果。
+tasks.register('copyTconstructCompatJars', Sync) {
+    dependsOn 'copyJadeDevJar'
+    doFirst {
+        prepareCompatRun('tconstruct-final')
+    }
+    from configurations.tconstructCompatDev
+    from configurations.seCompatDev
+    from compatBaselineFiles
+    into layout.projectDirectory.dir('run/compat/tconstruct-final/mods')
+}
+
+tasks.register('copyTetraCompatJars', Sync) {
+    dependsOn 'copyJadeDevJar'
+    doFirst {
+        prepareCompatRun('tetra-final')
+    }
+    from configurations.tetraCompatDev
+    from configurations.seCompatDev
+    from compatBaselineFiles
+    into layout.projectDirectory.dir('run/compat/tetra-final/mods')
+}
+
+tasks.register('copyAllCompatJars', Sync) {
+    dependsOn 'copyApotheosisDevJars', 'copyJadeDevJar'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    doFirst {
+        prepareCompatRun('all-final')
+    }
+    from configurations.tconstructCompatDev
+    from configurations.tetraCompatDev
+    from configurations.apotheosisDev
+    from configurations.seCompatDev
+    from compatBaselineFiles
+    into layout.projectDirectory.dir('run/compat/all-final/mods')
+}
+
+tasks.register('copyAllCoreCompatJars', Sync) {
+    dependsOn 'copyApotheosisDevJars', 'copyJadeDevJar'
+    doFirst {
+        prepareCompatRun('all-core-final')
+    }
+    from configurations.tconstructCompatDev
+    from configurations.tetraCompatDev
+    from configurations.apotheosisDev
+    from compatBaselineFiles
+    into layout.projectDirectory.dir('run/compat/all-core-final/mods')
+}
+
+// compatcheck 的 quickPlay 目标固定为 saves/st_check；每次从标准 DevCheckWorld 同步，
+// 保证隔离实例不会复用旧世界、旧实体或旧结构选举结果。
+def compatClientRunDirectory = project.hasProperty('allcompatdev')
+        ? 'all-final'
+        : project.hasProperty('allcoredev')
+        ? 'all-core-final'
+        : project.hasProperty('tconstructdev')
+        ? 'tconstruct-final'
+        : project.hasProperty('tetradev')
+        ? 'tetra-final'
+        : null
+
+tasks.register('prepareCompatClientWorld', Sync) {
+    from layout.projectDirectory.dir('run/saves/DevCheckWorld')
+    into layout.projectDirectory.dir("run/compat/${compatClientRunDirectory}/saves/st_check")
+}
+
+tasks.matching { it.name == 'runClient' }.configureEach {
+    if (project.hasProperty('compatcheck') && compatClientRunDirectory != null) {
+        dependsOn 'prepareCompatClientWorld'
+    }
+}
+
 tasks.matching { it.name == 'runClient' || it.name == 'runServer' }.configureEach {
     if (project.hasProperty('kubejsdev')) {
         dependsOn 'copyKubeJSDevJar'
     }
     if (project.hasProperty('apotheosisdev')) {
         dependsOn 'copyApotheosisDevJars'
+    }
+    if (project.hasProperty('tconstructdev')) {
+        dependsOn 'copyTconstructCompatJars'
+    }
+    if (project.hasProperty('tetradev')) {
+        dependsOn 'copyTetraCompatJars'
+    }
+    if (project.hasProperty('allcompatdev')) {
+        dependsOn 'copyAllCompatJars'
+    }
+    if (project.hasProperty('allcoredev')) {
+        dependsOn 'copyAllCoreCompatJars'
     }
 }
 
@@ -255,6 +400,7 @@ mixin {
     // 声明 mixin 配置：MixinGradle 会在 dev 运行参数里注册它们（否则 runServer 跑的是没有 mixin 的空壳），
     // 同时写进 jar 的 MixinConfigs 清单。
     config 'summy_threat.mixins.json'
+    config 'summy_threat.tconstruct.mixins.json'
 }
 
 // ForgeGradle 的 jarJar 默认关闭：显式打开，MixinExtras 才会作为嵌套 jar 打进产物
@@ -264,6 +410,7 @@ jarJar {
 
 dependencies {
     minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
+    compileOnly sourceSets.tconstructStub.output
 
     // B15 纯数据与规则测试；不进入正式产物。
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
@@ -293,6 +440,10 @@ dependencies {
     compileOnly files('libs/rhino-forge-2001.2.3-build.10.jar')
     // 仅 devcheck 的 AttackTestHarness 用于清空 Curios 栏位；正式 jar 不含 devcheck。
     compileOnly files('libs/curios-forge-5.14.1.jar')
+}
+
+tasks.named('compileJava') {
+    dependsOn sourceSets.tconstructStub.classesTaskName
 }
 
 tasks.named('test') {
@@ -327,6 +478,7 @@ tasks.withType(JavaCompile).configureEach {
 tasks.register('verifyMixinTargets') {
     group = 'verification'
     description = '校验 mixin 注解里的 Minecraft 类名与 refmap 覆盖是否完整'
+    dependsOn 'compileJava'
     def mixinDir = file('src/main/java/com/summy/threat/mixin')
     def refmapFile = file("${buildDir}/tmp/compileJava/summy-threat.refmap.json")
     inputs.dir(mixinDir)
@@ -363,6 +515,10 @@ tasks.register('verifyMixinTargets') {
                 return
             }
             def cls = f.name.substring(0, f.name.length() - '.java'.length())
+            if (cls == 'TConstructToolDamageMixin') {
+                // 可选外部目标由 verifyTconstructMixinTargets 直接检查匠魂 JAR。
+                return
+            }
             def text = f.text
 
             // 1) 注解里引用的 Minecraft 类必须存在
@@ -377,7 +533,8 @@ tasks.register('verifyMixinTargets') {
             def keys = mappings["com/summy/threat/mixin/$cls"]?.keySet() ?: ([] as Set)
             def used = (text =~ /(?:method|target)\s*=\s*"([^"]+)"/).collect { it[1] } as Set
             used.each { s ->
-                if (s.startsWith('Lcom/') || s.startsWith('Lorg/')) {
+                if (s.startsWith('Lcom/') || s.startsWith('Lorg/')
+                        || s.startsWith('Lslimeknights/')) {
                     return
                 }
                 if (!keys.contains(s)) {
@@ -397,12 +554,64 @@ tasks.named('check') {
     dependsOn 'verifyMixinTargets'
 }
 
+// 匠魂 Mixin 目标只在兼容测试时校验；正式构建不读取外部模组 JAR。
+tasks.register('verifyTconstructMixinTargets') {
+    group = 'verification'
+    description = '校验匠魂 ToolDamageUtil 的 damage/directDamage 目标'
+    dependsOn 'classes'
+    doLast {
+        def jarFile = file('libs/TConstruct-1.20.1-3.12.1.231.jar')
+        if (!jarFile.isFile()) {
+            throw new GradleException('缺少本地匠魂测试 JAR：' + jarFile)
+        }
+        def zip = new java.util.zip.ZipFile(jarFile)
+        try {
+            def entry = zip.getEntry(
+                    'slimeknights/tconstruct/library/tools/helper/ToolDamageUtil.class')
+            if (entry == null) {
+                throw new GradleException('匠魂 JAR 中不存在 ToolDamageUtil')
+            }
+            def node = new org.objectweb.asm.tree.ClassNode()
+            new org.objectweb.asm.ClassReader(zip.getInputStream(entry)).accept(node, 0)
+            def damage = node.methods.find {
+                it.name == 'damage' && it.desc ==
+                        '(Lslimeknights/tconstruct/library/tools/nbt/IToolStackView;ILnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;Lslimeknights/tconstruct/library/modifiers/ModifierId;)Z'
+            }
+            if (damage == null) {
+                throw new GradleException('匠魂 ToolDamageUtil.damage 签名已变化')
+            }
+            def direct = node.methods.find {
+                it.name == 'directDamage' && it.desc ==
+                        '(Lslimeknights/tconstruct/library/tools/nbt/IToolStackView;ILnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;)Z'
+            }
+            if (direct == null) {
+                throw new GradleException('匠魂 ToolDamageUtil.directDamage 签名已变化')
+            }
+            boolean callFound = damage.instructions.any {
+                it instanceof org.objectweb.asm.tree.MethodInsnNode
+                        && it.owner ==
+                        'slimeknights/tconstruct/library/tools/helper/ToolDamageUtil'
+                        && it.name == 'directDamage'
+                        && it.desc == direct.desc
+            }
+            if (!callFound) {
+                throw new GradleException(
+                        '匠魂 ToolDamageUtil.damage 中未找到 directDamage 调用')
+            }
+        } finally {
+            zip.close()
+        }
+        logger.lifecycle('[Summy Threat] 匠魂 Mixin 目标校验通过')
+    }
+}
+
 jar {
     // refmap 既在 resources 里（供 dev 运行），又被 MixinGradle 加进 jar，去重即可
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     if (!project.hasProperty('devcheck') && !project.hasProperty('stormcheck')
             && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')
-            && !project.hasProperty('leadercheck') && !project.hasProperty('weaponcheck')) {
+            && !project.hasProperty('leadercheck') && !project.hasProperty('weaponcheck')
+            && !project.hasProperty('compatcheck')) {
         exclude 'com/summy/threat/devcheck/**'
     }
     manifest {
@@ -415,7 +624,7 @@ jar {
                 'Implementation-Vendor' : 'Summy'
         ])
         // 注意：配置文件名不带连字符（写成 xxx-mixins.json 会让 Mixin 读不到）
-        attributes 'MixinConfigs': 'summy_threat.mixins.json'
+        attributes 'MixinConfigs': 'summy_threat.mixins.json,summy_threat.tconstruct.mixins.json'
     }
     from('LICENSE') {
         rename { "${it}_${project.base.archivesName.get()}" }
@@ -426,7 +635,8 @@ jar {
 tasks.named('jarJar') {
     if (!project.hasProperty('devcheck') && !project.hasProperty('stormcheck')
             && !project.hasProperty('archetypecheck') && !project.hasProperty('rangecheck')
-            && !project.hasProperty('leadercheck') && !project.hasProperty('weaponcheck')) {
+            && !project.hasProperty('leadercheck') && !project.hasProperty('weaponcheck')
+            && !project.hasProperty('compatcheck')) {
         exclude 'com/summy/threat/devcheck/**'
     }
 }

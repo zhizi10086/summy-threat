@@ -5,6 +5,7 @@ import com.summy.threat.api.event.ThreatConfigChangedEvent;
 import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.leader.LegendaryResistance;
 import com.summy.threat.scaling.MonsterScaler;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.OwnableEntity;
@@ -59,26 +60,14 @@ public final class RangedWeaponRuntime {
 				|| !event.hasAmmo() || !eligible(event.getBow())) {
 			return;
 		}
+		if (EquipmentCompatibility.isTetraRanged(itemId(event.getBow()))) {
+			return;
+		}
 		boolean crossbow = event.getBow().getItem() instanceof CrossbowItem;
 		if (!crossbow && event.getCharge() < requiredDrawTicks(event.getBow())) {
 			return;
 		}
-		WeaponAffixSnapshot snapshot = snapshot(event.getBow());
-		String armorAffix = joined(categorySnapshot(event.getBow(), EquipmentCategory.ARMOR));
-		String meleeAffix = joined(categorySnapshot(event.getBow(), EquipmentCategory.MELEE));
-		UUID shotId = UUID.randomUUID();
-		boolean sidereal = snapshot.has("sidereal_aim")
-				&& player.getRandom().nextDouble()
-				< StarPrismConfig.doubleValue("ranged.sidereal_aim.chance_percent") / 100.0D;
-		boolean terminal = snapshot.has("terminal_star_shot")
-				&& player.getRandom().nextDouble()
-				< StarPrismConfig.doubleValue("ranged.terminal_star_shot.chance_percent") / 100.0D;
-		String weaponKey = WeaponRuntimeService.weaponKey(event.getBow());
-		RangedShotState state = new RangedShotState(shotId, sidereal, terminal,
-				snapshot.markCapable(), now(player), weaponKey);
-		SHOTS.put(shotId, state);
-		PENDING_SHOTS.put(player.getUUID(),
-				new PendingShot(snapshot, armorAffix, meleeAffix, state, now(player)));
+		beginShot(player, event.getBow(), RangedShotSource.STANDARD);
 	}
 
 	@SubscribeEvent(priority = EventPriority.LOWEST)
@@ -113,14 +102,32 @@ public final class RangedWeaponRuntime {
 		if (pending == null || now(player) - pending.tick() > 2L) {
 			return;
 		}
-		WeaponAffixSnapshot snapshot = pending.snapshot();
-		PrismProjectileData data = new PrismProjectileData(
-				PrismProjectileData.SCHEMA, pending.state().shotId(), snapshot.level(),
-				pending.armorAffix(), pending.meleeAffix(), joined(snapshot), snapshot.markCapable(),
-				pending.state().siderealAim(), pending.state().terminalStarShot(),
-				false, false);
-		PrismProjectileData.write(arrow.getPersistentData(), data);
-		PENDING_ARROWS.add(arrow);
+		if (pending.source().attachOnEntityJoin()) {
+			attachPendingArrow(arrow, pending);
+		}
+	}
+
+	static boolean beginExternalShot(ServerPlayer player, ItemStack stack,
+			RangedShotSource source) {
+		if (player == null || source == null || source == RangedShotSource.STANDARD) {
+			return false;
+		}
+		return beginShot(player, stack, source);
+	}
+
+	static void attachTetraProjectile(ServerPlayer player, ItemStack firingStack,
+			AbstractArrow arrow) {
+		if (player == null || firingStack == null || arrow == null) {
+			return;
+		}
+		PendingShot pending = PENDING_SHOTS.get(player.getUUID());
+		if (pending == null || pending.source() != RangedShotSource.TETRA
+				|| now(player) - pending.tick() > 2L
+				|| !pending.state().weaponKey().equals(
+						WeaponRuntimeService.weaponKey(firingStack))) {
+			return;
+		}
+		attachPendingArrow(arrow, pending);
 	}
 
 	@SubscribeEvent
@@ -337,6 +344,45 @@ public final class RangedWeaponRuntime {
 		}
 	}
 
+	private static boolean beginShot(ServerPlayer player, ItemStack stack,
+			RangedShotSource source) {
+		if (!eligible(stack)) {
+			return false;
+		}
+		WeaponAffixSnapshot snapshot = snapshot(stack);
+		String armorAffix = joined(categorySnapshot(stack, EquipmentCategory.ARMOR));
+		String meleeAffix = joined(categorySnapshot(stack, EquipmentCategory.MELEE));
+		UUID shotId = UUID.randomUUID();
+		boolean sidereal = snapshot.has("sidereal_aim")
+				&& player.getRandom().nextDouble()
+				< StarPrismConfig.doubleValue("ranged.sidereal_aim.chance_percent") / 100.0D;
+		boolean terminal = snapshot.has("terminal_star_shot")
+				&& player.getRandom().nextDouble()
+				< StarPrismConfig.doubleValue("ranged.terminal_star_shot.chance_percent") / 100.0D;
+		RangedShotState state = new RangedShotState(shotId, sidereal, terminal,
+				snapshot.markCapable(), now(player),
+				WeaponRuntimeService.weaponKey(stack));
+		long tick = now(player);
+		SHOTS.put(shotId, state);
+		PENDING_SHOTS.put(player.getUUID(),
+				new PendingShot(snapshot, armorAffix, meleeAffix, state, tick, source));
+		return true;
+	}
+
+	private static void attachPendingArrow(AbstractArrow arrow, PendingShot pending) {
+		if (PrismProjectileData.read(arrow.getPersistentData()).isPresent()) {
+			return;
+		}
+		WeaponAffixSnapshot snapshot = pending.snapshot();
+		PrismProjectileData data = new PrismProjectileData(
+				PrismProjectileData.SCHEMA, pending.state().shotId(), snapshot.level(),
+				pending.armorAffix(), pending.meleeAffix(), joined(snapshot),
+				snapshot.markCapable(), pending.state().siderealAim(),
+				pending.state().terminalStarShot(), false, false);
+		PrismProjectileData.write(arrow.getPersistentData(), data);
+		PENDING_ARROWS.add(arrow);
+	}
+
 	private static void tryStarlightDew(ServerPlayer player) {
 		if (player.getHealth() >= player.getMaxHealth()
 				|| !PlayerEquipmentCooldowns.ready(player, "ranged.starlight_dew")) {
@@ -452,7 +498,7 @@ public final class RangedWeaponRuntime {
 	}
 
 	private record PendingShot(WeaponAffixSnapshot snapshot, String armorAffix,
-			String meleeAffix, RangedShotState state, long tick) {
+			String meleeAffix, RangedShotState state, long tick, RangedShotSource source) {
 	}
 
 	private record RangedDamageRecord(LivingEntity target, net.minecraft.world.damagesource.DamageSource source,
@@ -463,5 +509,9 @@ public final class RangedWeaponRuntime {
 	}
 
 	private record DelayedHeal(ServerPlayer player, double amount) {
+	}
+
+	private static String itemId(ItemStack stack) {
+		return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 	}
 }

@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.summy.threat.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "summy-threat.refmap.json",
+  "plugin": "com.summy.threat.mixin.TConstructMixinPlugin",
+  "mixins": [
+    "TConstructToolDamageMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
