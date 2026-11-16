@@ -8,6 +8,8 @@ import com.summy.threat.api.ThreatConfigApi;
 import com.summy.threat.combat.BossHardcodedDamageScaling;
 import com.summy.threat.combat.MagicResistance;
 import com.summy.threat.equipment.StarPrismService;
+import com.summy.threat.equipment.EquipmentCraftingHandler;
+import com.summy.threat.equipment.ModRecipes;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.eximus.EximusSpawner;
 import com.summy.threat.eximus.EximusShield;
@@ -63,6 +65,7 @@ public class SummyThreat {
 		IEventBus modBus = context.getModEventBus();
 		// B15 材料注册。
 		ModItems.ITEMS.register(modBus);
+		ModRecipes.SERIALIZERS.register(modBus);
 		// 创造页注入：BuildCreativeModeTabContentsEvent 是 **模组总线** 事件（IModBusEvent），
 		// 挂在 Forge 总线上不会被调用（第一版就踩了这个坑，物品注册成功但创造页里找不到）。
 		modBus.addListener(SummyThreat::onBuildCreativeTabContents);
@@ -78,6 +81,7 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(MagicResistance.class);
 		MinecraftForge.EVENT_BUS.register(AbilityEffects.class);
 		MinecraftForge.EVENT_BUS.register(StarPrismService.class);
+		MinecraftForge.EVENT_BUS.register(EquipmentCraftingHandler.class);
 		MinecraftForge.EVENT_BUS.register(EximusShield.class);
 		MinecraftForge.EVENT_BUS.register(EximusArchetypeEffects.class);
 		MinecraftForge.EVENT_BUS.register(EximusSpawner.class);
