@@ -2,6 +2,8 @@ package com.summy.threat.leader;
 
 import com.summy.threat.combat.ArmorPenetration;
 import com.summy.threat.combat.ArmorShred;
+import com.summy.threat.equipment.ThreatCategory;
+import com.summy.threat.equipment.ThreatHitContext;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
 import net.minecraft.core.BlockPos;
@@ -691,12 +693,15 @@ public final class LeaderActiveEffects {
 
 	private static boolean skillHurt(LivingEntity owner, LivingEntity target,
 			DamageSource source, BooleanSupplier action) {
+		LeaderAbilityId active = activeAbility(owner);
+		String abilityId = active == null ? "leader_skill" : active.id();
 		PendingHit hit = new PendingHit(target, source);
 		Deque<PendingHit> hits = SKILL_HITS.get();
 		hits.push(hit);
 		boolean accepted;
 		try {
-			accepted = action.getAsBoolean();
+			accepted = ThreatHitContext.call(target, source, ThreatCategory.LEADER_ABILITY,
+					abilityId, action::getAsBoolean);
 		} finally {
 			hits.pop();
 			if (hits.isEmpty()) {

@@ -3,6 +3,8 @@ package com.summy.threat.ability;
 import com.summy.threat.Config;
 import com.summy.threat.api.event.ThreatAbilityChangedEvent;
 import com.summy.threat.combat.ArmorShred;
+import com.summy.threat.equipment.ThreatCategory;
+import com.summy.threat.equipment.ThreatHitContext;
 import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
@@ -304,7 +306,8 @@ public final class AbilityEffects {
 				attacker.heal(Math.max(nominal * 0.15F, attacker.getMaxHealth() * 0.005F));
 			}
 			if (has(attacker, AbilityId.EMBER)) {
-				damageExtra(victim, attacker.damageSources().onFire(), nominal * 0.10F, false);
+				damageExtra(victim, attacker.damageSources().onFire(), nominal * 0.10F, false,
+						ThreatCategory.TL_ABILITY, AbilityId.EMBER.id());
 			}
 			if (has(attacker, AbilityId.CORROSION) && !EximusShield.isActive(victim)) {
 				ArmorShred.applyCorrosion(victim);
@@ -319,7 +322,8 @@ public final class AbilityEffects {
 			if (now >= THORNS_COOLDOWN.getOrDefault(attacker.getUUID(), 0L)) {
 				THORNS_COOLDOWN.put(attacker.getUUID(), now + 5L);
 				// 荆棘：无击退（结算前后保存 / 还原目标速度）
-				damageExtra(attacker, victim.damageSources().thorns(victim), nominal * 0.10F, true);
+				damageExtra(attacker, victim.damageSources().thorns(victim), nominal * 0.10F, true,
+						ThreatCategory.TL_ABILITY, AbilityId.THORNS.id());
 			}
 		}
 
@@ -366,7 +370,8 @@ public final class AbilityEffects {
 					// 对玩家的原始伤害上限 = 玩家最大生命的 85%（附魔保护 / 抗性 / 吸收仍继续结算）
 					amount = Math.min(amount, player.getMaxHealth() * 0.85F);
 				}
-				damageExtra(target, burst, amount, false);
+				damageExtra(target, burst, amount, false,
+						ThreatCategory.TL_ABILITY, AbilityId.DEATH_BURST.id());
 			}
 		}
 		cleanup(victim);
@@ -440,6 +445,11 @@ public final class AbilityEffects {
 
 	/** 追加段：进清前帧、结算后不清；期间跳过攻击方链式能力。 */
 	private static void damageExtra(LivingEntity target, DamageSource source, float amount, boolean suppressKnockback) {
+		damageExtra(target, source, amount, suppressKnockback, null, null);
+	}
+
+	private static void damageExtra(LivingEntity target, DamageSource source, float amount,
+			boolean suppressKnockback, ThreatCategory category, String abilityId) {
 		if (amount <= 0.0F || !target.isAlive()) {
 			return;
 		}
@@ -450,7 +460,10 @@ public final class AbilityEffects {
 		try {
 			Vec3 velocity = suppressKnockback ? target.getDeltaMovement() : null;
 			target.invulnerableTime = 0;
-			boolean landed = target.hurt(source, amount);
+			boolean landed = category == null
+					? target.hurt(source, amount)
+					: ThreatHitContext.call(target, source, category, abilityId,
+							() -> target.hurt(source, amount));
 			if (suppressKnockback && landed) {
 				target.setDeltaMovement(velocity);
 				target.hurtMarked = true;

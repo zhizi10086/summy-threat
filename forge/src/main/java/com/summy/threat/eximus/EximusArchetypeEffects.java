@@ -1,6 +1,8 @@
 package com.summy.threat.eximus;
 
 import com.summy.threat.mixin.PathNavigationAccessor;
+import com.summy.threat.equipment.ThreatCategory;
+import com.summy.threat.equipment.ThreatHitContext;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
 import net.minecraft.core.BlockPos;
@@ -264,9 +266,11 @@ public final class EximusArchetypeEffects {
 		return out;
 	}
 
-	private static boolean hurt(LivingEntity target, net.minecraft.world.damagesource.DamageSource source, float amount) {
+	private static boolean hurt(LivingEntity owner, LivingEntity target,
+			net.minecraft.world.damagesource.DamageSource source, float amount, String abilityId) {
 		target.invulnerableTime = 0;
-		return target.hurt(source, amount);
+		return ThreatHitContext.call(target, source, ThreatCategory.EXIMUS_ABILITY, abilityId,
+				() -> target.hurt(source, amount));
 	}
 
 	private static Vec3 flatLook(LivingEntity entity) {
@@ -422,7 +426,8 @@ public final class EximusArchetypeEffects {
 						|| !cast.hit.add(target.getUUID())) {
 					continue;
 				}
-				hurt(target, owner.damageSources().mobAttack(owner), skillDamage(owner, target, 70.0D));
+				hurt(owner, target, owner.damageSources().mobAttack(owner),
+						skillDamage(owner, target, 70.0D), EximusArchetype.FLAME.id());
 				target.setSecondsOnFire(FLAME_BURN_SECONDS);
 				Vec3 away = target.position().subtract(owner.position());
 				if (away.lengthSqr() > 1.0E-4D) {
@@ -644,7 +649,8 @@ public final class EximusArchetypeEffects {
 			return;
 		}
 		for (LivingEntity target : targets(owner, POISON_RADIUS, true)) {
-			hurt(target, owner.damageSources().indirectMagic(owner, owner), skillDamage(owner, target, 9.0D));
+			hurt(owner, target, owner.damageSources().indirectMagic(owner, owner),
+					skillDamage(owner, target, 9.0D), EximusArchetype.POISON.id());
 			level.sendParticles(ParticleTypes.SPORE_BLOSSOM_AIR, target.getX(),
 					target.getY() + target.getBbHeight() * 0.5D, target.getZ(), 4, 0.4D, 0.4D, 0.4D, 0.01D);
 		}
@@ -824,8 +830,8 @@ public final class EximusArchetypeEffects {
 			level.addFreshEntity(bolt);
 		}
 		for (LivingEntity target : allTargetsAtExcept(owner, point, STORM_STRIKE_RADIUS)) {
-			hurt(target, owner.damageSources().indirectMagic(owner, owner),
-					skillDamage(owner, target, 50.0D));
+			hurt(owner, target, owner.damageSources().indirectMagic(owner, owner),
+					skillDamage(owner, target, 50.0D), EximusArchetype.STORM.id());
 		}
 	}
 
@@ -954,7 +960,8 @@ public final class EximusArchetypeEffects {
 				if (!state.hit.add(target.getUUID() + "#" + i)) {
 					continue;
 				}
-				hurt(target, owner.damageSources().mobAttack(owner), skillDamage(owner, target, 30.0D));
+				hurt(owner, target, owner.damageSources().mobAttack(owner),
+						skillDamage(owner, target, 30.0D), EximusArchetype.SHOCK.id());
 				Vec3 away = target.position().subtract(owner.position());
 				if (away.lengthSqr() > 1.0E-4D) {
 					Vec3 dir = away.normalize();
@@ -1072,8 +1079,11 @@ public final class EximusArchetypeEffects {
 					continue;
 				}
 				CLOUD_HIT.put(target.getUUID(), now);
-				boolean landed = hurt(target, owner.damageSources().indirectMagic(owner, owner),
-						skillDamage(owner, target, archetype == EximusArchetype.VAMPIRE ? 18.0D : 15.0D));
+				boolean landed = hurt(owner, target,
+						owner.damageSources().indirectMagic(owner, owner),
+						skillDamage(owner, target,
+								archetype == EximusArchetype.VAMPIRE ? 18.0D : 15.0D),
+						archetype.id());
 				if (owner.level() instanceof ServerLevel level) {
 					Vector3f color = archetype == EximusArchetype.VAMPIRE
 							? new Vector3f(0.7F, 0.0F, 0.1F) : new Vector3f(0.71F, 0.36F, 1.0F);
