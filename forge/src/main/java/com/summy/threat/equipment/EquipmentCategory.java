@@ -15,4 +15,15 @@ public enum EquipmentCategory {
 	public String id() {
 		return id;
 	}
+
+	/** 固定优先级：盔甲 > 远程 > 近战。 */
+	public static EquipmentCategory resolve(boolean armor, boolean ranged, boolean melee) {
+		if (armor) {
+			return ARMOR;
+		}
+		if (ranged) {
+			return RANGED;
+		}
+		return melee ? MELEE : null;
+	}
 }
