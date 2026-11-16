@@ -11,6 +11,7 @@ import com.summy.threat.equipment.StarPrismService;
 import com.summy.threat.equipment.EquipmentCraftingHandler;
 import com.summy.threat.equipment.ModRecipes;
 import com.summy.threat.equipment.EximusArmorAttributes;
+import com.summy.threat.equipment.PlayerEquipmentCooldowns;
 import com.summy.threat.eximus.EximusArchetypeEffects;
 import com.summy.threat.eximus.EximusSpawner;
 import com.summy.threat.eximus.EximusShield;
@@ -84,6 +85,7 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(StarPrismService.class);
 		MinecraftForge.EVENT_BUS.register(EquipmentCraftingHandler.class);
 		MinecraftForge.EVENT_BUS.register(EximusArmorAttributes.class);
+		MinecraftForge.EVENT_BUS.register(PlayerEquipmentCooldowns.class);
 		MinecraftForge.EVENT_BUS.register(EximusShield.class);
 		MinecraftForge.EVENT_BUS.register(EximusArchetypeEffects.class);
 		MinecraftForge.EVENT_BUS.register(EximusSpawner.class);
