@@ -35,11 +35,16 @@ public final class WeaponRuntimeState {
 	}
 
 	public double pursuitMultiplier(UUID target, String weapon, long now, int resetTicks) {
+		return pursuitMultiplier(target, weapon, now, resetTicks, 6.0D);
+	}
+
+	public double pursuitMultiplier(UUID target, String weapon, long now, int resetTicks,
+			double percentPerStack) {
 		if (!pursuitMatches(target, weapon, now, resetTicks)) {
 			clearPursuit();
 			return 0.0D;
 		}
-		return pursuitStacks * 0.06D;
+		return pursuitStacks * Math.max(0.0D, percentPerStack) / 100.0D;
 	}
 
 	public int pursuitHit(UUID target, String weapon, long now, int maxStacks, int resetTicks) {
@@ -59,6 +64,18 @@ public final class WeaponRuntimeState {
 			mainhand = normalized;
 			clearPursuit();
 		}
+	}
+
+	public int pursuitStacks() {
+		return pursuitStacks;
+	}
+
+	public int activePursuitStacks(long now, int resetTicks) {
+		if (pursuitTarget == null || now - pursuitLastHit >= Math.max(1, resetTicks)) {
+			clearPursuit();
+			return 0;
+		}
+		return pursuitStacks;
 	}
 
 	public boolean starfireHit(int every) {

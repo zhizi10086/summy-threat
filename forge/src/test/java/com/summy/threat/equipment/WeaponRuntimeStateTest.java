@@ -70,6 +70,26 @@ class WeaponRuntimeStateTest {
 	}
 
 	@Test
+	void pursuitDamageUsesConfiguredPercentPerStack() {
+		WeaponRuntimeState state = new WeaponRuntimeState();
+		state.pursuitHit(TARGET_A, "sword-a", 20L, 2, 60);
+		state.pursuitHit(TARGET_A, "sword-a", 21L, 2, 60);
+
+		assertEquals(0.16D,
+				state.pursuitMultiplier(TARGET_A, "sword-a", 22L, 60, 8.0D), 1.0E-9D);
+		assertEquals(2, state.pursuitStacks());
+	}
+
+	@Test
+	void activePursuitStacksExpireWithoutMoreHits() {
+		WeaponRuntimeState state = new WeaponRuntimeState();
+		state.pursuitHit(TARGET_A, "sword-a", 20L, 5, 60);
+
+		assertEquals(1, state.activePursuitStacks(40L, 60));
+		assertEquals(0, state.activePursuitStacks(80L, 60));
+	}
+
+	@Test
 	void starfireAndStarfallPersistAcrossWeaponChangesUntilSessionReset() {
 		WeaponRuntimeState state = new WeaponRuntimeState();
 		assertFalse(state.starfireHit(4));
