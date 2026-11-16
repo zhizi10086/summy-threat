@@ -2,6 +2,7 @@ package com.summy.threat.devcheck;
 
 import com.google.common.collect.Multimap;
 import com.summy.threat.Config;
+import com.summy.threat.SummyThreat;
 import com.summy.threat.equipment.ArmorAffixEffects;
 import com.summy.threat.equipment.ArmorDurabilityProtection;
 import com.summy.threat.equipment.ArmorEquipmentAttributes;
@@ -74,7 +75,7 @@ final class EquipmentSystemDevCheck {
 		checkArmorRuntime(player, failures);
 		pendingEmergencyHeal = prepareEmergencyHeal(player);
 		pendingPlayer = pendingEmergencyHeal ? player : null;
-		ThreatDevCheck.logDetailed("B15 核心检查完成，等待下一 tick 验证应急生息");
+		SummyThreat.LOGGER.info("[DEVCHECK] B15 核心检查完成，等待下一 tick 验证应急生息");
 		return failures;
 	}
 
@@ -598,7 +599,7 @@ final class EquipmentSystemDevCheck {
 	}
 
 	private static void check(List<String> failures, String label, boolean ok, String detail) {
-		ThreatDevCheck.checkDetailed(label, ok, detail);
+		SummyThreat.LOGGER.info("[DEVCHECK] {} {}｜{}", ok ? "OK  " : "FAIL", label, detail);
 		if (!ok) {
 			failures.add(label + "｜" + detail);
 		}

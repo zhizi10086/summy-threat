@@ -163,7 +163,11 @@ final class KubeJSCompatDevCheck {
 						&& ThreatConfigApi.keys("magic_resistance")
 						.contains("magic_resistance.normal_tl0")
 						&& ThreatConfigApi.keys("magic_resistance")
-						.contains("magic_resistance.leader_boss_tl20"),
+						.contains("magic_resistance.leader_boss_tl20")
+						&& ThreatConfigApi.groups().contains("eximus_equipment")
+						&& ThreatConfigApi.keys("eximus_equipment").size() == 14
+						&& ThreatConfigApi.groups().contains("star_prism")
+						&& ThreatConfigApi.keys("star_prism").size() == 98,
 				"groups=" + ThreatConfigApi.groups().size());
 		ThreatDevCheck.checkDetailed("配置 API 六种声明类型识别",
 				"boolean".equals(ThreatConfigApi.type(booleanKey))

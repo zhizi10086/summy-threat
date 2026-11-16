@@ -148,6 +148,9 @@ minecraft {
                 // SR 的测试事务入口同时要求公共 devcheck 开关。
                 property 'summy.devcheck', 'true'
             }
+            if (project.hasProperty('equipmentcheck')) {
+                property 'summy_threat.equipmentcheck', 'true'
+            }
         }
     }
 }

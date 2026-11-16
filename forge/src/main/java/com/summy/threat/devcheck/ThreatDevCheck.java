@@ -122,6 +122,7 @@ public final class ThreatDevCheck {
 					b15EquipmentStarted = true;
 					b15EquipmentStartTick = serverTick;
 					FAILURES.addAll(EquipmentSystemDevCheck.start(player));
+					FAILURES.addAll(KubeJSCompatDevCheck.run(player));
 				} else if (b15EquipmentStarted && !b15EquipmentTicked
 						&& serverTick > b15EquipmentStartTick) {
 					b15EquipmentTicked = true;

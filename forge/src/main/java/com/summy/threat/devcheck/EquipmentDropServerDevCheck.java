@@ -6,6 +6,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -21,6 +22,8 @@ import java.util.List;
 public final class EquipmentDropServerDevCheck {
 	private static boolean ran;
 	private static boolean srRan;
+	private static ServerPlayer pendingB15Player;
+	private static List<String> pendingB15Failures = List.of();
 
 	private EquipmentDropServerDevCheck() {
 	}
@@ -32,6 +35,12 @@ public final class EquipmentDropServerDevCheck {
 		}
 		ran = true;
 		ServerLevel level = event.getServer().overworld();
+		if (Boolean.getBoolean("summy_threat.equipmentcheck")) {
+			ServerPlayer player = FakePlayerFactory.getMinecraft(level);
+			pendingB15Player = player;
+			pendingB15Failures = new ArrayList<>(EquipmentSystemDevCheck.start(player));
+			return;
+		}
 		ServerPlayer onlinePlayer = event.getServer().getPlayerList().getPlayers().stream()
 				.findFirst().orElse(null);
 		ServerPlayer player = onlinePlayer != null
@@ -42,6 +51,29 @@ public final class EquipmentDropServerDevCheck {
 			failures.addAll(EquipmentDropSrIntegrationDevCheck.run(onlinePlayer));
 		}
 		logResult(failures);
+	}
+
+	@SubscribeEvent
+	public static void onServerTick(TickEvent.ServerTickEvent event) {
+		if (event.phase != TickEvent.Phase.END || pendingB15Player == null) {
+			return;
+		}
+		ServerPlayer player = pendingB15Player;
+		pendingB15Player = null;
+		List<String> failures = new ArrayList<>(pendingB15Failures);
+		pendingB15Failures = List.of();
+		try {
+			failures.addAll(EquipmentSystemDevCheck.tick(player));
+		} catch (Throwable throwable) {
+			failures.add("B15 服务端专项异常：" + throwable);
+			throwable.printStackTrace();
+		}
+		if (failures.isEmpty()) {
+			SummyThreat.LOGGER.info("[EQUIPMENT] B15 服务端专项自检通过");
+		} else {
+			SummyThreat.LOGGER.error("[EQUIPMENT] B15 服务端专项自检失败：{}", failures);
+		}
+		event.getServer().halt(false);
 	}
 
 	@SubscribeEvent(priority = EventPriority.LOWEST)
