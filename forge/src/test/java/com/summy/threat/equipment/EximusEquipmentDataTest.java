@@ -62,4 +62,27 @@ class EximusEquipmentDataTest {
 		assertEquals(999, equipment.getCompound(EximusEquipmentData.EQUIPMENT_ROOT)
 				.getInt("schema"));
 	}
+
+	@Test
+	void modularToolRootsRemainUntouchedAcrossStOperations() {
+		CompoundTag input = new CompoundTag();
+		input.putString("tic_materials", "tinkers:iron");
+		input.putString("tic_stats", "keep-stats");
+		input.putString("sword/blade", "tetra:sword/short_blade");
+		input.putString("sword/blade_material", "tetra:iron");
+		input.putString("affix_data", "apotheosis-data");
+
+		CompoundTag prism = new CompoundTag();
+		prism.putString("Marker", "prism");
+		CompoundTag output = EximusEquipmentData.withPrism(
+				EximusEquipmentData.withUpgradeLevel(input, 2), 0, prism);
+
+		assertEquals("tinkers:iron", output.getString("tic_materials"));
+		assertEquals("keep-stats", output.getString("tic_stats"));
+		assertEquals("tetra:sword/short_blade", output.getString("sword/blade"));
+		assertEquals("tetra:iron", output.getString("sword/blade_material"));
+		assertEquals("apotheosis-data", output.getString("affix_data"));
+		assertEquals("prism", EximusEquipmentData.prismTag(output, 0)
+				.getString("Marker"));
+	}
 }

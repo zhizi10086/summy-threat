@@ -19,6 +19,7 @@ import com.summy.threat.Config;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -62,11 +63,13 @@ public final class ThreatDevCheck {
 	private static final boolean EQUIPMENT_CHECK = Boolean.getBoolean("summy_threat.equipmentcheck");
 	private static final boolean WEAPON_CHECK = Boolean.getBoolean("summy_threat.weaponcheck");
 	private static final boolean MAGIC_CHECK = Boolean.getBoolean("summy_threat.magiccheck");
+	private static final boolean COMPAT_CHECK = Boolean.getBoolean("summy_threat.compatcheck");
 	// 主菜单阶段要留给玩家创建/选择 DevCheckWorld 的时间；30 秒会在世界创建前
 	// 就把客户端关掉，因此这里放宽到 10 分钟，总运行上限放宽到 20 分钟。
 	private static final int IDLE_STOP_TICKS = 12000;
 	private static final int TOTAL_STOP_TICKS = 24000;
 	private static final int CLIENT_STOP_TICK = WEAPON_CHECK ? 400 : EQUIPMENT_CHECK ? 400
+			: COMPAT_CHECK ? 450
 			: BETRAYAL_CHECK ? 180 : LEADER_CHECK ? 240 : MAGIC_CHECK ? 140 : 1520;
 	private static final List<String> FAILURES = new ArrayList<>();
 	private static int serverTick;
@@ -98,6 +101,9 @@ public final class ThreatDevCheck {
 		ServerPlayer player = event.getServer().getPlayerList().getPlayers().get(0);
 		serverTick++;
 		try {
+			if (COMPAT_CHECK) {
+				return;
+			}
 			if (MAGIC_CHECK) {
 				switch (serverTick) {
 					case 20 -> prepareWorld(player);
@@ -241,6 +247,10 @@ public final class ThreatDevCheck {
 			equipmentClientRan = true;
 			checkWeaponClientTooltips(client);
 		}
+		if (COMPAT_CHECK && clientTick >= 300 && !equipmentClientRan) {
+			equipmentClientRan = true;
+			checkCompatibilityClientTooltips(client);
+		}
 		if (clientTick == 1370) {
 			screenshot(client, "st_devcheck_jade");
 		} else if (clientTick == 1390) {
@@ -306,6 +316,54 @@ public final class ThreatDevCheck {
 						&& (weaponText.contains("同步拆卸")
 								|| weaponText.contains("Synchronized disassembly")),
 				weaponText);
+	}
+
+	private static void checkCompatibilityClientTooltips(Minecraft client) {
+		ItemStack prism = new ItemStack(ModItems.ABYSSAL_STAR_PRISM.get());
+		StarPrismData.write(prism, new StarPrismData(StarPrismData.SCHEMA, true, null,
+				"astral_plating", "prism_edge", "starlit_bowstring"));
+
+		boolean tinkersOk = false;
+		if (net.minecraftforge.fml.ModList.get().isLoaded("tconstruct")) {
+			ItemStack armor = EximusEquipmentData.withUpgradeLevel(
+					new ItemStack(BuiltInRegistries.ITEM.get(
+							new net.minecraft.resources.ResourceLocation(
+									"tconstruct", "plate_chestplate"))), 2);
+			armor = EximusEquipmentData.withPrism(armor, 0, prism);
+			String text = tooltip(client, armor);
+			tinkersOk = (text.contains("槽位 1") || text.contains("Slot 1"))
+					&& !text.contains("武器功能尚未启用")
+					&& !text.contains("Weapon function is not yet enabled");
+		}
+		check("兼容客户端：匠魂护甲显示星渊槽位", tinkersOk,
+				"loaded=" + net.minecraftforge.fml.ModList.get().isLoaded("tconstruct"));
+
+		boolean tetraOk = false;
+		if (net.minecraftforge.fml.ModList.get().isLoaded("tetra")) {
+			try {
+				Class<?> type = Class.forName(
+						"se.mickelus.tetra.items.modular.impl.ModularBladedItem");
+				ItemStack sword = (ItemStack) type.getMethod("createItemStack",
+						String.class, String.class, String.class)
+						.invoke(null, "short_blade", "iron", "stick");
+				sword = EximusEquipmentData.withPrism(
+						EximusEquipmentData.withUpgradeLevel(sword, 2), 0, prism);
+				String text = tooltip(client, sword);
+				tetraOk = (text.contains("槽位 1") || text.contains("Slot 1"))
+						&& !text.contains("武器功能尚未启用")
+						&& !text.contains("Weapon function is not yet enabled");
+			} catch (Throwable ignored) {
+				tetraOk = false;
+			}
+		}
+		check("兼容客户端：Tetra 剑显示星渊槽位", tetraOk,
+				"loaded=" + net.minecraftforge.fml.ModList.get().isLoaded("tetra"));
+	}
+
+	private static String tooltip(Minecraft client, ItemStack stack) {
+		return stack.getTooltipLines(client.player, TooltipFlag.Default.NORMAL)
+				.stream().map(net.minecraft.network.chat.Component::getString)
+				.reduce("", (left, right) -> left + "\n" + right);
 	}
 
 	private static void prepareWorld(ServerPlayer player) {
@@ -711,6 +769,9 @@ public final class ThreatDevCheck {
 		}
 		if (WEAPON_CHECK) {
 			log("[WEAPON] FAIL=" + FAILURES.size());
+		}
+		if (COMPAT_CHECK) {
+			log("[COMPAT] FAIL=" + FAILURES.size());
 		}
 		for (String failure : FAILURES) {
 			log("FAILED｜" + failure);

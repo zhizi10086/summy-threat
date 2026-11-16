@@ -16,4 +16,14 @@ class ArmorDurabilityProtectionTest {
 		assertEquals(2, ArmorDurabilityProtection.capLoss(1000, 2, 2, 100, 5, 6));
 		assertEquals(20, ArmorDurabilityProtection.capLoss(1000, 20, 1, 100, 5, 6));
 	}
+
+	@Test
+	void onlyLevelTwoArmorHeldByServerPlayerUsesCap() {
+		assertEquals(6, ArmorDurabilityProtection.capForState(
+				1000, 20, true, true, 2, 100, 5, 6));
+		assertEquals(20, ArmorDurabilityProtection.capForState(
+				1000, 20, false, true, 2, 100, 5, 6));
+		assertEquals(20, ArmorDurabilityProtection.capForState(
+				1000, 20, true, false, 2, 100, 5, 6));
+	}
 }

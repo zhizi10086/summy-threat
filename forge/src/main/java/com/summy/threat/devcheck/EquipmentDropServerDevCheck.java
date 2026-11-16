@@ -30,7 +30,8 @@ public final class EquipmentDropServerDevCheck {
 
 	@SubscribeEvent
 	public static void onServerStarted(ServerStartedEvent event) {
-		if (ran || !Boolean.getBoolean("summy_threat.devcheck")) {
+		if (ran || !Boolean.getBoolean("summy_threat.devcheck")
+				|| Boolean.getBoolean("summy_threat.compatcheck")) {
 			return;
 		}
 		ran = true;
