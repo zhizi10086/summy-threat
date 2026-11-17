@@ -12,6 +12,7 @@ import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.leader.LeaderAbilityState;
 import com.summy.threat.leader.LeaderAbilityTexts;
 import com.summy.threat.leader.LegendaryResistance;
+import com.summy.threat.legendary.LegendaryActionState;
 import com.summy.threat.pcf.CdfManager;
 import com.summy.threat.pcf.PcfManager;
 import com.summy.threat.pcf.SpawnRegion;
@@ -357,6 +358,7 @@ public final class MonsterScaler {
 		// 卓越者核心机制：卓越护盾（新刷满盾；残留按剩余比例保留）
 		EximusShield.refresh(entity, tl, kind == Kind.EXIMUS);
 		LegendaryResistance.refresh(entity);
+		LegendaryActionState.ensure(entity);
 
 		if (kind != Kind.NORMAL) {
 			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}，卓越护盾 {}，能力 {}",

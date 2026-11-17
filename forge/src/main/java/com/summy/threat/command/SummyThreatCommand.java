@@ -13,6 +13,8 @@ import com.summy.threat.eximus.EximusArchetype;
 import com.summy.threat.leader.LeaderAbilityId;
 import com.summy.threat.leader.LeaderAbilityState;
 import com.summy.threat.leader.LeaderAbilityTexts;
+import com.summy.threat.legendary.LegendaryActionId;
+import com.summy.threat.legendary.LegendaryActionRuntime;
 import com.summy.threat.combat.ArmorDamageFormula;
 import com.summy.threat.pcf.CdfManager;
 import com.summy.threat.pcf.PcfManager;
@@ -45,6 +47,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.Locale;
 import java.util.List;
+import java.util.Arrays;
 
 /**
  * 调试 / 测量命令：{@code /summythreat ...}（OP 2 级）。
@@ -61,6 +64,7 @@ import java.util.List;
  *         flame / frost / poison / storm / shock / guardian / vampire / magnet，
  *         {@code clear} 清空原型，{@code none} 抑制 TL 能力。</li>
  *     <li>{@code stats [玩家]}：查看计量结果（有效 DPS / 击杀耗时 / 无视护甲占比 / 承伤）。</li>
+ *     <li>{@code legendary test <action_id> [target]}：以执行玩家为中心触发一次动作框架测试。</li>
  * </ul>
  */
 public final class SummyThreatCommand {
@@ -184,10 +188,46 @@ public final class SummyThreatCommand {
 												.then(Commands.argument("second", StringArgumentType.word())
 														.executes(ctx -> setLeaderAbility(ctx,
 																StringArgumentType.getString(ctx, "second"))))))))
+				.then(Commands.literal("legendary")
+						.then(Commands.literal("test")
+								.then(Commands.argument("action_id", StringArgumentType.word())
+										.suggests((ctx, builder) ->
+												net.minecraft.commands.SharedSuggestionProvider.suggest(
+														Arrays.stream(LegendaryActionId.values())
+																.map(LegendaryActionId::id), builder))
+										.executes(ctx -> testLegendaryAction(ctx,
+												ctx.getSource().getPlayerOrException()))
+										.then(Commands.argument("target", EntityArgument.entity())
+												.executes(ctx -> testLegendaryAction(ctx,
+														EntityArgument.getEntity(ctx, "target")))))))
 				.then(Commands.literal("armor")
 						.executes(ctx -> showArmor(ctx, ctx.getSource().getPlayer()))
 						.then(Commands.argument("player", EntityArgument.player())
 								.executes(ctx -> showArmor(ctx, EntityArgument.getPlayer(ctx, "player"))))));
+	}
+
+	private static int testLegendaryAction(CommandContext<CommandSourceStack> ctx,
+			Entity targetEntity) throws CommandSyntaxException {
+		ServerPlayer player = ctx.getSource().getPlayerOrException();
+		LegendaryActionId action = LegendaryActionId.byId(
+				StringArgumentType.getString(ctx, "action_id"));
+		if (action == null) {
+			return fail(ctx, "未知传奇动作 ID：" + StringArgumentType.getString(ctx, "action_id"));
+		}
+		if (!(targetEntity instanceof LivingEntity target)) {
+			return fail(ctx, "测试目标必须是活体");
+		}
+		if (!target.isAlive() || target.level() != player.level()) {
+			return fail(ctx, "测试目标必须存活且与执行玩家处于同一维度");
+		}
+		if (!LegendaryActionRuntime.startTest(player, target, action)) {
+			return fail(ctx, "同一玩家已存在相同传奇动作测试实例：" + action.id());
+		}
+		ctx.getSource().sendSuccess(() -> Component.literal(
+				"[Summy Threat] 已启动传奇动作基础框架测试：%s；中心 %.2f %.2f %.2f；目标 %s"
+						.formatted(action.id(), player.getX(), player.getY(), player.getZ(),
+								target.getName().getString())), false);
+		return 1;
 	}
 
 	private static int showTier(CommandContext<CommandSourceStack> ctx) {
