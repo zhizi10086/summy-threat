@@ -84,6 +84,8 @@ minecraft {
                     ? project.file('run/compat/tconstruct-final')
                     : project.hasProperty('tetradev')
                     ? project.file('run/compat/tetra-final')
+                    : project.hasProperty('apotheosisdev')
+                    ? project.file('run/apotheosis')
                     : project.file('run')
             property 'forge.logging.console.level', 'debug'
             // dev 环境里依赖模组自带的 refmap 是 SRG 名，需要重映射成开发映射；
@@ -223,7 +225,7 @@ dependencies {
     tconstructCompatDev fg.deobf('local:Mantle:1.20.1-1.11.128')
     tetraCompatDev fg.deobf('local:tetra:1.20.1-6.17.0')
     tetraCompatDev fg.deobf('local:mutil:1.20.1-6.3.0')
-    seCompatDev fg.deobf('local:summy-enchantment:1.4.2-forge')
+    seCompatDev fg.deobf('local:summy-enchantment:1.4.3-forge')
 }
 
 tasks.register('copyAttributeFixDevJar', Copy) {

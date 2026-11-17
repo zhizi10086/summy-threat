@@ -9,8 +9,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingEquipmentChangeEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.HashMap;
@@ -23,6 +25,23 @@ public final class WeaponRuntimeService {
 	private static final Map<UUID, WeaponRuntimeState> STATES = new HashMap<>();
 
 	private WeaponRuntimeService() {
+	}
+
+	@SubscribeEvent(priority = EventPriority.NORMAL)
+	public static void onMarkedTargetHurt(LivingHurtEvent event) {
+		if (event.isCanceled() || event.getAmount() <= 0.0F
+				|| event.getEntity().level().isClientSide() || !enabled()) {
+			return;
+		}
+		long now = event.getEntity().level().getGameTime();
+		UUID target = event.getEntity().getUUID();
+		for (WeaponRuntimeState state : STATES.values()) {
+			if (state.sharedMarkActive(target, now)) {
+				event.setAmount((float) (event.getAmount()
+						* (1.0D + Config.SHARED_MARK_DAMAGE_PERCENT.get() / 100.0D)));
+				return;
+			}
+		}
 	}
 
 	@SubscribeEvent
@@ -111,7 +130,7 @@ public final class WeaponRuntimeService {
 	public static double pursuitMultiplier(ServerPlayer player, LivingEntity target,
 			String weaponKey) {
 		if (!enabled() || player == null || target == null) {
-			return 1.0D;
+			return 0.0D;
 		}
 		double percent = StarPrismConfig.doubleValue(
 				"melee.abyssal_pursuit.damage_per_stack_percent");
@@ -127,7 +146,7 @@ public final class WeaponRuntimeService {
 		}
 		double percent = StarPrismConfig.doubleValue(
 				"ranged.abyssal_hunt_arrow.damage_per_stack_percent");
-		return state(player).pursuitMultiplier(target.getUUID(), weaponKey,
+		return state(player).rangedPursuitMultiplier(target.getUUID(), weaponKey,
 				now(player), StarPrismConfig.intValue("ranged.abyssal_hunt_arrow.reset_ticks"),
 				percent);
 	}
@@ -147,7 +166,7 @@ public final class WeaponRuntimeService {
 		if (!enabled() || player == null || target == null) {
 			return 0;
 		}
-		return state(player).pursuitHit(target.getUUID(), weaponKey, now(player),
+		return state(player).rangedPursuitHit(target.getUUID(), weaponKey, now(player),
 				StarPrismConfig.intValue("ranged.abyssal_hunt_arrow.max_stacks"),
 				StarPrismConfig.intValue("ranged.abyssal_hunt_arrow.reset_ticks"));
 	}

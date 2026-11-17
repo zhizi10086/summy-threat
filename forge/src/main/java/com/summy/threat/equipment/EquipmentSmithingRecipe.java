@@ -17,10 +17,12 @@ import net.minecraft.world.item.crafting.SmithingRecipe;
 import net.minecraft.world.level.Level;
 
 import java.util.Optional;
+import java.util.UUID;
 
 /** 单一动态锻造配方，按 operation 执行 B15 的六种事务。 */
 public final class EquipmentSmithingRecipe implements SmithingRecipe {
 	public static final String RETURN_PRISMS = "summy_threat:return_prisms";
+	public static final String RETURN_ID = "summy_threat:return_id";
 	private final ResourceLocation id;
 	private final EquipmentOperation operation;
 
@@ -170,6 +172,7 @@ public final class EquipmentSmithingRecipe implements SmithingRecipe {
 		ItemStack out = EximusEquipmentData.clearPrisms(base);
 		CompoundTag root = out.getOrCreateTag().getCompound(EximusEquipmentData.EQUIPMENT_ROOT);
 		root.put(RETURN_PRISMS, returns);
+		root.putString(RETURN_ID, UUID.randomUUID().toString());
 		return out;
 	}
 

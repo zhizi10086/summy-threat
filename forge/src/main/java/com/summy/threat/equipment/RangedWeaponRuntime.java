@@ -170,7 +170,8 @@ public final class RangedWeaponRuntime {
 		}
 		if (!(owner instanceof ServerPlayer player)) {
 			if (data.fixedLevel() >= 1) {
-				event.setAmount(event.getAmount() * 1.10F);
+				event.setAmount((float) (event.getAmount()
+						* EximusUpgradeValues.RANGED_DAMAGE_MULTIPLIER));
 			}
 			return;
 		}
@@ -180,7 +181,7 @@ public final class RangedWeaponRuntime {
 		WeaponAffixSnapshot snapshot = snapshot(data);
 		double amount = event.getAmount();
 		if (data.fixedLevel() >= 1) {
-			amount *= 1.10D;
+			amount *= EximusUpgradeValues.RANGED_DAMAGE_MULTIPLIER;
 		}
 		if (snapshot.has("starlit_bowstring")) {
 			amount *= 1.0D + StarPrismConfig.doubleValue(
@@ -231,7 +232,7 @@ public final class RangedWeaponRuntime {
 		if (snapshot.has("void_quiver") && state.claim("void_quiver")) {
 			DAMAGE_RECORDS.computeIfAbsent(event.getEntity().getUUID(),
 					id -> new ArrayList<>()).add(new RangedDamageRecord(
-							event.getEntity(), event.getSource(), player,
+							event.getEntity(), event.getSource(), player, amount,
 							StarPrismConfig.doubleValue(
 									"ranged.void_quiver.lifesteal_percent")));
 		}
@@ -251,8 +252,9 @@ public final class RangedWeaponRuntime {
 				continue;
 			}
 			iterator.remove();
-			if (!event.isCanceled() && event.getAmount() > 0.0F) {
-				double actual = Math.min(event.getAmount(), event.getEntity().getHealth());
+			if (!event.isCanceled()) {
+				double actual = Math.min(record.nominalAmount(),
+						event.getEntity().getHealth());
 				if (actual > 0.0D) {
 					HEALS.add(new DelayedHeal(record.player(),
 							actual * record.lifestealPercent() / 100.0D));
@@ -325,8 +327,12 @@ public final class RangedWeaponRuntime {
 			}
 			boolean velocityApplied = data.velocityApplied();
 			boolean pierceApplied = data.pierceApplied();
-			if (!velocityApplied && data.fixedLevel() >= 1) {
-				Vec3 velocity = arrow.getDeltaMovement().scale(1.10D * 1.15D);
+			if (!velocityApplied) {
+				double velocityMultiplier = initialVelocityMultiplier(
+						data.fixedLevel(), hasAffix(data, "comet_fletching"),
+						StarPrismConfig.doubleValue(
+								"ranged.comet_fletching.velocity_percent"));
+				Vec3 velocity = arrow.getDeltaMovement().scale(velocityMultiplier);
 				arrow.setDeltaMovement(velocity);
 				velocityApplied = true;
 			}
@@ -342,6 +348,16 @@ public final class RangedWeaponRuntime {
 							data.markCapable(), data.siderealAim(), data.terminalStarShot(),
 							velocityApplied, pierceApplied));
 		}
+	}
+
+	static double initialVelocityMultiplier(int fixedLevel, boolean cometFletching,
+			double cometVelocityPercent) {
+		double multiplier = fixedLevel >= 1
+				? EximusUpgradeValues.RANGED_VELOCITY_MULTIPLIER : 1.0D;
+		if (cometFletching) {
+			multiplier *= 1.0D + Math.max(0.0D, cometVelocityPercent) / 100.0D;
+		}
+		return multiplier;
 	}
 
 	private static boolean beginShot(ServerPlayer player, ItemStack stack,
@@ -502,7 +518,7 @@ public final class RangedWeaponRuntime {
 	}
 
 	private record RangedDamageRecord(LivingEntity target, net.minecraft.world.damagesource.DamageSource source,
-			ServerPlayer player, double lifestealPercent) {
+			ServerPlayer player, double nominalAmount, double lifestealPercent) {
 	}
 
 	private record DelayedMagic(LivingEntity target, ServerPlayer player, double amount) {

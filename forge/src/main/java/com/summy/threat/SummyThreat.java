@@ -8,7 +8,6 @@ import com.summy.threat.api.ThreatConfigApi;
 import com.summy.threat.combat.BossHardcodedDamageScaling;
 import com.summy.threat.combat.MagicResistance;
 import com.summy.threat.equipment.StarPrismService;
-import com.summy.threat.equipment.EquipmentCraftingHandler;
 import com.summy.threat.equipment.ModRecipes;
 import com.summy.threat.equipment.EximusArmorAttributes;
 import com.summy.threat.equipment.EximusWeaponAttributes;
@@ -104,7 +103,6 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(MagicResistance.class);
 		MinecraftForge.EVENT_BUS.register(AbilityEffects.class);
 		MinecraftForge.EVENT_BUS.register(StarPrismService.class);
-		MinecraftForge.EVENT_BUS.register(EquipmentCraftingHandler.class);
 		MinecraftForge.EVENT_BUS.register(EximusArmorAttributes.class);
 		MinecraftForge.EVENT_BUS.register(EximusWeaponAttributes.class);
 		MinecraftForge.EVENT_BUS.register(PlayerEquipmentCooldowns.class);

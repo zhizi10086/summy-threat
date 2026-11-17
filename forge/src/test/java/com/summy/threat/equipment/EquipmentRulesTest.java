@@ -82,11 +82,41 @@ class EquipmentRulesTest {
 						"starfall_cycle_arrow"), EquipmentCategory.ARMOR));
 	}
 
+	@Test
+	void embeddingSecondSlotReadsPrismSavedAsItemStackForEveryCategory() {
+		assertSecondSlotFor(EquipmentCategory.ARMOR,
+				"astral_plating", "star_mantle");
+		assertSecondSlotFor(EquipmentCategory.MELEE,
+				"prism_edge", "astral_haste");
+		assertSecondSlotFor(EquipmentCategory.RANGED,
+				"starlit_bowstring", "sidereal_aim");
+	}
+
+	private static void assertSecondSlotFor(EquipmentCategory category,
+			String first, String second) {
+		CompoundTag equipment = EximusEquipmentData.withUpgradeLevel(new CompoundTag(), 2);
+		CompoundTag firstPrism = serializedPrism(first, first, first);
+		equipment = EximusEquipmentData.withPrism(equipment, 0, firstPrism);
+		CompoundTag secondPrism = prism(true, null, second, second, second);
+
+		assertEquals(1, EquipmentRules.embeddingSlot(equipment,
+				secondPrism, category));
+	}
+
 	private static CompoundTag prism(boolean revealed, String pending, String armor,
 			String melee, String ranged) {
 		CompoundTag tag = new CompoundTag();
 		StarPrismData.write(tag, new StarPrismData(1, revealed, pending,
 				armor, melee, ranged));
 		return tag;
+	}
+
+	private static CompoundTag serializedPrism(String armor, String melee,
+			String ranged) {
+		CompoundTag stack = new CompoundTag();
+		stack.putByte("Count", (byte) 1);
+		stack.putString("id", "summy_threat:abyssal_star_prism");
+		stack.put("tag", prism(true, null, armor, melee, ranged));
+		return stack;
 	}
 }

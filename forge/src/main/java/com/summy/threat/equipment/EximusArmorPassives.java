@@ -56,9 +56,10 @@ public final class EximusArmorPassives {
 
 	@SubscribeEvent(priority = EventPriority.LOWEST)
 	public static void onLivingDamage(LivingDamageEvent event) {
-		if (event.isCanceled() || !(event.getEntity() instanceof ServerPlayer player)
+		if (event.isCanceled() || event.getAmount() <= 0.0F
+				|| !(event.getEntity() instanceof ServerPlayer player)
 				|| !hasFixed(player, EquipmentSlot.CHEST)
-				|| !validAttack(player, event.getSource())
+				|| !validTrigger(player, event.getSource())
 				|| !EquipmentConfigValidation.emergencyMendingValid()
 				|| !PlayerEquipmentCooldowns.ready(player, "emergency_mending")) {
 			return;
@@ -101,10 +102,6 @@ public final class EximusArmorPassives {
 		}
 		player.removeEffect(MobEffects.BLINDNESS);
 		player.removeEffect(MobEffects.DARKNESS);
-		int light = player.level().getMaxLocalRawBrightness(player.blockPosition());
-		if (light > Config.CLEAR_SIGHT_NIGHT_VISION_LIGHT.get()) {
-			return;
-		}
 		if (current == null || current.isAmbient() && !current.isVisible()
 				&& current.getDuration() < NIGHT_VISION_REFRESH_BELOW) {
 			player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION,
@@ -119,17 +116,13 @@ public final class EximusArmorPassives {
 				&& armor.getType().getSlot() == slot;
 	}
 
-	private static boolean validAttack(ServerPlayer player, DamageSource source) {
+	private static boolean validTrigger(ServerPlayer player, DamageSource source) {
 		Entity sourceEntity = source.getEntity();
 		Entity direct = source.getDirectEntity();
 		if (sourceEntity == player
 				|| direct instanceof Projectile projectile && projectile.getOwner() == player) {
 			return false;
 		}
-		if (sourceEntity instanceof LivingEntity) {
-			return true;
-		}
-		return direct instanceof Projectile projectile
-				&& projectile.getOwner() instanceof LivingEntity;
+		return true;
 	}
 }

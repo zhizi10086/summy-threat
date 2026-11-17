@@ -165,7 +165,7 @@ final class KubeJSCompatDevCheck {
 						&& ThreatConfigApi.keys("magic_resistance")
 						.contains("magic_resistance.leader_boss_tl20")
 						&& ThreatConfigApi.groups().contains("eximus_equipment")
-						&& ThreatConfigApi.keys("eximus_equipment").size() == 14
+						&& ThreatConfigApi.keys("eximus_equipment").size() == 13
 						&& ThreatConfigApi.groups().contains("star_prism")
 						&& ThreatConfigApi.keys("star_prism").size() == 98,
 				"groups=" + ThreatConfigApi.groups().size());
@@ -298,7 +298,8 @@ final class KubeJSCompatDevCheck {
 
 		@SubscribeEvent
 		public void onConfig(ThreatConfigChangedEvent event) {
-			if (attempted) {
+			// 异步 reload 事件不属于本次递归写入路径，不能抢先消费唯一一次探针。
+			if (!"api".equals(event.getSource()) || attempted) {
 				return;
 			}
 			attempted = true;

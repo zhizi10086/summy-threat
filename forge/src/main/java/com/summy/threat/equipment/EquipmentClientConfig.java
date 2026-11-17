@@ -19,8 +19,6 @@ public final class EquipmentClientConfig {
 		CompoundTag root = new CompoundTag();
 		CompoundTag equipment = new CompoundTag();
 		equipment.putBoolean("enable", read(Config.EXIMUS_EQUIPMENT_ENABLED));
-		equipment.putInt("clear_sight_night_vision_light",
-				read(Config.CLEAR_SIGHT_NIGHT_VISION_LIGHT));
 		equipment.putInt("emergency_mending_cooldown_ticks",
 				read(Config.EMERGENCY_MENDING_COOLDOWN_TICKS));
 		equipment.putDouble("emergency_mending_heal_percent",
@@ -161,8 +159,6 @@ public final class EquipmentClientConfig {
 			return StarPrismConfig.intValue(key.substring("star.value.".length()));
 		}
 		return switch (key) {
-			case "equipment.clear_sight_night_vision_light" ->
-					read(Config.CLEAR_SIGHT_NIGHT_VISION_LIGHT);
 			case "equipment.emergency_mending_cooldown_ticks" ->
 					read(Config.EMERGENCY_MENDING_COOLDOWN_TICKS);
 			case "equipment.shared_mark_duration_ticks" ->

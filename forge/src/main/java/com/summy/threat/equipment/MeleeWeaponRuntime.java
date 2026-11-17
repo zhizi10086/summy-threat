@@ -82,7 +82,8 @@ public final class MeleeWeaponRuntime {
 		if (event.getSource().getDirectEntity() instanceof LivingEntity attacker
 				&& !(attacker instanceof ServerPlayer)
 				&& eligible(attacker.getMainHandItem())) {
-			event.setAmount(event.getAmount() * 1.10F);
+			event.setAmount((float) (event.getAmount()
+					* EximusUpgradeValues.MELEE_DAMAGE_MULTIPLIER));
 		}
 		if (!(event.getSource().getEntity() instanceof ServerPlayer player)
 				|| event.getSource().getDirectEntity() != player) {
@@ -100,10 +101,7 @@ public final class MeleeWeaponRuntime {
 		LivingEntity target = event.getEntity();
 		double amount = event.getAmount();
 		if (snapshot.level() >= 1) {
-			amount *= 1.10D;
-		}
-		if (WeaponRuntimeService.sharedMarkActive(player, target)) {
-			amount *= 1.0D + Config.SHARED_MARK_DAMAGE_PERCENT.get() / 100.0D;
+			amount *= EximusUpgradeValues.MELEE_DAMAGE_MULTIPLIER;
 		}
 		double pursuitPercent = WeaponRuntimeService.pursuitMultiplier(player, target,
 				WeaponRuntimeService.weaponKey(player.getMainHandItem()));
@@ -144,7 +142,7 @@ public final class MeleeWeaponRuntime {
 		}
 		if (snapshot.has("void_siphon")) {
 			DAMAGE_RECORDS.put(target.getUUID(), new DamageRecord(target, event.getSource(),
-					player, StarPrismConfig.doubleValue(
+					player, amount, StarPrismConfig.doubleValue(
 							"melee.void_siphon.lifesteal_percent")));
 		}
 		if (snapshot.markCapable()) {
@@ -165,11 +163,11 @@ public final class MeleeWeaponRuntime {
 			return;
 		}
 		DAMAGE_RECORDS.remove(event.getEntity().getUUID());
-		if (event.isCanceled() || event.getAmount() <= 0.0F) {
+		if (event.isCanceled()) {
 			return;
 		}
-		// LivingDamageEvent 的金额是护甲/保护/吸收后、真正准备扣除的生命值。
-		double actual = Math.min(event.getAmount(), event.getEntity().getHealth());
+		// 吸血按命中前名义伤害与目标当前生命的较低值结算，不随最终减伤缩水。
+		double actual = Math.min(record.nominalAmount(), event.getEntity().getHealth());
 		if (actual <= 0.0D) {
 			return;
 		}
@@ -291,7 +289,7 @@ public final class MeleeWeaponRuntime {
 	}
 
 	private record DamageRecord(LivingEntity target, DamageSource source,
-			ServerPlayer player, double lifestealPercent) {
+			ServerPlayer player, double nominalAmount, double lifestealPercent) {
 	}
 
 	private record DelayedMagic(LivingEntity target, ServerPlayer player, double amount) {

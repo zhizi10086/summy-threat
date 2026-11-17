@@ -6,11 +6,11 @@ import com.summy.threat.combat.MagicResistance;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -33,6 +33,19 @@ public final class ArmorAffixEffects {
 	private static final Map<UUID, Map<String, Long>> NEGATED_MOVEMENTS = new HashMap<>();
 
 	private ArmorAffixEffects() {
+	}
+
+	@SubscribeEvent(priority = EventPriority.HIGHEST)
+	public static void onLivingAttack(LivingAttackEvent event) {
+		if (event.isCanceled() || !(event.getEntity() instanceof ServerPlayer player)) {
+			return;
+		}
+		ThreatHitContext.Hit context = ThreatHitContext.current(player, event.getSource());
+		if (context != null && context.category() == ThreatCategory.TL_ABILITY
+				&& "thorns".equals(context.abilityId())
+				&& active(player).has("thorns_insulation")) {
+			event.setCanceled(true);
+		}
 	}
 
 	@SubscribeEvent(priority = EventPriority.HIGHEST)
@@ -84,7 +97,7 @@ public final class ArmorAffixEffects {
 		DamageSource source = event.getSource();
 		float amount = event.getAmount();
 
-		if (active.has("projectile_ward") && hasAttributedProjectile(source)) {
+		if (active.has("projectile_ward") && source.is(DamageTypeTags.IS_PROJECTILE)) {
 			amount *= multiplier("armor.projectile_ward.reduction_percent");
 		}
 		if (active.has("anchored_stride") && source.is(DamageTypeTags.IS_FALL)) {
@@ -235,7 +248,7 @@ public final class ArmorAffixEffects {
 
 	private static void tryActivateSteadyHeart(ServerPlayer player, DamageSource source,
 			float amount, long now) {
-		if (!active(player).has("steady_heart") || !hasAttribution(source)
+		if (!active(player).has("steady_heart") || isSelfDamage(player, source)
 				|| !PlayerEquipmentCooldowns.ready(player, STEADY_HEART_COOLDOWN)) {
 			return;
 		}
@@ -263,24 +276,12 @@ public final class ArmorAffixEffects {
 		return ThreatHitContext.current(player, source) != null;
 	}
 
-	private static boolean hasAttributedProjectile(DamageSource source) {
-		if (!source.is(DamageTypeTags.IS_PROJECTILE)) {
-			return false;
-		}
-		Entity direct = source.getDirectEntity();
-		if (direct instanceof Projectile projectile
-				&& projectile.getOwner() instanceof LivingEntity) {
-			return true;
-		}
-		return source.getEntity() instanceof LivingEntity;
-	}
-
-	private static boolean hasAttribution(DamageSource source) {
-		if (source.getEntity() instanceof LivingEntity) {
+	private static boolean isSelfDamage(ServerPlayer player, DamageSource source) {
+		if (source.getEntity() == player) {
 			return true;
 		}
 		return source.getDirectEntity() instanceof Projectile projectile
-				&& projectile.getOwner() instanceof LivingEntity;
+				&& projectile.getOwner() == player;
 	}
 
 	private static double multiplier(String key) {

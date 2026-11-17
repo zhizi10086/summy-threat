@@ -3,7 +3,9 @@ package com.summy.threat.client;
 import com.summy.threat.equipment.EquipmentCategory;
 import com.summy.threat.equipment.EquipmentClientConfig;
 import com.summy.threat.equipment.EquipmentTypeResolver;
+import com.summy.threat.equipment.EximusArmorAttributes;
 import com.summy.threat.equipment.EximusEquipmentData;
+import com.summy.threat.equipment.EximusUpgradeValues;
 import com.summy.threat.equipment.StarPrismAffix;
 import com.summy.threat.equipment.StarPrismAffixes;
 import com.summy.threat.equipment.StarPrismData;
@@ -12,6 +14,8 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -56,7 +60,6 @@ public final class EquipmentTooltipHandler {
 					.withStyle(ChatFormatting.GOLD));
 			tooltip.add(translation("summy_threat.tooltip.prism.refresh_hint", ChatFormatting.GRAY));
 		}
-		tooltip.add(translation("summy_threat.tooltip.potential_lines", ChatFormatting.DARK_GRAY));
 		for (EquipmentCategory category : EquipmentCategory.values()) {
 			String id = data.affix(category);
 			StarPrismAffix affix = StarPrismAffixes.find(id);
@@ -88,9 +91,8 @@ public final class EquipmentTooltipHandler {
 			return;
 		}
 		int level = EximusEquipmentData.upgradeLevel(stack);
-		tooltip.add(Component.translatable("summy_threat.tooltip.upgrade_level." + level)
-				.withStyle(ChatFormatting.AQUA));
 		EquipmentCategory category = EquipmentTypeResolver.category(stack);
+		addFixedUpgradeLines(tooltip, stack, category, level);
 		for (int slot = 0; slot < EximusEquipmentData.SLOT_COUNT; slot++) {
 			MutableComponent line = Component.translatable("summy_threat.tooltip.slot." + (slot + 1))
 					.withStyle(ChatFormatting.GRAY);
@@ -121,13 +123,6 @@ public final class EquipmentTooltipHandler {
 			}
 			tooltip.add(line);
 		}
-		if (category != null) {
-			tooltip.add(Component.translatable("summy_threat.tooltip.active_category",
-							Component.translatable("summy_threat.tooltip.category." + category.id()))
-					.withStyle(ChatFormatting.DARK_GRAY));
-			tooltip.add(translation("summy_threat.tooltip.disassemble_all",
-					ChatFormatting.DARK_GRAY));
-		}
 		if (!Screen.hasShiftDown()) {
 			tooltip.add(translation("summy_threat.tooltip.shift_values", ChatFormatting.DARK_GRAY));
 		}
@@ -149,11 +144,15 @@ public final class EquipmentTooltipHandler {
 		return switch (affix.id()) {
 			case "astral_plating" -> value(key,
 					number("star.value.armor.astral_plating.armor_value_per_stack"),
-					number("star.value.armor.astral_plating.toughness_value_per_stack"));
+					number("star.value.armor.astral_plating.toughness_value_per_stack"),
+					integer("star.value.armor.basic_stack_limit"));
 			case "vital_constellation" -> value(key,
-					number("star.value.armor.vital_constellation.max_health_per_stack"));
+					number("star.value.armor.vital_constellation.max_health_per_stack"),
+					integer("star.value.armor.basic_stack_limit"));
 			case "star_mantle" -> value(key,
-					number("star.value.armor.star_mantle.reduction_percent_per_stack"));
+					number("star.value.armor.star_mantle.reduction_percent_per_stack"),
+					integer("star.value.armor.basic_stack_limit"));
+			case "thorns_insulation" -> value(key);
 			case "corrosion_baffle" -> value(key,
 					number("star.value.armor.corrosion_baffle.suppression_percent"));
 			case "projectile_ward" -> value(key,
@@ -166,16 +165,16 @@ public final class EquipmentTooltipHandler {
 			case "steady_heart" -> value(key,
 					number("star.value.armor.steady_heart.threshold_percent"),
 					number("star.value.armor.steady_heart.reduction_percent"),
-					integer("star.value.armor.steady_heart.duration_ticks"),
-					integer("star.value.armor.steady_heart.cooldown_ticks"));
+					seconds("star.value.armor.steady_heart.duration_ticks"),
+					seconds("star.value.armor.steady_heart.cooldown_ticks"));
 			case "last_light" -> value(key,
 					number("star.value.armor.last_light.health_floor_percent"),
-					integer("star.value.armor.last_light.guard_ticks"),
-					integer("star.value.armor.last_light.cooldown_ticks"));
+					seconds("star.value.armor.last_light.guard_ticks"),
+					seconds("star.value.armor.last_light.cooldown_ticks"));
 			case "threat_aegis" -> value(key,
 					number("star.value.armor.threat_aegis.reduction_percent"));
 			case "phase_anchor" -> value(key,
-					integer("star.value.armor.phase_anchor.cooldown_ticks"));
+					seconds("star.value.armor.phase_anchor.cooldown_ticks"));
 			case "prism_edge" -> value(key,
 					number("star.value.melee.prism_edge.attack_bonus"));
 			case "astral_haste" -> value(key,
@@ -216,7 +215,7 @@ public final class EquipmentTooltipHandler {
 					number("star.value.ranged.starlight_dew.heal_flat"),
 					number("star.value.ranged.starlight_dew.heal_percent"),
 					number("star.value.ranged.starlight_dew.heal_max"),
-					integer("star.value.ranged.starlight_dew.cooldown_ticks"));
+					seconds("star.value.ranged.starlight_dew.cooldown_ticks"));
 			case "breach_star_arrow" -> value(key,
 					number("star.value.ranged.breach_star_arrow.armor_reduction_points"));
 			case "shield_render_arrow" -> value(key,
@@ -256,7 +255,149 @@ public final class EquipmentTooltipHandler {
 		return Integer.toString(EquipmentClientConfig.intValue(key));
 	}
 
+	private static String seconds(String key) {
+		return plain(EquipmentClientConfig.intValue(key) / 20.0D);
+	}
+
 	private static MutableComponent translation(String key, ChatFormatting color) {
 		return Component.translatable(key).withStyle(color);
+	}
+
+	static String fixedAttributeKey(EquipmentCategory category) {
+		if (category == null) {
+			return null;
+		}
+		return switch (category) {
+			case ARMOR -> "summy_threat.tooltip.fixed.armor";
+			case MELEE -> "summy_threat.tooltip.fixed.melee";
+			case RANGED -> "summy_threat.tooltip.fixed.ranged";
+		};
+	}
+
+	static List<String> fixedAttributeArguments(EquipmentCategory category) {
+		if (category == null) {
+			return List.of();
+		}
+		return switch (category) {
+			case ARMOR -> List.of(
+					plain(EximusArmorAttributes.ARMOR_BONUS),
+					plain(EximusArmorAttributes.TOUGHNESS_BONUS),
+					plain(EximusArmorAttributes.KNOCKBACK_BONUS));
+			case MELEE -> List.of(
+					percentBonus(EximusUpgradeValues.MELEE_DAMAGE_MULTIPLIER),
+					plainPercent(EximusUpgradeValues.MELEE_ATTACK_SPEED_BONUS));
+			case RANGED -> List.of(
+					percentBonus(EximusUpgradeValues.RANGED_DAMAGE_MULTIPLIER),
+					percentBonus(EximusUpgradeValues.RANGED_VELOCITY_MULTIPLIER));
+		};
+	}
+
+	static String fixedAbilityNameKey(EquipmentCategory category,
+			EquipmentSlot slot) {
+		if (category == EquipmentCategory.MELEE) {
+			return "summy_threat.tooltip.fixed_ability.star_brand";
+		}
+		if (category == EquipmentCategory.RANGED) {
+			return "summy_threat.tooltip.fixed_ability.far_star_mark";
+		}
+		if (category != EquipmentCategory.ARMOR) {
+			return null;
+		}
+		return switch (slot) {
+			case HEAD -> "summy_threat.tooltip.fixed_ability.clear_sight";
+			case CHEST -> "summy_threat.tooltip.fixed_ability.emergency_mending";
+			case LEGS -> "summy_threat.tooltip.fixed_ability.slowness_guard";
+			case FEET -> "summy_threat.tooltip.fixed_ability.star_stride";
+			default -> null;
+		};
+	}
+
+	private static void addFixedUpgradeLines(List<Component> tooltip, ItemStack stack,
+			EquipmentCategory category, int level) {
+		String attributeKey = fixedAttributeKey(category);
+		if (level >= 1 && attributeKey != null) {
+			tooltip.add(Component.translatable(attributeKey,
+							fixedAttributeArguments(category).toArray())
+					.withStyle(ChatFormatting.GRAY));
+		}
+		if (level < 2 || category == null) {
+			return;
+		}
+		String abilityKey = fixedAbilityNameKey(category,
+				LivingEntity.getEquipmentSlotForItem(stack));
+		if (abilityKey != null) {
+			EquipmentSlot slot = LivingEntity.getEquipmentSlotForItem(stack);
+			tooltip.add(Component.translatable(abilityKey)
+					.withStyle(ChatFormatting.GOLD));
+			if (Screen.hasShiftDown()) {
+				String effectKey = fixedAbilityEffectKey(category, slot);
+				if (effectKey != null) {
+					tooltip.add(Component.translatable(effectKey,
+									fixedAbilityEffectArguments(category, slot).toArray())
+							.withStyle(ChatFormatting.GRAY));
+				}
+			}
+		}
+	}
+
+	static String fixedAbilityEffectKey(EquipmentCategory category,
+			EquipmentSlot slot) {
+		if (category == EquipmentCategory.MELEE) {
+			return "summy_threat.tooltip.fixed_ability.effect.star_brand";
+		}
+		if (category == EquipmentCategory.RANGED) {
+			return "summy_threat.tooltip.fixed_ability.effect.far_star_mark";
+		}
+		if (category != EquipmentCategory.ARMOR) {
+			return null;
+		}
+		return switch (slot) {
+			case HEAD -> "summy_threat.tooltip.fixed_ability.effect.clear_sight";
+			case CHEST -> "summy_threat.tooltip.fixed_ability.effect.emergency_mending";
+			case LEGS -> "summy_threat.tooltip.fixed_ability.effect.slowness_guard";
+			case FEET -> "summy_threat.tooltip.fixed_ability.effect.star_stride";
+			default -> null;
+		};
+	}
+
+	static List<String> fixedAbilityEffectArguments(EquipmentCategory category,
+			EquipmentSlot slot) {
+		if (category == EquipmentCategory.MELEE || category == EquipmentCategory.RANGED) {
+			return List.of(
+					seconds("equipment.shared_mark_duration_ticks"),
+					number("equipment.shared_mark_damage_percent"));
+		}
+		if (category != EquipmentCategory.ARMOR) {
+			return List.of();
+		}
+		return switch (slot) {
+			case CHEST -> List.of(
+					number("equipment.emergency_mending_heal_percent"),
+					number("equipment.emergency_mending_heal_min"),
+					number("equipment.emergency_mending_heal_max"),
+					seconds("equipment.emergency_mending_cooldown_ticks"));
+			case LEGS -> List.of(
+					number("equipment.slowness_guard_floor_percent"));
+			case FEET -> List.of(
+					number("equipment.star_stride_speed_percent"),
+					number("equipment.star_stride_step_height"));
+			default -> List.of();
+		};
+	}
+
+	private static String percentBonus(double multiplier) {
+		return plain((multiplier - 1.0D) * 100.0D);
+	}
+
+	private static String plainPercent(double bonus) {
+		return plain(bonus * 100.0D);
+	}
+
+	private static String plain(double value) {
+		if (Math.abs(value - Math.rint(value)) < 1.0E-6D) {
+			return Long.toString(Math.round(value));
+		}
+		return String.format(Locale.ROOT, "%.2f", value).replaceAll("0+$", "")
+				.replaceAll("\\.$", "");
 	}
 }

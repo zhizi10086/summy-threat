@@ -1,6 +1,7 @@
 package com.summy.threat.equipment;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 
 import java.util.Optional;
 
@@ -68,6 +69,10 @@ public final class EquipmentRules {
 				continue;
 			}
 			Optional<StarPrismData> existingData = StarPrismData.read(existing);
+			if (existingData.isEmpty()
+					&& existing.contains("tag", Tag.TAG_COMPOUND)) {
+				existingData = StarPrismData.read(existing.getCompound("tag"));
+			}
 			if (existingData.isEmpty()) {
 				return -1;
 			}

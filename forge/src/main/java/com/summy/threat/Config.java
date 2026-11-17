@@ -231,7 +231,6 @@ public final class Config {
 
 	// ================= B15 卓越装备与星渊棱晶 =================
 	public static final ForgeConfigSpec.BooleanValue EXIMUS_EQUIPMENT_ENABLED;
-	public static final ForgeConfigSpec.IntValue CLEAR_SIGHT_NIGHT_VISION_LIGHT;
 	public static final ForgeConfigSpec.IntValue EMERGENCY_MENDING_COOLDOWN_TICKS;
 	public static final ForgeConfigSpec.DoubleValue EMERGENCY_MENDING_HEAL_PERCENT;
 	public static final ForgeConfigSpec.DoubleValue EMERGENCY_MENDING_HEAL_MIN;
@@ -681,9 +680,6 @@ public final class Config {
 		EXIMUS_EQUIPMENT_ENABLED = builder
 				.comment("B15 总开关；关闭后升级、固定能力、耐久保护、棱晶效果与全部装备配方失效，NBT 保留")
 				.define("enable", true);
-		CLEAR_SIGHT_NIGHT_VISION_LIGHT = builder
-				.comment("澄明视界触发夜视的光照等级上限")
-				.defineInRange("clear_sight_night_vision_light", 4, 0, 15);
 		EMERGENCY_MENDING_COOLDOWN_TICKS = builder
 				.comment("应急生息冷却 tick")
 				.defineInRange("emergency_mending_cooldown_ticks", 30, 1, 200);

@@ -9,7 +9,8 @@
     "ItemStackMixin",
     "LivingEntityMixin",
     "PathNavigationAccessor",
-    "RangedAttributeAccessor"
+    "RangedAttributeAccessor",
+    "SmithingMenuMixin"
   ],
   "injectors": {
     "defaultRequire": 1

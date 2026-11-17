@@ -37,6 +37,8 @@ public final class WeaponSystemDevCheck {
 	}
 
 	public static void run(ServerPlayer player) {
+		StarPrismAffixCoverage.reset();
+		WeaponAffixAuditDevCheck.run(player);
 		ThreatDevCheck.checkDetailed("武器词条数量：近战 11、远程 11",
 				StarPrismAffixes.byCategory(EquipmentCategory.MELEE).size() == 11
 						&& StarPrismAffixes.byCategory(EquipmentCategory.RANGED).size() == 11,

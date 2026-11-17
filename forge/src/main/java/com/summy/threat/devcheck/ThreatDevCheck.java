@@ -273,6 +273,8 @@ public final class ThreatDevCheck {
 				(prismText.contains("星铸甲胄") || prismText.contains("Astral Plating"))
 						&& !prismText.contains("武器功能尚未启用")
 						&& !prismText.contains("Weapon function is not yet enabled")
+						&& !prismText.contains("三系潜在线")
+						&& !prismText.contains("Potential lines")
 						&& prismText.contains("[T1]"),
 				prismText);
 
@@ -282,9 +284,15 @@ public final class ThreatDevCheck {
 		String armorText = armor.getTooltipLines(client.player, TooltipFlag.Default.NORMAL)
 				.stream().map(net.minecraft.network.chat.Component::getString)
 				.reduce("", (left, right) -> left + "\n" + right);
-		check("B15 客户端装备提示显示编号槽位与激活类别",
+		check("B15 客户端装备提示显示编号槽位与固定内容",
 				(armorText.contains("槽位 1") || armorText.contains("Slot 1"))
-						&& (armorText.contains("当前激活类别") || armorText.contains("Active category")),
+						&& (armorText.contains("护甲 +") || armorText.contains("Armor +"))
+						&& (armorText.contains("应急生息")
+								|| armorText.contains("Emergency Mending"))
+						&& !armorText.contains("当前激活类别")
+						&& !armorText.contains("Active category")
+						&& !armorText.contains("同步拆卸")
+						&& !armorText.contains("Synchronized disassembly"),
 				armorText);
 	}
 
@@ -297,7 +305,9 @@ public final class ThreatDevCheck {
 				.reduce("", (left, right) -> left + "\n" + right);
 		check("武器检查：棱晶提示不再显示武器锁定",
 				!prismText.contains("武器功能尚未启用")
-						&& !prismText.contains("Weapon function is not yet enabled"),
+						&& !prismText.contains("Weapon function is not yet enabled")
+						&& !prismText.contains("三系潜在线")
+						&& !prismText.contains("Potential lines"),
 				prismText);
 
 		ItemStack weapon = EximusEquipmentData.withUpgradeLevel(
@@ -310,12 +320,29 @@ public final class ThreatDevCheck {
 		String weaponText = weapon.getTooltipLines(client.player, TooltipFlag.Default.NORMAL)
 				.stream().map(net.minecraft.network.chat.Component::getString)
 				.reduce("", (left, right) -> left + "\n" + right);
-		check("武器检查：近战显示槽位 1/2 与同步拆卸",
+		check("武器检查：近战显示槽位 1/2 与固定内容",
 				(weaponText.contains("槽位 1") || weaponText.contains("Slot 1"))
 						&& (weaponText.contains("槽位 2") || weaponText.contains("Slot 2"))
-						&& (weaponText.contains("同步拆卸")
-								|| weaponText.contains("Synchronized disassembly")),
+						&& (weaponText.contains("近战最终伤害")
+								|| weaponText.contains("final melee damage"))
+						&& (weaponText.contains("星痕刻印")
+								|| weaponText.contains("Star Brand"))
+						&& !weaponText.contains("同步拆卸")
+						&& !weaponText.contains("Synchronized disassembly")
+						&& !weaponText.contains("当前激活类别")
+						&& !weaponText.contains("Active category"),
 				weaponText);
+		ItemStack bow = EximusEquipmentData.withUpgradeLevel(
+				new ItemStack(Items.BOW), 2);
+		String bowText = tooltip(client, bow);
+		check("武器检查：远程显示固定伤害、初速与固定能力",
+				(bowText.contains("投射物最终伤害")
+						|| bowText.contains("final projectile damage"))
+						&& (bowText.contains("初始箭速")
+								|| bowText.contains("initial arrow velocity"))
+						&& (bowText.contains("远星标定")
+								|| bowText.contains("Far Star Mark")),
+				bowText);
 	}
 
 	private static void checkCompatibilityClientTooltips(Minecraft client) {

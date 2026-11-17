@@ -3,12 +3,12 @@ package com.summy.threat.devcheck;
 import com.google.common.collect.Multimap;
 import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
+import com.summy.threat.api.event.ThreatConfigChangedEvent;
 import com.summy.threat.equipment.ArmorAffixEffects;
 import com.summy.threat.equipment.ArmorDurabilityProtection;
 import com.summy.threat.equipment.ArmorEquipmentAttributes;
 import com.summy.threat.equipment.EquipmentCategory;
 import com.summy.threat.equipment.EquipmentCooldownData;
-import com.summy.threat.equipment.EquipmentCraftingHandler;
 import com.summy.threat.equipment.EquipmentOperation;
 import com.summy.threat.equipment.EquipmentRules;
 import com.summy.threat.equipment.EquipmentSmithingRecipe;
@@ -43,11 +43,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.inventory.SmithingMenu;
 import net.minecraftforge.common.ForgeMod;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,12 +69,14 @@ final class EquipmentSystemDevCheck {
 
 	static List<String> start(ServerPlayer player) {
 		List<String> failures = new ArrayList<>();
+		StarPrismAffixCoverage.reset();
 		preparePlayer(player);
 		checkNbtAndSlots(failures);
 		checkRecipesAndReturns(player, failures);
 		checkItemAttributes(failures);
 		checkDurabilityAndFixedAttributes(player, failures);
 		checkArmorRuntime(player, failures);
+		checkAffixCoverage(failures, EquipmentCategory.ARMOR);
 		pendingEmergencyHeal = prepareEmergencyHeal(player);
 		pendingPlayer = pendingEmergencyHeal ? player : null;
 		SummyThreat.LOGGER.info("[DEVCHECK] B15 核心检查完成，等待下一 tick 验证应急生息");
@@ -211,6 +215,52 @@ final class EquipmentSystemDevCheck {
 
 		ItemStack prismTwo = prism("vital_constellation", "terminal_star",
 				"terminal_star_shot", true, null);
+		SimpleContainer secondEmbed = smith(Items.ECHO_SHARD, oneEmbedded, prismTwo);
+		boolean secondMatches = embedRecipe.matches(secondEmbed, null);
+		int secondSlot = EquipmentRules.embeddingSlot(oneEmbedded.getTag(),
+				prismTwo.getTag(), EquipmentCategory.ARMOR);
+		check(failures, "B15 第二槽配方 matches 与槽位计算一致",
+				secondMatches && secondSlot == 1,
+				"matches=%s slot=%d existing=%s".formatted(
+						secondMatches, secondSlot,
+						EximusEquipmentData.prism(oneEmbedded, 0)));
+		ItemStack twoEmbedded = embedRecipe.assemble(secondEmbed,
+				player.server.registryAccess());
+		check(failures, "B15 第二次镶嵌实际写入槽位 2",
+				!EximusEquipmentData.prism(twoEmbedded, 0).isEmpty()
+						&& !EximusEquipmentData.prism(twoEmbedded, 1).isEmpty(),
+				"slot1=%s slot2=%s".formatted(
+						EximusEquipmentData.prism(twoEmbedded, 0),
+						EximusEquipmentData.prism(twoEmbedded, 1)));
+
+		ItemStack bow = EximusEquipmentData.withPrism(
+				EximusEquipmentData.withUpgradeLevel(new ItemStack(Items.BOW), 2),
+				0, prism("astral_plating", "prism_edge", "starlit_bowstring", true, null));
+		ItemStack bowSecond = prism("vital_constellation", "terminal_star",
+				"starfall_cycle_arrow", true, null);
+		SmithingMenu menu = new SmithingMenu(0, player.getInventory());
+		menu.getSlot(0).set(new ItemStack(Items.ECHO_SHARD));
+		menu.getSlot(1).set(bow);
+		menu.getSlot(2).set(bowSecond);
+		menu.createResult();
+		ItemStack menuResult = menu.getSlot(3).getItem();
+		check(failures, "B15 实际 SmithingMenu 输出第二槽结果",
+				!menuResult.isEmpty()
+						&& !EximusEquipmentData.prism(menuResult, 0).isEmpty()
+						&& !EximusEquipmentData.prism(menuResult, 1).isEmpty(),
+				"result=" + menuResult);
+
+		SmithingMenu quickMoveMenu = new SmithingMenu(0, player.getInventory());
+		int emptyBaseTarget = quickMoveMenu.getSlotToQuickMoveTo(prismOne.copy());
+		check(failures, "B15 棱晶快速移动优先中间槽",
+				emptyBaseTarget == SmithingMenu.BASE_SLOT,
+				"target=" + emptyBaseTarget);
+		quickMoveMenu.getSlot(SmithingMenu.BASE_SLOT).set(prismOne.copy());
+		int occupiedBaseTarget = quickMoveMenu.getSlotToQuickMoveTo(prismOne.copy());
+		check(failures, "B15 中间槽占用时棱晶快速移动至右槽",
+				occupiedBaseTarget == SmithingMenu.ADDITIONAL_SLOT,
+				"target=" + occupiedBaseTarget);
+
 		ItemStack full = EximusEquipmentData.withPrism(oneEmbedded, 1, prismTwo);
 		SimpleContainer disassemble = smith(Items.ECHO_SHARD, full, Items.AMETHYST_SHARD);
 		EquipmentSmithingRecipe disassembleRecipe = recipe(EquipmentOperation.DISASSEMBLE_ALL);
@@ -226,19 +276,18 @@ final class EquipmentSystemDevCheck {
 				"returns=%d".formatted(returns.size()));
 
 		player.getInventory().clearContent();
-		ItemStack craftedStack = disassembled.copy();
-		PlayerEvent.ItemCraftedEvent crafted = new PlayerEvent.ItemCraftedEvent(
-				player, craftedStack, new SimpleContainer(1));
-		EquipmentCraftingHandler.onCrafted(crafted);
-		EquipmentCraftingHandler.onCrafted(new PlayerEvent.ItemCraftedEvent(
-				player, craftedStack, new SimpleContainer(1)));
-		check(failures, "B15 拆卸返还恰好一次并移除一次性标记",
-				countItem(player, ModItems.ABYSSAL_STAR_PRISM.get()) == 2
-				&& !craftedStack.getTag().getCompound(
-								EximusEquipmentData.EQUIPMENT_ROOT)
-								.contains(EquipmentSmithingRecipe.RETURN_PRISMS),
-				"inventoryCount=%d".formatted(
-						countItem(player, ModItems.ABYSSAL_STAR_PRISM.get())));
+		SmithingMenu disassembleMenu = new SmithingMenu(0, player.getInventory());
+		disassembleMenu.getSlot(0).set(new ItemStack(Items.ECHO_SHARD));
+		disassembleMenu.getSlot(1).set(full.copy());
+		disassembleMenu.getSlot(2).set(new ItemStack(Items.AMETHYST_SHARD));
+		disassembleMenu.createResult();
+		ItemStack menuReturn = disassembleMenu.getSlot(3).getItem().copy();
+		disassembleMenu.getSlot(3).onTake(player,
+				disassembleMenu.getSlot(3).getItem().copy());
+		int returnedByMenu = countItem(player, ModItems.ABYSSAL_STAR_PRISM.get());
+		check(failures, "B15 真实 SmithingMenu 取回同步拆卸返还 2 枚",
+				returnedByMenu == 2 && !menuReturn.isEmpty(),
+				"inventoryCount=%d result=%s".formatted(returnedByMenu, menuReturn));
 		player.getInventory().clearContent();
 
 		ItemStack oneFilled = EximusEquipmentData.withPrism(levelTwo, 0, prismOne);
@@ -296,16 +345,34 @@ final class EquipmentSystemDevCheck {
 						player.hasEffect(MobEffects.DARKNESS)));
 
 		clearArmor(player);
+		equipFixed(player, EquipmentSlot.CHEST, Items.DIAMOND_CHESTPLATE);
+		EquipmentCooldownData.clear(player.getPersistentData(), "emergency_mending");
+		player.setHealth(player.getMaxHealth() - 5.0F);
+		float emergencyEnvironmentBefore = player.getHealth();
+		EximusArmorPassives.onLivingDamage(new LivingDamageEvent(
+				player, player.damageSources().fall(), 1.0F));
+		EximusArmorPassives.onPlayerTick(new TickEvent.PlayerTickEvent(
+				TickEvent.Phase.END, player));
+		check(failures, "B15 应急生息可由环境伤害触发",
+				player.getHealth() > emergencyEnvironmentBefore,
+				"before=%.2f after=%.2f".formatted(
+						emergencyEnvironmentBefore, player.getHealth()));
+		player.setHealth(player.getMaxHealth());
+		EquipmentCooldownData.clear(player.getPersistentData(), "emergency_mending");
+
+		clearArmor(player);
+		ArmorEquipmentAttributes.clear(player);
+		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+		double speedBeforeStride = speed == null ? 0.0D : speed.getValue();
 		equipFixed(player, EquipmentSlot.FEET, Items.DIAMOND_BOOTS);
 		ArmorEquipmentAttributes.refresh(player);
-		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
 		AttributeInstance step = player.getAttribute(ForgeMod.STEP_HEIGHT_ADDITION.get());
 		check(failures, "B15 星履提供移速与台阶高度",
-				speed != null && speed.getValue() > speed.getBaseValue()
+				speed != null && speed.getValue() > speedBeforeStride
 						&& step != null && step.getValue() >= Config.STAR_STRIDE_STEP_HEIGHT.get(),
-				"speed=%s base=%s step=%s".formatted(
+				"speed=%s before=%s step=%s".formatted(
 						speed == null ? "null" : speed.getValue(),
-						speed == null ? "null" : speed.getBaseValue(),
+						speedBeforeStride,
 						step == null ? "null" : step.getValue()));
 
 		clearArmor(player);
@@ -326,6 +393,7 @@ final class EquipmentSystemDevCheck {
 	}
 
 	private static void checkArmorRuntime(ServerPlayer player, List<String> failures) {
+		checkArmorAffixAttributes(player, failures);
 		ServerLevel level = player.serverLevel();
 		Zombie attacker = net.minecraft.world.entity.EntityType.ZOMBIE.create(level);
 		if (attacker == null) {
@@ -335,6 +403,7 @@ final class EquipmentSystemDevCheck {
 		attacker.moveTo(player.getX() + 2.0D, player.getY(), player.getZ());
 
 		equipAffixes(player, "star_mantle", "star_mantle");
+		StarPrismAffixCoverage.cover("star_mantle");
 		float mantle = damage(player, attacker.damageSources().mobAttack(attacker), 100.0F);
 		check(failures, "B15 两份星辉壁障独立乘算",
 				close(mantle, (float) (100.0D
@@ -343,6 +412,7 @@ final class EquipmentSystemDevCheck {
 				"amount=" + mantle);
 
 		equipAffixes(player, "projectile_ward");
+		StarPrismAffixCoverage.cover("projectile_ward");
 		Arrow arrow = new Arrow(level, attacker);
 		DamageSource arrowSource = arrow.damageSources().arrow(arrow, attacker);
 		float projectile = damage(player, arrowSource, 100.0F);
@@ -350,16 +420,26 @@ final class EquipmentSystemDevCheck {
 				close(projectile, (float) (100.0D - StarPrismConfig.doubleValue(
 						"armor.projectile_ward.reduction_percent"))),
 				"amount=" + projectile);
+		Arrow unattributedArrow = new Arrow(level, player.getX(), player.getY(), player.getZ());
+		float unattributedProjectile = damage(player,
+				player.damageSources().arrow(unattributedArrow, null), 100.0F);
+		check(failures, "B15 星幕偏折覆盖无归属投射物",
+				close(unattributedProjectile, (float) (100.0D - StarPrismConfig.doubleValue(
+						"armor.projectile_ward.reduction_percent"))),
+				"amount=" + unattributedProjectile);
 
 		equipAffixes(player, "spellward_prism");
+		StarPrismAffixCoverage.cover("spellward_prism");
 		float spell = ArmorAffixEffects.spellwardMultiplier(player,
 				player.damageSources().indirectMagic(attacker, attacker));
 		check(failures, "B15 星咒屏障乘区为 0.88",
 				close(spell, (float) (1.0D - StarPrismConfig.doubleValue(
 						"armor.spellward_prism.reduction_percent") / 100.0D)),
 				"multiplier=" + spell);
+		checkSpellwardFullChain(player, attacker, failures);
 
 		equipAffixes(player, "anchored_stride");
+		StarPrismAffixCoverage.cover("anchored_stride");
 		float fall = damage(player, player.damageSources().fall(), 100.0F);
 		check(failures, "B15 磐星步摔落减伤",
 				close(fall, (float) (100.0D - StarPrismConfig.doubleValue(
@@ -367,7 +447,14 @@ final class EquipmentSystemDevCheck {
 				"amount=" + fall);
 
 		equipAffixes(player, "thorns_insulation");
+		StarPrismAffixCoverage.cover("thorns_insulation");
 		DamageSource thorns = player.damageSources().thorns(attacker);
+		LivingAttackEvent thornsAttack = new LivingAttackEvent(player, thorns, 10.0F);
+		ThreatHitContext.run(player, thorns, ThreatCategory.TL_ABILITY, "thorns",
+				() -> MinecraftForge.EVENT_BUS.post(thornsAttack));
+		check(failures, "B15 荆棘绝缘在受击反馈前取消 ST 荆棘",
+				thornsAttack.isCanceled(),
+				"canceled=" + thornsAttack.isCanceled());
 		LivingHurtEvent thornsEvent = new LivingHurtEvent(player, thorns, 10.0F);
 		ThreatHitContext.run(player, thorns, ThreatCategory.TL_ABILITY, "thorns",
 				() -> ArmorAffixEffects.onLivingHurt(thornsEvent));
@@ -380,6 +467,7 @@ final class EquipmentSystemDevCheck {
 				!vanillaThorns.isCanceled(), "canceled=" + vanillaThorns.isCanceled());
 
 		equipAffixes(player, "corrosion_baffle");
+		StarPrismAffixCoverage.cover("corrosion_baffle");
 		ArmorShred.cleanup(player);
 		for (int i = 0; i < Config.CORROSION_MAX_STACKS.get(); i++) {
 			ArmorShred.applyCorrosion(player);
@@ -395,6 +483,20 @@ final class EquipmentSystemDevCheck {
 		ArmorShred.cleanup(player);
 
 		equipAffixes(player, "steady_heart");
+		StarPrismAffixCoverage.cover("steady_heart");
+		ArmorAffixEffects.onConfigChanged(new ThreatConfigChangedEvent(
+				"devcheck", java.util.Map.of(), java.util.Map.of()));
+		EquipmentCooldownData.clear(player.getPersistentData(), "armor.steady_heart");
+		player.setHealth(player.getMaxHealth() * 0.6F);
+		damage(player, player.damageSources().fall(), player.getMaxHealth() * 0.2F);
+		float steadyEnvironment = damage(player, player.damageSources().fall(), 20.0F);
+		check(failures, "B15 定心回响可由环境伤害触发",
+				close(steadyEnvironment, (float) (20.0D * (1.0D
+						- StarPrismConfig.doubleValue(
+								"armor.steady_heart.reduction_percent") / 100.0D))),
+				"amount=" + steadyEnvironment);
+		ArmorAffixEffects.onConfigChanged(new ThreatConfigChangedEvent(
+				"devcheck", java.util.Map.of(), java.util.Map.of()));
 		EquipmentCooldownData.clear(player.getPersistentData(), "armor.steady_heart");
 		player.setHealth(player.getMaxHealth() * 0.6F);
 		damage(player, attacker.damageSources().mobAttack(attacker),
@@ -407,6 +509,7 @@ final class EquipmentSystemDevCheck {
 		player.setHealth(player.getMaxHealth());
 
 		equipAffixes(player, "threat_aegis");
+		StarPrismAffixCoverage.cover("threat_aegis");
 		DamageSource skill = attacker.damageSources().mobAttack(attacker);
 		LivingDamageEvent aegis = new LivingDamageEvent(player, skill, 100.0F);
 		ThreatHitContext.run(player, skill, ThreatCategory.LEADER_ABILITY,
@@ -421,6 +524,7 @@ final class EquipmentSystemDevCheck {
 				close(plain.getAmount(), 100.0F), "amount=" + plain.getAmount());
 
 		equipAffixes(player, "last_light");
+		StarPrismAffixCoverage.cover("last_light");
 		EquipmentCooldownData.clear(player.getPersistentData(), "armor.last_light");
 		player.setHealth(player.getMaxHealth() * 0.3F);
 		LivingDamageEvent fatal = new LivingDamageEvent(player, skill,
@@ -445,6 +549,7 @@ final class EquipmentSystemDevCheck {
 		player.setHealth(player.getMaxHealth());
 
 		equipAffixes(player, "phase_anchor");
+		StarPrismAffixCoverage.cover("phase_anchor");
 		EquipmentCooldownData.clear(player.getPersistentData(), "armor.phase_anchor");
 		long now = player.server.overworld().getGameTime();
 		boolean anchored = ThreatMovementContext.call(
@@ -465,6 +570,50 @@ final class EquipmentSystemDevCheck {
 		WornArmorState.invalidate(player);
 	}
 
+	private static void checkArmorAffixAttributes(ServerPlayer player, List<String> failures) {
+		clearArmor(player);
+		equipAffixes(player, "steady_heart", "steady_heart");
+		ArmorEquipmentAttributes.refresh(player);
+		double baseArmor = player.getAttributeValue(Attributes.ARMOR);
+		double baseToughness = player.getAttributeValue(Attributes.ARMOR_TOUGHNESS);
+		float baseHealth = player.getMaxHealth();
+
+		clearArmor(player);
+		equipAffixes(player, "astral_plating", "astral_plating");
+		ArmorEquipmentAttributes.refresh(player);
+		double expectedArmor = baseArmor + 2.0D * StarPrismConfig.doubleValue(
+				"armor.astral_plating.armor_value_per_stack");
+		double expectedToughness = baseToughness + 2.0D * StarPrismConfig.doubleValue(
+				"armor.astral_plating.toughness_value_per_stack");
+		check(failures, "B15 星铸甲胄两份属性叠加",
+				close(player.getAttributeValue(Attributes.ARMOR), expectedArmor)
+						&& close(player.getAttributeValue(Attributes.ARMOR_TOUGHNESS),
+								expectedToughness),
+				"armor=%.2f/%.2f toughness=%.2f/%.2f".formatted(
+						player.getAttributeValue(Attributes.ARMOR), expectedArmor,
+						player.getAttributeValue(Attributes.ARMOR_TOUGHNESS), expectedToughness));
+		StarPrismAffixCoverage.cover("astral_plating");
+
+		clearArmor(player);
+		equipAffixes(player, "vital_constellation", "vital_constellation");
+		ArmorEquipmentAttributes.refresh(player);
+		double expectedHealth = baseHealth + 2.0D * StarPrismConfig.doubleValue(
+				"armor.vital_constellation.max_health_per_stack");
+		check(failures, "B15 命星簇两份最大生命叠加",
+				close(player.getMaxHealth(), expectedHealth),
+				"health=%.2f expected=%.2f".formatted(
+						player.getMaxHealth(), expectedHealth));
+		StarPrismAffixCoverage.cover("vital_constellation");
+		player.setHealth(player.getMaxHealth());
+	}
+
+	private static void checkAffixCoverage(List<String> failures,
+			EquipmentCategory category) {
+		for (String id : StarPrismAffixCoverage.missing(category)) {
+			check(failures, "B15 星渊词条已执行：" + id, false, "UNCOVERED");
+		}
+	}
+
 	private static boolean prepareEmergencyHeal(ServerPlayer player) {
 		clearArmor(player);
 		equipFixed(player, EquipmentSlot.CHEST, Items.DIAMOND_CHESTPLATE);
@@ -472,8 +621,10 @@ final class EquipmentSystemDevCheck {
 		ServerLevel level = player.serverLevel();
 		Zombie attacker = new Zombie(net.minecraft.world.entity.EntityType.ZOMBIE, level);
 		attacker.moveTo(player.getX() + 2.0D, player.getY(), player.getZ());
-		player.getFoodData().setFoodLevel(0);
-		player.getFoodData().setSaturation(0.0F);
+		// 保持饥饿值稳定，避免测试等待下一 tick 时被饥饿/SE 饮食机制扣血，
+		// 影响应急生息治疗量的独立断言。
+		player.getFoodData().setFoodLevel(20);
+		player.getFoodData().setSaturation(20.0F);
 		player.getFoodData().setExhaustion(0.0F);
 		player.setHealth(player.getMaxHealth() - 5.0F);
 		emergencyHealthBefore = player.getHealth();
@@ -538,10 +689,90 @@ final class EquipmentSystemDevCheck {
 		ArmorEquipmentAttributes.refresh(player);
 	}
 
+	private static void checkSpellwardFullChain(ServerPlayer player, Zombie attacker,
+			List<String> failures) {
+		MobEffectInstance previousResistance = player.getEffect(
+				MobEffects.DAMAGE_RESISTANCE);
+		net.minecraft.world.level.GameType previousGameMode =
+				player.gameMode.getGameModeForPlayer();
+		float previousHealth = player.getHealth();
+		float previousAbsorption = player.getAbsorptionAmount();
+		try {
+			player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+			player.removeEffect(MobEffects.DAMAGE_RESISTANCE);
+			player.addEffect(new MobEffectInstance(
+					MobEffects.DAMAGE_RESISTANCE, 200, 1, false, false));
+
+			equipProtectionArmor(player, false);
+			MagicAbsorbProbe baseline = absorbMagicHit(player, attacker);
+			equipProtectionArmor(player, true);
+			MagicAbsorbProbe warded = absorbMagicHit(player, attacker);
+			double expected = baseline.absorbed()
+					* (1.0D - StarPrismConfig.doubleValue(
+							"armor.spellward_prism.reduction_percent") / 100.0D);
+			check(failures, "B15 星咒屏障位于保护抗性后吸收前",
+					baseline.absorbed() > 0.0F && baseline.absorbed() < 100.0F
+							&& Math.abs(warded.absorbed() - expected) <= 0.01D
+							&& Math.abs(warded.healthLost()) <= 0.01D,
+					"baseline=%.4f warded=%.4f expected=%.4f healthLost=%.4f"
+							.formatted(baseline.absorbed(), warded.absorbed(),
+									expected, warded.healthLost()));
+		} finally {
+			player.removeEffect(MobEffects.DAMAGE_RESISTANCE);
+			if (previousResistance != null) {
+				player.addEffect(previousResistance);
+			}
+			player.setGameMode(previousGameMode);
+			player.setAbsorptionAmount(previousAbsorption);
+			player.setHealth(Math.min(previousHealth, player.getMaxHealth()));
+			clearArmor(player);
+			ArmorEquipmentAttributes.clear(player);
+		}
+	}
+
+	private static void equipProtectionArmor(ServerPlayer player, boolean spellward) {
+		clearArmor(player);
+		for (EquipmentSlot slot : ARMOR) {
+			Item item = switch (slot) {
+				case HEAD -> Items.DIAMOND_HELMET;
+				case CHEST -> Items.DIAMOND_CHESTPLATE;
+				case LEGS -> Items.DIAMOND_LEGGINGS;
+				case FEET -> Items.DIAMOND_BOOTS;
+				default -> Items.DIAMOND_CHESTPLATE;
+			};
+			ItemStack stack = EximusEquipmentData.withUpgradeLevel(new ItemStack(item), 2);
+			stack.enchant(Enchantments.ALL_DAMAGE_PROTECTION, 5);
+			if (spellward && slot == EquipmentSlot.CHEST) {
+				stack = EximusEquipmentData.withPrism(stack, 0,
+						prism("spellward_prism", "prism_edge",
+								"starlit_bowstring", true, null));
+			}
+			player.setItemSlot(slot, stack);
+		}
+		WornArmorState.invalidate(player);
+		ArmorEquipmentAttributes.refresh(player);
+	}
+
+	private static MagicAbsorbProbe absorbMagicHit(ServerPlayer player, Zombie attacker) {
+		player.setHealth(player.getMaxHealth());
+		player.setAbsorptionAmount(10_000.0F);
+		player.invulnerableTime = 0;
+		player.hurtTime = 0;
+		float healthBefore = player.getHealth();
+		float absorptionBefore = player.getAbsorptionAmount();
+		player.hurt(player.damageSources().indirectMagic(attacker, attacker), 100.0F);
+		return new MagicAbsorbProbe(
+				absorptionBefore - player.getAbsorptionAmount(),
+				healthBefore - player.getHealth());
+	}
+
 	private static float damage(ServerPlayer player, DamageSource source, float amount) {
 		LivingDamageEvent event = new LivingDamageEvent(player, source, amount);
 		ArmorAffixEffects.onLivingDamage(event);
 		return event.getAmount();
+	}
+
+	private record MagicAbsorbProbe(float absorbed, float healthLost) {
 	}
 
 	private static ItemStack prism(String armor, String melee, String ranged,

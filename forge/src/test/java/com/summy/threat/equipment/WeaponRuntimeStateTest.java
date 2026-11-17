@@ -2,6 +2,8 @@ package com.summy.threat.equipment;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -90,6 +92,44 @@ class WeaponRuntimeStateTest {
 	}
 
 	@Test
+	void pursuitTracksEightTargetsIndependently() {
+		WeaponRuntimeState state = new WeaponRuntimeState();
+		List<UUID> targets = new ArrayList<>();
+		for (int i = 0; i < 8; i++) {
+			UUID target = UUID.nameUUIDFromBytes(("pursuit-" + i).getBytes());
+			targets.add(target);
+			assertEquals(1, state.pursuitHit(target, "sword-a", 20L, 5, 60));
+		}
+		for (UUID target : targets) {
+			assertEquals(2, state.pursuitHit(target, "sword-a", 21L, 5, 60));
+			assertEquals(0.12D,
+					state.pursuitMultiplier(target, "sword-a", 22L, 60), 1.0E-9D);
+		}
+	}
+
+	@Test
+	void meleeAndRangedPursuitStatesAreIndependent() {
+		WeaponRuntimeState state = new WeaponRuntimeState();
+		state.changeMainhand("sword-a");
+		state.changeRangedMainhand("bow-a");
+		state.pursuitHit(TARGET_A, "sword-a", 20L, 5, 60);
+		state.rangedPursuitHit(TARGET_A, "bow-a", 20L, 5, 100);
+
+		assertEquals(0.06D,
+				state.pursuitMultiplier(TARGET_A, "sword-a", 21L, 60), 1.0E-9D);
+		assertEquals(0.15D,
+				state.rangedPursuitMultiplier(TARGET_A, "bow-a", 21L, 100, 15.0D),
+				1.0E-9D);
+
+		state.changeRangedMainhand("bow-b");
+		assertEquals(0.06D,
+				state.pursuitMultiplier(TARGET_A, "sword-a", 22L, 60), 1.0E-9D);
+		assertEquals(0.0D,
+				state.rangedPursuitMultiplier(TARGET_A, "bow-b", 22L, 100, 15.0D),
+				1.0E-9D);
+	}
+
+	@Test
 	void starfireAndStarfallPersistAcrossWeaponChangesUntilSessionReset() {
 		WeaponRuntimeState state = new WeaponRuntimeState();
 		assertFalse(state.starfireHit(4));
@@ -112,12 +152,14 @@ class WeaponRuntimeStateTest {
 	void rangedWeaponChangeResetsPursuit() {
 		WeaponRuntimeState state = new WeaponRuntimeState();
 		state.changeRangedMainhand("bow-a");
-		state.pursuitHit(TARGET_A, "bow-a", 20L, 5, 100);
+		state.rangedPursuitHit(TARGET_A, "bow-a", 20L, 5, 100);
 
 		assertEquals(0.15D,
-				state.pursuitMultiplier(TARGET_A, "bow-a", 21L, 100, 15.0D), 1.0E-9D);
+				state.rangedPursuitMultiplier(TARGET_A, "bow-a", 21L, 100, 15.0D),
+				1.0E-9D);
 		state.changeRangedMainhand("bow-b");
 		assertEquals(0.0D,
-				state.pursuitMultiplier(TARGET_A, "bow-b", 22L, 100, 15.0D), 1.0E-9D);
+				state.rangedPursuitMultiplier(TARGET_A, "bow-b", 22L, 100, 15.0D),
+				1.0E-9D);
 	}
 }

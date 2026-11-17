@@ -1,15 +1,18 @@
 package com.summy.threat.equipment;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /** 单个玩家的武器会话状态；不保存到 ItemStack。 */
 public final class WeaponRuntimeState {
+	private static final int MAX_PURSUIT_TARGETS = 8;
 	private UUID markedTarget;
 	private long markExpiresAt;
-	private UUID pursuitTarget;
-	private String pursuitWeapon = "";
-	private long pursuitLastHit;
-	private int pursuitStacks;
+	private final Map<UUID, Pursuit> meleePursuits = new HashMap<>();
+	private final Map<UUID, Pursuit> rangedPursuits = new HashMap<>();
+	private UUID lastMeleePursuitTarget;
+	private UUID lastRangedPursuitTarget;
 	private int starfireHits;
 	private int starfallHits;
 	private String mainhand = "";
@@ -41,29 +44,35 @@ public final class WeaponRuntimeState {
 
 	public double pursuitMultiplier(UUID target, String weapon, long now, int resetTicks,
 			double percentPerStack) {
-		if (!pursuitMatches(target, weapon, now, resetTicks)) {
-			clearPursuit();
-			return 0.0D;
-		}
-		return pursuitStacks * Math.max(0.0D, percentPerStack) / 100.0D;
+		return pursuitMultiplier(meleePursuits, target, weapon, now, resetTicks,
+				percentPerStack);
+	}
+
+	public double rangedPursuitMultiplier(UUID target, String weapon, long now,
+			int resetTicks, double percentPerStack) {
+		return pursuitMultiplier(rangedPursuits, target, weapon, now, resetTicks,
+				percentPerStack);
 	}
 
 	public int pursuitHit(UUID target, String weapon, long now, int maxStacks, int resetTicks) {
-		if (!pursuitMatches(target, weapon, now, resetTicks)) {
-			pursuitTarget = target;
-			pursuitWeapon = weapon == null ? "" : weapon;
-			pursuitStacks = 0;
-		}
-		pursuitStacks = Math.min(Math.max(1, maxStacks), pursuitStacks + 1);
-		pursuitLastHit = now;
-		return pursuitStacks;
+		int stacks = pursuitHit(meleePursuits, target, weapon, now, maxStacks, resetTicks);
+		lastMeleePursuitTarget = target;
+		return stacks;
+	}
+
+	public int rangedPursuitHit(UUID target, String weapon, long now, int maxStacks,
+			int resetTicks) {
+		int stacks = pursuitHit(rangedPursuits, target, weapon, now, maxStacks, resetTicks);
+		lastRangedPursuitTarget = target;
+		return stacks;
 	}
 
 	public void changeMainhand(String weapon) {
 		String normalized = weapon == null ? "" : weapon;
 		if (!mainhand.equals(normalized)) {
 			mainhand = normalized;
-			clearPursuit();
+			meleePursuits.clear();
+			lastMeleePursuitTarget = null;
 		}
 	}
 
@@ -71,20 +80,20 @@ public final class WeaponRuntimeState {
 		String normalized = weapon == null ? "" : weapon;
 		if (!rangedMainhand.equals(normalized)) {
 			rangedMainhand = normalized;
-			clearPursuit();
+			rangedPursuits.clear();
+			lastRangedPursuitTarget = null;
 		}
 	}
 
 	public int pursuitStacks() {
-		return pursuitStacks;
+		Pursuit pursuit = meleePursuits.get(lastMeleePursuitTarget);
+		return pursuit == null ? 0 : pursuit.stacks();
 	}
 
 	public int activePursuitStacks(long now, int resetTicks) {
-		if (pursuitTarget == null || now - pursuitLastHit >= Math.max(1, resetTicks)) {
-			clearPursuit();
-			return 0;
-		}
-		return pursuitStacks;
+		cleanupExpired(meleePursuits, now, resetTicks);
+		Pursuit pursuit = meleePursuits.get(lastMeleePursuitTarget);
+		return pursuit == null ? 0 : pursuit.stacks();
 	}
 
 	public boolean starfireHit(int every) {
@@ -115,16 +124,50 @@ public final class WeaponRuntimeState {
 		rangedMainhand = "";
 	}
 
-	private boolean pursuitMatches(UUID target, String weapon, long now, int resetTicks) {
-		return target != null && target.equals(pursuitTarget)
-				&& (weapon == null ? "" : weapon).equals(pursuitWeapon)
-				&& now - pursuitLastHit < Math.max(1, resetTicks);
+	private void clearPursuit() {
+		meleePursuits.clear();
+		rangedPursuits.clear();
+		lastMeleePursuitTarget = null;
+		lastRangedPursuitTarget = null;
 	}
 
-	private void clearPursuit() {
-		pursuitTarget = null;
-		pursuitWeapon = "";
-		pursuitLastHit = 0L;
-		pursuitStacks = 0;
+	private static double pursuitMultiplier(Map<UUID, Pursuit> pursuits, UUID target,
+			String weapon, long now, int resetTicks, double percentPerStack) {
+		Pursuit pursuit = pursuits.get(target);
+		if (pursuit == null || !(weapon == null ? "" : weapon).equals(pursuit.weapon())
+				|| now - pursuit.lastHit() >= Math.max(1, resetTicks)) {
+			pursuits.remove(target);
+			return 0.0D;
+		}
+		return pursuit.stacks() * Math.max(0.0D, percentPerStack) / 100.0D;
+	}
+
+	private static int pursuitHit(Map<UUID, Pursuit> pursuits, UUID target,
+			String weapon, long now, int maxStacks, int resetTicks) {
+		cleanupExpired(pursuits, now, resetTicks);
+		String normalizedWeapon = weapon == null ? "" : weapon;
+		Pursuit pursuit = pursuits.get(target);
+		if (pursuit == null || !normalizedWeapon.equals(pursuit.weapon())) {
+			if (!pursuits.containsKey(target) && pursuits.size() >= MAX_PURSUIT_TARGETS) {
+				pursuits.entrySet().stream()
+						.min(Map.Entry.comparingByValue(
+								java.util.Comparator.comparingLong(Pursuit::lastHit)))
+						.map(Map.Entry::getKey)
+						.ifPresent(pursuits::remove);
+			}
+			pursuit = new Pursuit(normalizedWeapon, now, 0);
+		}
+		int stacks = Math.min(Math.max(1, maxStacks), pursuit.stacks() + 1);
+		pursuits.put(target, new Pursuit(normalizedWeapon, now, stacks));
+		return stacks;
+	}
+
+	private static void cleanupExpired(Map<UUID, Pursuit> pursuits, long now,
+			int resetTicks) {
+		pursuits.entrySet().removeIf(entry ->
+				now - entry.getValue().lastHit() >= Math.max(1, resetTicks));
+	}
+
+	private record Pursuit(String weapon, long lastHit, int stacks) {
 	}
 }

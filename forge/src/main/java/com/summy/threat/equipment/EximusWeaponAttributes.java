@@ -31,7 +31,8 @@ public final class EximusWeaponAttributes {
 			return;
 		}
 		event.addModifier(Attributes.ATTACK_SPEED, new AttributeModifier(FIXED_ATTACK_SPEED,
-				"summy_threat:eximus_weapon_speed", 0.10D,
+				"summy_threat:eximus_weapon_speed",
+				EximusUpgradeValues.MELEE_ATTACK_SPEED_BONUS,
 				AttributeModifier.Operation.MULTIPLY_TOTAL));
 	}
 }
