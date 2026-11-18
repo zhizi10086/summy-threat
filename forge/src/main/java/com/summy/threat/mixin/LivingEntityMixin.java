@@ -5,6 +5,8 @@ import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.summy.threat.combat.ArmorDamageFormula;
 import com.summy.threat.equipment.ArmorAffixEffects;
 import com.summy.threat.equipment.ArmorReductionContext;
+import com.summy.threat.legendary.FrightfulPresenceService;
+import com.summy.threat.legendary.LegendaryRiposteService;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -52,5 +54,21 @@ public abstract class LivingEntityMixin {
 	private float summyThreat$applySpellwardPrism(float original, DamageSource source) {
 		LivingEntity self = (LivingEntity) (Object) this;
 		return original * ArmorAffixEffects.spellwardMultiplier(self, source);
+	}
+
+	@ModifyExpressionValue(
+			method = "actuallyHurt(Lnet/minecraft/world/damagesource/DamageSource;F)V",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/world/entity/LivingEntity;getDamageAfterMagicAbsorb(Lnet/minecraft/world/damagesource/DamageSource;F)F"
+			)
+	)
+	private float summyThreat$capturePreAbsorptionDamage(float original,
+			DamageSource source, float amount) {
+		LivingEntity self = (LivingEntity) (Object) this;
+		float adjusted = FrightfulPresenceService.modifyPreAbsorptionDamage(
+				self, source, original);
+		return LegendaryRiposteService.capturePreAbsorptionDamage(
+				self, source, adjusted);
 	}
 }

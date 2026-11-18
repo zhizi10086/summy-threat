@@ -31,6 +31,11 @@ import com.summy.threat.leader.LeaderAuraEffects;
 import com.summy.threat.leader.LegendaryResistance;
 import com.summy.threat.leader.LeaderSpawnController;
 import com.summy.threat.legendary.LegendaryActionRuntime;
+import com.summy.threat.legendary.LegendaryActionHandlers;
+import com.summy.threat.legendary.ModLegendaryEntities;
+import com.summy.threat.legendary.EchoSentenceService;
+import com.summy.threat.legendary.FrightfulPresenceService;
+import com.summy.threat.legendary.LegendaryRiposteService;
 import com.summy.threat.item.EquipmentDropHandler;
 import com.summy.threat.network.ModNetwork;
 import com.summy.threat.pcf.CdfManager;
@@ -60,7 +65,7 @@ import org.slf4j.LoggerFactory;
  * <p>已实现：属性上限抬升、自定义护甲减伤公式、基础数值表（怪物侧 TL 缩放 + 玩家护甲重填）、
  * 生态分档（§5.0）、卓越者 / TL 能力 / 8 个卓越者原型、Boss 硬编码攻击接管与调试 / 测量命令。
  * PCF/CDF、TL 选择与持久化、单次穿甲与临时削甲、Mod Boss 自动反推、SR 背叛兼容与
- * Boss 传奇动作公共框架已实现；具体 Boss 常规能力与传奇动作效果仍待实现。
+ * Boss 传奇动作公共框架与 12 项动作效果已实现；Boss 常规能力和升级传奇抗性仍待实现。
  * 配置走 Forge 原生 SERVER 档，Forge 会把服务端的值自动同步给客户端，双端口径天然一致。
  */
 @Mod(SummyThreat.MOD_ID)
@@ -80,6 +85,8 @@ public class SummyThreat {
 		// B15 材料注册。
 		ModItems.ITEMS.register(modBus);
 		ModRecipes.SERIALIZERS.register(modBus);
+		ModLegendaryEntities.ENTITY_TYPES.register(modBus);
+		LegendaryActionHandlers.registerAll();
 		// 创造页注入：BuildCreativeModeTabContentsEvent 是 **模组总线** 事件（IModBusEvent），
 		// 挂在 Forge 总线上不会被调用（第一版就踩了这个坑，物品注册成功但创造页里找不到）。
 		modBus.addListener(SummyThreat::onBuildCreativeTabContents);
@@ -120,6 +127,9 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(LeaderSpawnController.class);
 		MinecraftForge.EVENT_BUS.register(LegendaryResistance.class);
 		MinecraftForge.EVENT_BUS.register(LegendaryActionRuntime.class);
+		MinecraftForge.EVENT_BUS.register(LegendaryRiposteService.class);
+		MinecraftForge.EVENT_BUS.register(EchoSentenceService.class);
+		MinecraftForge.EVENT_BUS.register(FrightfulPresenceService.class);
 		MinecraftForge.EVENT_BUS.register(EquipmentDropHandler.class);
 		MinecraftForge.EVENT_BUS.register(PcfManager.class);
 		MinecraftForge.EVENT_BUS.register(CdfManager.class);

@@ -1,5 +1,7 @@
 package com.summy.threat.combat;
 
+import com.summy.threat.equipment.ThreatCategory;
+import com.summy.threat.equipment.ThreatHitContext;
 import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
@@ -30,6 +32,9 @@ public final class BossHardcodedDamageScaling {
 			return;
 		}
 		DamageSource source = event.getSource();
+		if (alreadyScaled(ThreatHitContext.current(event.getEntity(), source))) {
+			return;
+		}
 		LivingEntity owner = causingOwner(source);
 		if (owner == null || event.getEntity() == owner || MonsterScaler.isSpawnerSource(owner)
 				|| !isHardcodedAttack(owner, source)) {
@@ -39,6 +44,10 @@ public final class BossHardcodedDamageScaling {
 		if (multiplier != 1.0D) {
 			event.setAmount((float) (event.getAmount() * multiplier));
 		}
+	}
+
+	static boolean alreadyScaled(ThreatHitContext.Hit hit) {
+		return hit != null && hit.category() == ThreatCategory.LEGENDARY_ACTION;
 	}
 
 	/**

@@ -97,7 +97,9 @@ minecraft {
             if (project.hasProperty('devcheck') || project.hasProperty('betrayalcheck')
                     || project.hasProperty('leadercheck') || project.hasProperty('equipmentcheck')
                     || project.hasProperty('magiccheck') || project.hasProperty('weaponcheck')
-                    || project.hasProperty('compatcheck')) {
+                    || project.hasProperty('compatcheck')
+                    || project.hasProperty('legendarycheck')
+                    || project.hasProperty('legendaryautocheck')) {
                 property 'summy_threat.devcheck', 'true'
                 // 允许 SR 的 dev-only 联调事务入口在真实玩家环境中执行。
                 property 'summy.devcheck', 'true'
@@ -129,6 +131,13 @@ minecraft {
             if (project.hasProperty('compatcheck')) {
                 property 'summy_threat.compatcheck', 'true'
                 args '--quickPlaySingleplayer', 'st_check'
+            }
+            if (project.hasProperty('legendarycheck')) {
+                property 'summy_threat.legendarycheck', 'true'
+            }
+            if (project.hasProperty('legendaryautocheck')) {
+                property 'summy_threat.legendarycheck', 'true'
+                property 'summy_threat.legendaryautoonly', 'true'
             }
             // A11 玩家攻击测试环境：只准备木桩与装备，不自动退出。
             if (project.hasProperty('attacktest') || project.hasProperty('attacktest.stats')
@@ -178,7 +187,9 @@ minecraft {
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
             if (project.hasProperty('devcheck') || project.hasProperty('equipmentcheck')
-                    || project.hasProperty('weaponcheck') || project.hasProperty('compatcheck')) {
+                    || project.hasProperty('weaponcheck') || project.hasProperty('compatcheck')
+                    || project.hasProperty('legendarycheck')
+                    || project.hasProperty('legendaryautocheck')) {
                 property 'summy_threat.devcheck', 'true'
                 // SR 的测试事务入口同时要求公共 devcheck 开关。
                 property 'summy.devcheck', 'true'
@@ -191,6 +202,13 @@ minecraft {
             }
             if (project.hasProperty('compatcheck')) {
                 property 'summy_threat.compatcheck', 'true'
+            }
+            if (project.hasProperty('legendarycheck')) {
+                property 'summy_threat.legendarycheck', 'true'
+            }
+            if (project.hasProperty('legendaryautocheck')) {
+                property 'summy_threat.legendarycheck', 'true'
+                property 'summy_threat.legendaryautoonly', 'true'
             }
         }
     }

@@ -64,7 +64,7 @@ import java.util.Arrays;
  *         flame / frost / poison / storm / shock / guardian / vampire / magnet，
  *         {@code clear} 清空原型，{@code none} 抑制 TL 能力。</li>
  *     <li>{@code stats [玩家]}：查看计量结果（有效 DPS / 击杀耗时 / 无视护甲占比 / 承伤）。</li>
- *     <li>{@code legendary test <action_id> [target]}：以执行玩家为中心触发一次动作框架测试。</li>
+ *     <li>{@code legendary test <action_id> [target]}：以执行玩家为中心触发一次传奇动作效果测试。</li>
  * </ul>
  */
 public final class SummyThreatCommand {
@@ -220,11 +220,16 @@ public final class SummyThreatCommand {
 		if (!target.isAlive() || target.level() != player.level()) {
 			return fail(ctx, "测试目标必须存活且与执行玩家处于同一维度");
 		}
-		if (!LegendaryActionRuntime.startTest(player, target, action)) {
+		LegendaryActionRuntime.TestStartResult result =
+				LegendaryActionRuntime.startTest(player, target, action);
+		if (result == LegendaryActionRuntime.TestStartResult.DUPLICATE) {
 			return fail(ctx, "同一玩家已存在相同传奇动作测试实例：" + action.id());
 		}
+		if (result == LegendaryActionRuntime.TestStartResult.NO_ACTION_INSTANCE) {
+			return fail(ctx, "当前动作没有合法目标或处理器拒绝启动：" + action.id());
+		}
 		ctx.getSource().sendSuccess(() -> Component.literal(
-				"[Summy Threat] 已启动传奇动作基础框架测试：%s；中心 %.2f %.2f %.2f；目标 %s"
+				"[Summy Threat] 已启动传奇动作测试：%s；中心 %.2f %.2f %.2f；目标 %s"
 						.formatted(action.id(), player.getX(), player.getY(), player.getZ(),
 								target.getName().getString())), false);
 		return 1;

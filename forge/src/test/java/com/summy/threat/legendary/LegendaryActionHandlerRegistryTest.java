@@ -9,10 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LegendaryActionHandlerRegistryTest {
 	@Test
 	void registersOneHandlerPerActionAndRejectsDuplicate() {
-		LegendaryActionHandler first = context -> {
-		};
-		LegendaryActionHandler second = context -> {
-		};
+		LegendaryActionHandler first = context -> (ctx, age) -> false;
+		LegendaryActionHandler second = context -> (ctx, age) -> false;
 		LegendaryActionHandlerRegistry registry = new LegendaryActionHandlerRegistry();
 
 		assertTrue(registry.register(LegendaryActionId.JADE_LIGHT, first));

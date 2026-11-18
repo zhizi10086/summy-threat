@@ -64,12 +64,18 @@ public final class ThreatDevCheck {
 	private static final boolean WEAPON_CHECK = Boolean.getBoolean("summy_threat.weaponcheck");
 	private static final boolean MAGIC_CHECK = Boolean.getBoolean("summy_threat.magiccheck");
 	private static final boolean COMPAT_CHECK = Boolean.getBoolean("summy_threat.compatcheck");
+	private static final boolean LEGENDARY_CHECK =
+			Boolean.getBoolean("summy_threat.legendarycheck");
+	private static final boolean LEGENDARY_AUTO_ONLY =
+			Boolean.getBoolean("summy_threat.legendaryautoonly");
 	// 主菜单阶段要留给玩家创建/选择 DevCheckWorld 的时间；30 秒会在世界创建前
 	// 就把客户端关掉，因此这里放宽到 10 分钟，总运行上限放宽到 20 分钟。
 	private static final int IDLE_STOP_TICKS = 12000;
 	private static final int TOTAL_STOP_TICKS = 24000;
 	private static final int CLIENT_STOP_TICK = WEAPON_CHECK ? 400 : EQUIPMENT_CHECK ? 400
 			: COMPAT_CHECK ? 450
+			: LEGENDARY_AUTO_ONLY ? 400
+			: LEGENDARY_CHECK ? 3600
 			: BETRAYAL_CHECK ? 180 : LEADER_CHECK ? 240 : MAGIC_CHECK ? 140 : 1520;
 	private static final List<String> FAILURES = new ArrayList<>();
 	private static int serverTick;
@@ -144,6 +150,14 @@ public final class ThreatDevCheck {
 					case 80 -> WeaponSystemDevCheck.run(player);
 					default -> {
 					}
+				}
+				return;
+			}
+			if (LEGENDARY_CHECK) {
+				if (serverTick == 20) {
+					prepareWorld(player);
+				} else if (serverTick >= 30) {
+					LegendaryActionDevCheck.tick(player, serverTick - 30);
 				}
 				return;
 			}
@@ -250,6 +264,12 @@ public final class ThreatDevCheck {
 		if (COMPAT_CHECK && clientTick >= 300 && !equipmentClientRan) {
 			equipmentClientRan = true;
 			checkCompatibilityClientTooltips(client);
+		}
+		if (LEGENDARY_CHECK) {
+			if (clientTick >= CLIENT_STOP_TICK) {
+				finish(client, "传奇动作专项结束");
+			}
+			return;
 		}
 		if (clientTick == 1370) {
 			screenshot(client, "st_devcheck_jade");
