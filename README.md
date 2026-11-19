@@ -33,7 +33,7 @@ KubeJS 集成见 [`docs/kubejs.md`](docs/kubejs.md)。
 ```bash
 cd forge
 ./gradlew build
-# 1.20.1 产物会复制到 MC mod/JAR/1.20.1/summy-threat-forge/summy-threat-0.1.0.jar
+./gradlew archiveReleaseJar  # 显式归档重混淆成品
 ```
 
 `gradlew build` 自带两道构建期保障：

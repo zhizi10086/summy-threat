@@ -24,7 +24,7 @@ Forge 1.20.1 的"属性与怪物机制改造"模组，承载四块内容：
 | 构建 | ForgeGradle 6 + MixinGradle 0.7.38 + MixinExtras 0.5.5（jar-in-jar）+ 官方（Mojang）映射 |
 | Gradle / JDK | Gradle 8.8（wrapper）；JDK 17（由全局 `~/.gradle/gradle.properties` 的 `org.gradle.java.home` 指定） |
 | 构建命令 | `gradlew build` |
-| 产物 | `build/libs/summy-threat-0.1.0.jar`（薄包）与 `summy-threat-0.1.0-all.jar`（含嵌套 MixinExtras）；可发布的是后者，1.20.1 自动复制到 `JAR/1.20.1/summy-threat-forge/`，1.21.1 迁移完成后复制到 `JAR/1.21.1/summy-threat-neoforge/` |
+| 产物 | `build/libs/summy-threat-0.1.0.jar`（薄包）与 `summy-threat-0.1.0-all.jar`（含嵌套 MixinExtras）；可发布的是后者，执行 archiveReleaseJar 后复制到 `JAR/1.20.1/summy-threat-forge/`，1.21.1 迁移完成后复制到 `JAR/1.21.1/summy-threat-neoforge/` |
 
 ## 已实现①：属性上限抬升
 

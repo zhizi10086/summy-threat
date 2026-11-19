@@ -661,49 +661,98 @@ tasks.named('jarJar') {
     }
 }
 
-// 从主协调树或版本 worktree 向上查找工作区 JAR 根，再按 Minecraft 版本归档。
-def resolveJarArchive = { String moduleDirectory ->
-    File cursor = projectDir
-    while (cursor != null && !new File(cursor, 'JAR').isDirectory()) {
-        cursor = cursor.parentFile
-    }
-    if (cursor == null) {
-        throw new GradleException('找不到工作区 JAR 归档目录')
-    }
-    return new File(cursor, "JAR/${project.minecraft_version}/${moduleDirectory}")
-}
-
-// 1.20.1 沿用 Forge 目录；1.21.1 迁移后将产物切到 NeoForge 目录。
-def archiveModuleDirectory = project.minecraft_version.startsWith('1.21.1')
-        ? 'summy-threat-neoforge'
-        : 'summy-threat-forge'
-
-// 构建结束后把 reobf 后的 jar 复制到 JAR/<Minecraft版本>/<加载器目录>
-tasks.named('build') {
-    if (!project.hasProperty('internalPreview')) {
-        doLast {
-            def releaseDir = resolveJarArchive(archiveModuleDirectory)
-            releaseDir.mkdirs()
-            // 开启 JarJar 后，真正可发布的产物是 reobfJarJar（含嵌套的 MixinExtras）
-            def reobfTask = tasks.findByName('reobfJarJar') ?: tasks.named('reobfJar').get()
-            def jarFile = null
-            if (reobfTask.hasProperty('output')) {
-                def output = reobfTask.property('output')
-                if (output instanceof File) {
-                    jarFile = output
+// 普通构建只产出中间包，发布归档独立执行并保留冲突旧件。
+tasks.register('archiveReleaseJar') {
+    group = 'distribution'
+    dependsOn 'build', 'reobfJarJar'
+    doLast {
+        if (['devcheck', 'stormcheck', 'archetypecheck', 'rangecheck', 'leadercheck',
+             'weaponcheck', 'compatcheck', 'internalPreview'].any { project.hasProperty(it) }) {
+            throw new GradleException('开发包不可归档为正式产物')
+        }
+        File root = project.hasProperty('releaseArchiveRoot') ? file(project.property('releaseArchiveRoot')) : null
+        if (root == null) {
+            File cursor = projectDir
+            while (cursor != null && !new File(cursor, 'JAR').isDirectory()) {
+                cursor = cursor.parentFile
+            }
+            if (cursor == null) {
+                throw new GradleException('找不到工作区 JAR 归档目录')
+            }
+            root = new File(cursor, 'JAR')
+        }
+        String platform = project.minecraft_version.startsWith('1.21.1')
+                ? 'summy-threat-neoforge' : 'summy-threat-forge'
+        String relative = project.minecraft_version + '/' + platform
+        File output = layout.buildDirectory.file('reobfJarJar/output.jar').get().asFile
+        if (!output.isFile()) {
+            throw new GradleException('找不到重混淆后的 JarJar 产物')
+        }
+        def hash = { java.nio.file.Path path ->
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+            java.nio.file.Files.newInputStream(path).withCloseable { input ->
+                byte[] buffer = new byte[8192]
+                for (int count; (count = input.read(buffer)) != -1;) {
+                    digest.update(buffer, 0, count)
                 }
             }
-            if (jarFile == null) {
-                jarFile = (file('build/reobfJarJar').listFiles() ?: file('build/reobfJar').listFiles())
-                        ?.find { it.name.endsWith('.jar') }
-            }
-            if (jarFile == null || !jarFile.exists()) {
-                throw new GradleException('找不到 reobfJar 的输出 jar')
-            }
-            copy {
-                from jarFile
-                rename { "${project.archives_base_name}-${project.mod_version}.jar" }
-                into releaseDir
+            digest.digest().encodeHex().toString()
+        }
+        def directory = new File(root, relative).toPath()
+        java.nio.file.Files.createDirectories(directory)
+        def destination = directory.resolve(project.archives_base_name + '-' + project.mod_version + '.jar')
+        String expected = hash(output.toPath())
+        def lockPath = directory.resolve('.archive-release.lock')
+        java.nio.channels.FileChannel.open(lockPath, java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.WRITE).withCloseable { channel ->
+            channel.lock().withCloseable {
+                boolean exists = java.nio.file.Files.exists(destination)
+                if (exists && !java.nio.file.Files.isRegularFile(destination)) {
+                    throw new GradleException('归档目标不是普通文件 ' + destination)
+                }
+                if (exists && hash(destination) == expected) {
+                    logger.lifecycle('JAR 内容一致，保留原归档 ' + destination)
+                    return
+                }
+                def staged = java.nio.file.Files.createTempFile(directory, '.staging-', '.jar')
+                def backup = null
+                boolean installed = false
+                try {
+                    java.nio.file.Files.copy(output.toPath(), staged, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                    if (hash(staged) != expected) {
+                        throw new GradleException('暂存 JAR 哈希不一致')
+                    }
+                    if (exists) {
+                        String date = java.time.LocalDate.now(java.time.ZoneId.of('Asia/Shanghai')).toString()
+                        def conflicts = new File(root, '_archive/冲突归档-' + date).toPath()
+                        java.nio.file.Files.createDirectories(conflicts)
+                        def unique = java.nio.file.Files.createTempDirectory(conflicts, 'summy-threat-')
+                        def previous = unique.resolve(relative).resolve(destination.fileName)
+                        java.nio.file.Files.createDirectories(previous.parent)
+                        java.nio.file.Files.move(destination, previous)
+                        backup = previous
+                    }
+                    java.nio.file.Files.move(staged, destination)
+                    installed = true
+                    if (hash(destination) != expected) {
+                        throw new GradleException('归档 JAR 哈希不一致')
+                    }
+                    logger.lifecycle('已归档 ' + destination + ' SHA-256 ' + expected)
+                } catch (Exception failure) {
+                    try {
+                        if (installed) {
+                            java.nio.file.Files.deleteIfExists(destination)
+                        }
+                        if (backup != null && !java.nio.file.Files.exists(destination)) {
+                            java.nio.file.Files.move(backup, destination)
+                        }
+                    } catch (Exception restoreFailure) {
+                        failure.addSuppressed(restoreFailure)
+                    }
+                    throw failure
+                } finally {
+                    java.nio.file.Files.deleteIfExists(staged)
+                }
             }
         }
     }
