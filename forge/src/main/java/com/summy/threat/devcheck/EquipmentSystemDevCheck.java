@@ -183,6 +183,26 @@ final class EquipmentSystemDevCheck {
 	}
 
 	private static void checkRecipesAndReturns(ServerPlayer player, List<String> failures) {
+		ItemStack stack = prism("astral_plating", "prism_edge", "starlit_bowstring", true, null);
+		stack.setCount(5);
+		for (EquipmentOperation operation : List.of(EquipmentOperation.REFRESH_STANDARD,
+				EquipmentOperation.REFRESH_ADVANCED)) {
+			SmithingMenu stackMenu = new SmithingMenu(0, player.getInventory());
+			stackMenu.getSlot(0).set(new ItemStack(Items.ECHO_SHARD));
+			stackMenu.getSlot(1).set(stack.copy());
+			if (operation == EquipmentOperation.REFRESH_ADVANCED) {
+				stackMenu.getSlot(2).set(new ItemStack(ModItems.EXIMUS_ESSENCE.get()));
+			}
+			stackMenu.createResult();
+			ItemStack result = stackMenu.getSlot(3).getItem().copy();
+			if (!result.isEmpty()) {
+				stackMenu.getSlot(3).onTake(player, result);
+			}
+			check(failures, "ST-AUD-07 棱晶刷新一次只产出和消耗一枚 " + operation,
+					result.getCount() == 1 && stackMenu.getSlot(1).getItem().getCount() == 4,
+					"result=" + result + " remaining=" + stackMenu.getSlot(1).getItem());
+		}
+
 		ItemStack base = new ItemStack(Items.DIAMOND_CHESTPLATE);
 		SimpleContainer upgradeOne = smith(Items.ECHO_SHARD, base,
 				ModItems.EXIMUS_ESSENCE.get());
@@ -203,11 +223,14 @@ final class EquipmentSystemDevCheck {
 
 		ItemStack prismOne = prism("astral_plating", "prism_edge",
 				"starlit_bowstring", true, null);
-		SimpleContainer embed = smith(Items.ECHO_SHARD, levelTwo, prismOne);
+		ItemStack stackedAddition = prismOne.copy();
+		stackedAddition.setCount(5);
+		SimpleContainer embed = smith(Items.ECHO_SHARD, levelTwo, stackedAddition);
 		EquipmentSmithingRecipe embedRecipe = recipe(EquipmentOperation.EMBED_PRISM);
 		ItemStack oneEmbedded = embedRecipe.assemble(embed, player.server.registryAccess());
 		check(failures, "B15 镶嵌操作写入槽位 1",
-				!EximusEquipmentData.prism(oneEmbedded, 0).isEmpty()
+				EximusEquipmentData.prism(oneEmbedded, 0).getCount() == 1
+						&& stackedAddition.getCount() == 5
 						&& EximusEquipmentData.prism(oneEmbedded, 1).isEmpty(),
 				"slot1=%s slot2=%s".formatted(
 						EximusEquipmentData.prism(oneEmbedded, 0),
@@ -262,6 +285,7 @@ final class EquipmentSystemDevCheck {
 				"target=" + occupiedBaseTarget);
 
 		ItemStack full = EximusEquipmentData.withPrism(oneEmbedded, 1, prismTwo);
+		full.setTag(EximusEquipmentData.withPrism(full.getTag(), 0, stackedAddition.save(new CompoundTag())));
 		SimpleContainer disassemble = smith(Items.ECHO_SHARD, full, Items.AMETHYST_SHARD);
 		EquipmentSmithingRecipe disassembleRecipe = recipe(EquipmentOperation.DISASSEMBLE_ALL);
 		ItemStack disassembled = disassembleRecipe.assemble(disassemble,
@@ -270,7 +294,7 @@ final class EquipmentSystemDevCheck {
 				EximusEquipmentData.EQUIPMENT_ROOT);
 		ListTag returns = root.getList(EquipmentSmithingRecipe.RETURN_PRISMS, Tag.TAG_COMPOUND);
 		check(failures, "B15 同步拆卸双满槽返回 2 枚且槽位清空",
-				returns.size() == 2
+				returns.size() == 2 && ItemStack.of(returns.getCompound(0)).getCount() == 1
 						&& EximusEquipmentData.prism(disassembled, 0).isEmpty()
 						&& EximusEquipmentData.prism(disassembled, 1).isEmpty(),
 				"returns=%d".formatted(returns.size()));
@@ -436,7 +460,11 @@ final class EquipmentSystemDevCheck {
 				close(spell, (float) (1.0D - StarPrismConfig.doubleValue(
 						"armor.spellward_prism.reduction_percent") / 100.0D)),
 				"multiplier=" + spell);
-		checkSpellwardFullChain(player, attacker, failures);
+		if (player instanceof net.minecraftforge.common.util.FakePlayer) {
+			SummyThreat.LOGGER.info("[EQUIPMENT] Forge 假玩家固定免疫伤害，星咒屏障实际受伤链由客户端自检覆盖");
+		} else {
+			checkSpellwardFullChain(player, attacker, failures);
+		}
 
 		equipAffixes(player, "anchored_stride");
 		StarPrismAffixCoverage.cover("anchored_stride");
@@ -695,10 +723,14 @@ final class EquipmentSystemDevCheck {
 				MobEffects.DAMAGE_RESISTANCE);
 		net.minecraft.world.level.GameType previousGameMode =
 				player.gameMode.getGameModeForPlayer();
+		var previousDifficulty = player.level().getDifficulty();
+		boolean previousInvulnerable = player.isInvulnerable();
 		float previousHealth = player.getHealth();
 		float previousAbsorption = player.getAbsorptionAmount();
 		try {
 			player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+			player.setInvulnerable(false);
+			player.server.setDifficulty(net.minecraft.world.Difficulty.NORMAL, true);
 			player.removeEffect(MobEffects.DAMAGE_RESISTANCE);
 			player.addEffect(new MobEffectInstance(
 					MobEffects.DAMAGE_RESISTANCE, 200, 1, false, false));
@@ -723,6 +755,8 @@ final class EquipmentSystemDevCheck {
 				player.addEffect(previousResistance);
 			}
 			player.setGameMode(previousGameMode);
+			player.setInvulnerable(previousInvulnerable);
+			player.server.setDifficulty(previousDifficulty, true);
 			player.setAbsorptionAmount(previousAbsorption);
 			player.setHealth(Math.min(previousHealth, player.getMaxHealth()));
 			clearArmor(player);

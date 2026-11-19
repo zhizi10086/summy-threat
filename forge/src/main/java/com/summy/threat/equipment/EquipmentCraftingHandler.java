@@ -55,6 +55,7 @@ public final class EquipmentCraftingHandler {
 			if (prism.isEmpty()) {
 				continue;
 			}
+			prism.setCount(1);
 			if (!serverPlayer.getInventory().add(prism)) {
 				serverPlayer.drop(prism, false);
 			}

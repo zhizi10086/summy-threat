@@ -73,7 +73,7 @@ public final class EximusEquipmentData {
 
 	public static ItemStack withPrism(ItemStack input, int slot, ItemStack prism) {
 		ItemStack out = input.copy();
-		CompoundTag prismTag = prism.isEmpty() ? new CompoundTag() : prism.save(new CompoundTag());
+		CompoundTag prismTag = prism.isEmpty() ? new CompoundTag() : prism.copyWithCount(1).save(new CompoundTag());
 		out.setTag(withPrism(out.getTag(), slot, prismTag));
 		return out;
 	}

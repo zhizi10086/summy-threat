@@ -154,6 +154,7 @@ public final class EquipmentSmithingRecipe implements SmithingRecipe {
 				new StarPrismData(StarPrismData.SCHEMA, false, null,
 						null, null, null));
 		ItemStack out = base.copy();
+		out.setCount(1);
 		StarPrismData.write(out, new StarPrismData(StarPrismData.SCHEMA,
 				current.revealed(), pending, current.armorAffix(),
 				current.meleeAffix(), current.rangedAffix()));
@@ -166,6 +167,7 @@ public final class EquipmentSmithingRecipe implements SmithingRecipe {
 		for (int slot = 0; slot < EximusEquipmentData.SLOT_COUNT; slot++) {
 			ItemStack prism = EximusEquipmentData.prism(base, slot);
 			if (!prism.isEmpty()) {
+				prism.setCount(1);
 				returns.add(prism.save(new CompoundTag()));
 			}
 		}
