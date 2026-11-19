@@ -73,6 +73,7 @@ public final class MonsterScaler {
 	/** 区域首领的 PCF（生命公式用，默认 20） */
 	public static final String TAG_PCF = "summy_threat:pcf";
 	/** 会话令牌：与当前服务端会话比对，用于识别跨存档残留实体 */
+	private static final String TAG_PERSISTENT_ATTRIBUTES = "summy_threat:persistent_attributes";
 	public static final String TAG_SESSION = "summy_threat:session";
 	/** 能力名列表（能力系统落地后写入；Jade 提示框读取显示） */
 	public static final String TAG_ABILITIES = "summy_threat:abilities";
@@ -139,28 +140,16 @@ public final class MonsterScaler {
 			return;
 		}
 		CompoundTag data = mob.getPersistentData();
-		if (data.contains(TAG_SCALED)) {
-			if (data.getLong(TAG_SESSION) == sessionToken) {
-				// 本会话已数值化（/summythreat spawn 等命令路径）：仍记录一次最终分类，
-				// 让刷怪审计能看到命令生成的 TL / PCF / 能力 / 原型。
-				auditJoin(mob, (ServerLevel) event.getLevel());
-				return; // 本会话已数值化（重复 join 不重复处理）
+		if (data.getBoolean(TAG_SCALED)) {
+			if (event.loadedFromDisk() || data.getLong(TAG_SESSION) != sessionToken) {
+				restoreScaled(mob);
 			}
-			// 跨存档 / 跨会话的残留实体：运行期属性修正已丢失、但标记仍在（此前会一直保持原版数值）。
-			// 用存档里的 TL 补一次重缩放——不依赖当前全局 TL；档位 none（短路）时跳过。
-			if (ScalingState.tier() == ScalingState.Tier.NONE) {
-				return;
-			}
-			int storedTl = data.contains(TAG_TL) ? data.getInt(TAG_TL) : 0;
-			scaleNow(mob, storedTl);
 			auditJoin(mob, (ServerLevel) event.getLevel());
-			SummyThreat.LOGGER.info("[Summy Threat] 重新数值化残留实体 {}（TL {}）",
-					mob.getName().getString(), storedTl);
 			return;
 		}
 		if (!ScalingState.enabled()) {
 			// 原版领队僵尸只抬最大生命、不回满当前生命；即使我们未接管 TL，也补一次当前生命。
-			if (hasVanillaLeaderHealthBonus(mob)) {
+			if (!event.loadedFromDisk() && hasVanillaLeaderHealthBonus(mob)) {
 				mob.setHealth(mob.getMaxHealth());
 			}
 			// 自检审计：TL 关闭时也记录最终分类，便于 /summon 等命令样本核对；
@@ -263,8 +252,114 @@ public final class MonsterScaler {
 		}
 		// 原版领队的 MAX_HEALTH 是 MULTIPLY_TOTAL；不剥离会与 M/E/首领倍率相乘（2–5 倍污染）
 		stripVanillaLeaderHealthBonus(entity);
+		boolean alreadyScaled = forcedData.getBoolean(TAG_SCALED);
+		float previousHealth = entity.getHealth();
+		ScalingValues values = applyBaseAttributes(entity, kind, tl);
+		entity.setHealth(alreadyScaled ? previousHealth : entity.getMaxHealth());
+
+		CompoundTag data = entity.getPersistentData();
+		data.putBoolean(TAG_SCALED, true);
+		data.putBoolean(TAG_BOSS, kind == Kind.BOSS);
+		data.putBoolean(TAG_LEADER, kind == Kind.LEADER);
+		data.putBoolean(TAG_EXIMUS, kind == Kind.EXIMUS);
+		data.putInt(TAG_TL, tl);
+		if (kind != Kind.LEADER) {
+			data.remove(TAG_FIXED_LEADER);
+			data.remove(TAG_MANUAL_LEADER);
+		}
+		data.putDouble(TAG_HARDCODED_ATTACK_MULTIPLIER, values.attackMultiplier());
+		data.putBoolean(TAG_PERSISTENT_ATTRIBUTES, true);
+		data.putLong(TAG_SESSION, sessionToken);
+		String oldArchetype = data.getString(TAG_ARCHETYPE);
+		if (kind == Kind.EXIMUS) {
+			// 命令可在 scaleNow 之前写入指定原型；没有合法标签时随机补一个。
+			if (EximusArchetype.byId(data.getString(TAG_ARCHETYPE)) == null) {
+				data.putString(TAG_ARCHETYPE, EximusArchetype.random(entity.getRandom()).id());
+			}
+		} else {
+			data.remove(TAG_ARCHETYPE);
+		}
+		String newArchetype = data.getString(TAG_ARCHETYPE);
+		if (!oldArchetype.equals(newArchetype)) {
+			MinecraftForge.EVENT_BUS.post(new ThreatArchetypeChangedEvent(entity,
+					oldArchetype, newArchetype));
+		}
+
+		// 区域首领使用独立能力标签，旧存档中的普通 TL 能力立即迁移清除
+		if (kind == Kind.LEADER) {
+			if (!isFixedLeaderType(entity)) {
+				data.remove(TAG_FIXED_LEADER);
+			}
+			AbilityEffects.setAbilities(entity, tl, "");
+			LeaderAbilityState.ensure(entity, Math.max(10, tl));
+		} else if (AbilityEffects.enabled()) {
+			if (!data.contains(TAG_ABILITIES)) {
+				int extra = kind == Kind.EXIMUS ? 1 : 0;
+				boolean necroEligible = allowNecro && entity.getMobType() == MobType.UNDEAD
+						&& kind != Kind.BOSS && kind != Kind.LEADER;
+				AbilityEffects.setAbilities(entity, tl, AbilityEffects.roll(tl, extra, entity.getRandom(),
+						necroEligible));
+			} else {
+				AbilityEffects.setAbilities(entity, tl, data.getString(TAG_ABILITIES));
+			}
+		}
+
+		// 卓越者核心机制：卓越护盾（新刷满盾；残留按剩余比例保留）
+		EximusShield.refresh(entity, tl, kind == Kind.EXIMUS);
+		LegendaryResistance.refresh(entity);
+		if (ScalingState.enabled()) {
+			LegendaryActionState.ensure(entity);
+		}
+
+		if (kind != Kind.NORMAL) {
+			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}，卓越护盾 {}，能力 {}",
+					entity.getName().getString(), kind, tl, round(values.armor()), round(values.toughness()),
+					round(values.healthMultiplier()), round(values.attackMultiplier()),
+					kind == Kind.EXIMUS
+							? round(EximusShield.current(entity)) + " / " + round(EximusShield.max(entity)) : "无",
+					data.getString(TAG_ABILITIES).isEmpty() ? "无" : data.getString(TAG_ABILITIES));
+		}
+		MinecraftForge.EVENT_BUS.post(new ThreatScalePostEvent(entity, tl, kind,
+				values.healthMultiplier(), values.attackMultiplier()));
+		return true;
+	}
+
+	/** 旧存档需要先恢复属性上限，再按原始存档值还原血量。 */
+	public static void restoreLegacyAttributes(LivingEntity entity, float savedHealth) {
+		CompoundTag data = entity.getPersistentData();
+		if (!data.getBoolean(TAG_SCALED) || data.getBoolean(TAG_PERSISTENT_ATTRIBUTES)) {
+			return;
+		}
+		ScalingValues values = applyBaseAttributes(entity, kindOf(entity), ScalingState.clampTl(data.getInt(TAG_TL)));
+		if (!data.contains(TAG_HARDCODED_ATTACK_MULTIPLIER)) {
+			data.putDouble(TAG_HARDCODED_ATTACK_MULTIPLIER, values.attackMultiplier());
+		}
+		data.putBoolean(TAG_PERSISTENT_ATTRIBUTES, true);
+		if (Float.isFinite(savedHealth)) {
+			entity.setHealth(savedHealth);
+		}
+	}
+
+	private static void restoreScaled(LivingEntity entity) {
+		restoreLegacyAttributes(entity, entity.getHealth());
+		entity.getPersistentData().putLong(TAG_SESSION, sessionToken);
+		refreshRuntimeMechanisms(entity);
+	}
+
+	public static void refreshRuntimeMechanisms(LivingEntity entity) {
+		if (!entity.getPersistentData().getBoolean(TAG_SCALED)) {
+			return;
+		}
+		AbilityEffects.refreshStaticModifiers(entity, entity.getPersistentData().getInt(TAG_TL));
+		EximusShield.refreshRuntime(entity);
+		LegendaryResistance.refresh(entity);
+	}
+
+	private record ScalingValues(double armor, double toughness, double healthMultiplier, double attackMultiplier) {
+	}
+
+	private static ScalingValues applyBaseAttributes(LivingEntity entity, Kind kind, int tl) {
 		double rHp = ScalingState.rHp();
-		double rAtk = ScalingState.rAtk();
 
 		double armorTarget;
 		double toughnessTarget;
@@ -307,70 +402,7 @@ public final class MonsterScaler {
 		// 移速：仅卓越者 +5%
 		setMultiplier(entity, Attributes.MOVEMENT_SPEED, ID_SPEED, 1.0D + speedBonus);
 
-		entity.setHealth(entity.getMaxHealth());
-
-		CompoundTag data = entity.getPersistentData();
-		data.putBoolean(TAG_SCALED, true);
-		data.putBoolean(TAG_BOSS, kind == Kind.BOSS);
-		data.putBoolean(TAG_LEADER, kind == Kind.LEADER);
-		data.putBoolean(TAG_EXIMUS, kind == Kind.EXIMUS);
-		data.putInt(TAG_TL, tl);
-		if (kind != Kind.LEADER) {
-			data.remove(TAG_FIXED_LEADER);
-			data.remove(TAG_MANUAL_LEADER);
-		}
-		data.putDouble(TAG_HARDCODED_ATTACK_MULTIPLIER, attackMultiplier);
-		data.putLong(TAG_SESSION, sessionToken);
-		String oldArchetype = data.getString(TAG_ARCHETYPE);
-		if (kind == Kind.EXIMUS) {
-			// 命令可在 scaleNow 之前写入指定原型；没有合法标签时随机补一个。
-			if (EximusArchetype.byId(data.getString(TAG_ARCHETYPE)) == null) {
-				data.putString(TAG_ARCHETYPE, EximusArchetype.random(entity.getRandom()).id());
-			}
-		} else {
-			data.remove(TAG_ARCHETYPE);
-		}
-		String newArchetype = data.getString(TAG_ARCHETYPE);
-		if (!oldArchetype.equals(newArchetype)) {
-			MinecraftForge.EVENT_BUS.post(new ThreatArchetypeChangedEvent(entity,
-					oldArchetype, newArchetype));
-		}
-
-		// 区域首领使用独立能力标签，旧存档中的普通 TL 能力立即迁移清除
-		if (kind == Kind.LEADER) {
-			if (!isFixedLeaderType(entity)) {
-				data.remove(TAG_FIXED_LEADER);
-			}
-			AbilityEffects.setAbilities(entity, tl, "");
-			LeaderAbilityState.ensure(entity, Math.max(10, tl));
-		} else if (AbilityEffects.enabled()) {
-			if (!data.contains(TAG_ABILITIES)) {
-				int extra = kind == Kind.EXIMUS ? 1 : 0;
-				boolean necroEligible = allowNecro && entity.getMobType() == MobType.UNDEAD
-						&& kind != Kind.BOSS && kind != Kind.LEADER;
-				AbilityEffects.setAbilities(entity, tl, AbilityEffects.roll(tl, extra, entity.getRandom(),
-						necroEligible));
-			} else {
-				AbilityEffects.setAbilities(entity, tl, data.getString(TAG_ABILITIES));
-			}
-		}
-
-		// 卓越者核心机制：卓越护盾（新刷满盾；残留按剩余比例保留）
-		EximusShield.refresh(entity, tl, kind == Kind.EXIMUS);
-		LegendaryResistance.refresh(entity);
-		LegendaryActionState.ensure(entity);
-
-		if (kind != Kind.NORMAL) {
-			SummyThreat.LOGGER.info("[Summy Threat] 数值化 {}（{}，TL {}）：护甲 {} / 韧性 {}，生命 ×{}，攻击 ×{}，卓越护盾 {}，能力 {}",
-					entity.getName().getString(), kind, tl, round(armorTarget), round(toughnessTarget),
-					round(healthMultiplier), round(attackMultiplier),
-					kind == Kind.EXIMUS
-							? round(EximusShield.current(entity)) + " / " + round(EximusShield.max(entity)) : "无",
-					data.getString(TAG_ABILITIES).isEmpty() ? "无" : data.getString(TAG_ABILITIES));
-		}
-		MinecraftForge.EVENT_BUS.post(new ThreatScalePostEvent(entity, tl, kind,
-				healthMultiplier, attackMultiplier));
-		return true;
+		return new ScalingValues(armorTarget, toughnessTarget, healthMultiplier, attackMultiplier);
 	}
 
 	public static void setArchetype(LivingEntity entity, String archetypeId) {
@@ -396,7 +428,7 @@ public final class MonsterScaler {
 	 */
 	public static double hardcodedAttackMultiplier(LivingEntity entity) {
 		CompoundTag data = entity.getPersistentData();
-		if (!data.getBoolean(TAG_SCALED) || ScalingState.tier() == ScalingState.Tier.NONE) {
+		if (!data.getBoolean(TAG_SCALED) || !ScalingState.enabled()) {
 			return 1.0D;
 		}
 		if (data.contains(TAG_HARDCODED_ATTACK_MULTIPLIER)) {
@@ -466,7 +498,7 @@ public final class MonsterScaler {
 		instance.removeModifier(id);
 		double delta = target - instance.getBaseValue();
 		if (Math.abs(delta) > 1.0E-6D) {
-			instance.addTransientModifier(new AttributeModifier(id, MODIFIER_NAME, delta,
+			instance.addPermanentModifier(new AttributeModifier(id, MODIFIER_NAME, delta,
 					AttributeModifier.Operation.ADDITION));
 		}
 	}
@@ -480,7 +512,7 @@ public final class MonsterScaler {
 		instance.removeModifier(id);
 		double delta = multiplier - 1.0D;
 		if (Math.abs(delta) > 1.0E-6D) {
-			instance.addTransientModifier(new AttributeModifier(id, MODIFIER_NAME, delta,
+			instance.addPermanentModifier(new AttributeModifier(id, MODIFIER_NAME, delta,
 					AttributeModifier.Operation.MULTIPLY_TOTAL));
 		}
 	}

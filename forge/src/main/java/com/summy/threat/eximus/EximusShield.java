@@ -66,7 +66,7 @@ public final class EximusShield {
 	}
 
 	public static boolean isActive(LivingEntity entity) {
-		return isEximus(entity) && current(entity) > 0.0D;
+		return com.summy.threat.scaling.ScalingState.enabled() && isEximus(entity) && current(entity) > 0.0D;
 	}
 
 	public static double current(LivingEntity entity) {
@@ -141,12 +141,25 @@ public final class EximusShield {
 		data.putDouble(TAG_SHIELD, current);
 		data.remove(TAG_LEGACY_SHIELD);
 		data.remove(TAG_LEGACY_SHIELD_MAX);
-		if (current > 0.0D) {
+		if (isActive(entity)) {
 			applyShieldModifiers(entity);
 			applySnapshot(entity);
 		} else {
 			removeShieldModifiers(entity);
 			clearSnapshot(entity);
+		}
+	}
+
+	/** 恢复护盾运行期属性，保留存档上限和剩余量。 */
+	public static void refreshRuntime(LivingEntity entity) {
+		clearSnapshot(entity);
+		if (isActive(entity)) {
+			applyShieldModifiers(entity);
+			applySnapshot(entity);
+		} else {
+			removeShieldModifiers(entity);
+			GUARD_UNTIL.remove(entity.getUUID());
+			ABSORBED.remove(entity.getUUID());
 		}
 	}
 
@@ -164,7 +177,7 @@ public final class EximusShield {
 
 	/** 护盾破碎后的 0.5 秒真无敌；不依赖护盾剩余值，护盾已归零仍会生效。 */
 	public static boolean isGuarded(LivingEntity entity) {
-		if (entity == null) {
+		if (entity == null || !com.summy.threat.scaling.ScalingState.enabled()) {
 			return false;
 		}
 		Long until = GUARD_UNTIL.get(entity.getUUID());

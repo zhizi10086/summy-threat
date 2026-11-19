@@ -4,6 +4,7 @@ import com.google.common.collect.Multimap;
 import com.summy.threat.Config;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.scaling.MonsterScaler;
+import com.summy.threat.scaling.ScalingState;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -64,12 +65,17 @@ public final class PcfManager {
 	}
 
 	public static double value(ServerPlayer player) {
-		ensureData(player);
+		if (ScalingState.enabled()) {
+			ensureData(player);
+		}
 		CompoundTag root = root(player);
 		return clamp(root.getDouble(VALUE), 0.0D, 20.0D);
 	}
 
 	public static void setValue(ServerPlayer player, double value) {
+		if (!ScalingState.enabled()) {
+			return;
+		}
 		CompoundTag root = root(player);
 		root.putDouble(VALUE, clamp(value, 0.0D, 20.0D));
 		root.putBoolean(INITIALIZED, true);
@@ -100,7 +106,9 @@ public final class PcfManager {
 	}
 
 	public static Snapshot snapshot(ServerPlayer player) {
-		ensureData(player);
+		if (ScalingState.enabled()) {
+			ensureData(player);
+		}
 		CompoundTag root = root(player);
 		Components components = components(player, root);
 		boolean locked = player.level().getGameTime() < root.getLong(RESET_LOCK_UNTIL);
@@ -116,6 +124,9 @@ public final class PcfManager {
 
 	@SubscribeEvent
 	public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+		if (!ScalingState.enabled()) {
+			return;
+		}
 		if (event.getEntity() instanceof ServerPlayer player) {
 			ensureData(player);
 			refresh(player);
@@ -134,6 +145,9 @@ public final class PcfManager {
 
 	@SubscribeEvent
 	public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+		if (!ScalingState.enabled()) {
+			return;
+		}
 		if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) {
 			return;
 		}
@@ -148,6 +162,9 @@ public final class PcfManager {
 
 	@SubscribeEvent
 	public static void onItemPickup(PlayerEvent.ItemPickupEvent event) {
+		if (!ScalingState.enabled()) {
+			return;
+		}
 		if (!(event.getEntity() instanceof ServerPlayer player)) {
 			return;
 		}
@@ -187,6 +204,9 @@ public final class PcfManager {
 
 	@SubscribeEvent
 	public static void onBossDeath(LivingDeathEvent event) {
+		if (!ScalingState.enabled()) {
+			return;
+		}
 		ServerPlayer killer = playerOf(event.getSource());
 		if (killer == null) {
 			return;
@@ -208,6 +228,9 @@ public final class PcfManager {
 
 	@SubscribeEvent
 	public static void onChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+		if (!ScalingState.enabled()) {
+			return;
+		}
 		if (event.getEntity() instanceof ServerPlayer player) {
 			ensureData(player);
 			CompoundTag root = root(player);

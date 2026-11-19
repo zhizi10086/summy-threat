@@ -6,8 +6,14 @@ import com.summy.threat.combat.ArmorDamageFormula;
 import com.summy.threat.equipment.ArmorAffixEffects;
 import com.summy.threat.equipment.ArmorReductionContext;
 import com.summy.threat.legendary.FrightfulPresenceService;
-import com.summy.threat.legendary.LegendaryRiposteService;
+import com.summy.threat.legendary.LegendaryDamageSettlement;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.nbt.CompoundTag;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import com.summy.threat.scaling.MonsterScaler;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -68,7 +74,21 @@ public abstract class LivingEntityMixin {
 		LivingEntity self = (LivingEntity) (Object) this;
 		float adjusted = FrightfulPresenceService.modifyPreAbsorptionDamage(
 				self, source, original);
-		return LegendaryRiposteService.capturePreAbsorptionDamage(
+		return LegendaryDamageSettlement.beforeAbsorption(
 				self, source, adjusted);
+	}
+	@Inject(method = "readAdditionalSaveData", at = @At("RETURN"))
+	private void summyThreat$restoreLegacyScaledHealth(CompoundTag tag, CallbackInfo ci) {
+		LivingEntity self = (LivingEntity) (Object) this;
+		if (!self.level().isClientSide() && tag.contains("Health", 99)
+				&& com.summy.threat.Config.SPEC.isLoaded()) {
+			MonsterScaler.restoreLegacyAttributes(self, tag.getFloat("Health"));
+		}
+	}
+
+	@WrapMethod(method = "actuallyHurt")
+	private void summyThreat$observeSettledDamage(DamageSource source, float amount, Operation<Void> original) {
+		LegendaryDamageSettlement.observe((LivingEntity) (Object) this, source,
+				() -> original.call(source, amount));
 	}
 }

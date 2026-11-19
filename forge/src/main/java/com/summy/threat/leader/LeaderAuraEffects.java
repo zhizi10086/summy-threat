@@ -62,7 +62,7 @@ public final class LeaderAuraEffects {
 	}
 
 	public static void tickLeader(LivingEntity leader, long now) {
-		if (MonsterScaler.kindOf(leader) != MonsterScaler.Kind.LEADER) {
+		if (!com.summy.threat.scaling.ScalingState.enabled() || MonsterScaler.kindOf(leader) != MonsterScaler.Kind.LEADER) {
 			cleanupLeader(leader);
 			return;
 		}
@@ -97,6 +97,9 @@ public final class LeaderAuraEffects {
 
 	@SubscribeEvent(priority = EventPriority.NORMAL)
 	public static void onLivingHurt(LivingHurtEvent event) {
+		if (!com.summy.threat.scaling.ScalingState.enabled()) {
+			return;
+		}
 		if (event.isCanceled()) {
 			return;
 		}
@@ -122,6 +125,9 @@ public final class LeaderAuraEffects {
 
 	@SubscribeEvent(priority = EventPriority.HIGH)
 	public static void onLivingDamage(LivingDamageEvent event) {
+		if (!com.summy.threat.scaling.ScalingState.enabled()) {
+			return;
+		}
 		if (event.isCanceled()
 				|| event.getSource().is(DamageTypeTags.BYPASSES_INVULNERABILITY)
 				|| event.getAmount() <= 0.0F) {

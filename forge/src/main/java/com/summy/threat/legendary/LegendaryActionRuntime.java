@@ -2,6 +2,7 @@ package com.summy.threat.legendary;
 
 import com.summy.threat.SummyThreat;
 import com.summy.threat.scaling.MonsterScaler;
+import com.summy.threat.scaling.ScalingState;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -11,14 +12,14 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -79,8 +80,7 @@ public final class LegendaryActionRuntime {
 	@SubscribeEvent
 	public static void onLivingTick(net.minecraftforge.event.entity.living.LivingEvent.LivingTickEvent event) {
 		LivingEntity entity = event.getEntity();
-		if (entity.level().isClientSide()
-				|| MonsterScaler.kindOf(entity) != MonsterScaler.Kind.BOSS) {
+		if (!eligibleBoss(entity)) {
 			return;
 		}
 		LegendaryActionId selected = LegendaryActionState.ensure(entity);
@@ -101,7 +101,7 @@ public final class LegendaryActionRuntime {
 
 	public static boolean startReactive(LivingEntity owner, LivingEntity target,
 			LegendaryActionId expected, long now) {
-		if (target == null || !canStartReactive(owner, expected, now)) {
+		if (!validPlayer(owner, target) || !canStartReactive(owner, expected, now)) {
 			return false;
 		}
 		return startBossAction(owner, target, expected, now);
@@ -109,8 +109,7 @@ public final class LegendaryActionRuntime {
 
 	public static boolean canStartReactive(LivingEntity owner,
 			LegendaryActionId expected, long now) {
-		return owner != null && expected != null
-				&& MonsterScaler.kindOf(owner) == MonsterScaler.Kind.BOSS
+		return expected != null && eligibleBoss(owner)
 				&& LegendaryActionState.selection(owner) == expected
 				&& COMBAT_TICKS.getOrDefault(owner.getUUID(), 0) >= 200
 				&& LegendaryActionState.ready(owner, now)
@@ -143,34 +142,61 @@ public final class LegendaryActionRuntime {
 
 	private static LivingEntity combatTarget(LivingEntity owner) {
 		LivingEntity current = com.summy.threat.leader.LeaderTargeting.currentTarget(owner);
-		if (current instanceof ServerPlayer player && player.isAlive()) {
-			return player;
+		if (validPlayer(owner, current)) {
+			return current;
 		}
 		if (!(owner.level() instanceof ServerLevel level)) {
 			return null;
 		}
-		return level.getPlayers(player -> player.isAlive()
-						&& !player.isCreative()
-						&& !player.isSpectator()
+		return level.getPlayers(player -> validPlayer(owner, player)
 						&& player.distanceToSqr(owner) <= 32.0D * 32.0D)
 				.stream()
 				.min(Comparator.comparingDouble(player -> player.distanceToSqr(owner)))
 				.orElse(null);
 	}
 
-	@SubscribeEvent
+	private static boolean eligibleBoss(LivingEntity owner) {
+		return owner != null && owner.level() instanceof ServerLevel && owner.isAlive()
+				&& ScalingState.enabled()
+				&& owner.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED)
+				&& MonsterScaler.kindOf(owner) == MonsterScaler.Kind.BOSS;
+	}
+
+	static boolean validPlayer(LivingEntity owner, LivingEntity target) {
+		return owner != null && target instanceof ServerPlayer player && player.isAlive()
+				&& player.level() == owner.level() && !player.isCreative() && !player.isSpectator();
+	}
+
+	// 伤害事件可在动作 tick 内同步回调，先移除会话，待 tick 返回时清理。
+	@SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.MONITOR)
 	public static void onLivingDeath(LivingDeathEvent event) {
 		LivingEntity entity = event.getEntity();
+		if (entity.level().isClientSide()) {
+			return;
+		}
 		if (MonsterScaler.kindOf(entity) == MonsterScaler.Kind.BOSS) {
 			LegendaryActionState.clear(entity);
-			COMBAT_TICKS.remove(entity.getUUID());
-			LegendaryRiposteService.clearOwner(entity.getUUID());
-			BossSession session = BOSS_ACTIONS.remove(entity.getUUID());
-			if (session != null) {
-				finishBoss(session, LegendaryActionInstance.StopReason.OWNER_INVALID);
-			}
 		}
-		if (entity instanceof ServerPlayer player) {
+		removeOwner(entity);
+	}
+
+	@SubscribeEvent
+	public static void onEntityLeave(EntityLeaveLevelEvent event) {
+		if (!event.getLevel().isClientSide() && event.getEntity() instanceof LivingEntity living) {
+			removeOwner(living);
+		}
+	}
+
+	private static void removeOwner(LivingEntity owner) {
+		UUID id = owner.getUUID();
+		COMBAT_TICKS.remove(id);
+		LegendaryRiposteService.clearOwner(id);
+		FrightfulPresenceService.clearOwner(id, (ServerLevel) owner.level());
+		BossSession boss = BOSS_ACTIONS.get(id);
+		if (boss != null && boss.context.owner() == owner) {
+			cancel(boss, LegendaryActionInstance.StopReason.OWNER_INVALID);
+		}
+		if (owner instanceof ServerPlayer player) {
 			clearPlayer(player.getUUID());
 		}
 	}
@@ -194,108 +220,99 @@ public final class LegendaryActionRuntime {
 		if (event.phase != TickEvent.Phase.END) {
 			return;
 		}
-		MinecraftServer server = event.getServer();
-		long now = server.overworld().getGameTime();
-		tickTests(server, now);
-		tickBossActions(now);
-	}
-
-	private static void tickTests(MinecraftServer server, long now) {
-		Iterator<TestSession> iterator = TEST_SESSIONS.iterator();
-		while (iterator.hasNext()) {
-			TestSession session = iterator.next();
-			ServerPlayer player = server.getPlayerList().getPlayer(session.playerId());
-			if (player == null || !player.isAlive()) {
-				finish(session, LegendaryActionInstance.StopReason.OWNER_INVALID);
-				iterator.remove();
+		long now = event.getServer().overworld().getGameTime();
+		for (TestSession session : List.copyOf(TEST_SESSIONS)) {
+			if (session.reason != null) {
 				continue;
 			}
-			boolean keepRunning;
-			try {
-				keepRunning = session.instance().tick(session.context(), session.age());
-			} catch (RuntimeException exception) {
-				SummyThreat.LOGGER.error("[Summy Threat] 传奇动作 {} tick 失败",
-						session.action().id(), exception);
-				keepRunning = false;
+			if (!session.context.owner().isAlive() || session.context.owner().level() != session.level()) {
+				cancel(session, LegendaryActionInstance.StopReason.OWNER_INVALID);
+			} else if (tick(session) && now % MARKER_INTERVAL_TICKS == 0) {
+				spawnMarker(session.level(), session.context.center(), session.action());
 			}
-			session.age++;
-			if (!keepRunning || session.age >= TEST_SAFETY_TIMEOUT_TICKS) {
-				finish(session, LegendaryActionInstance.StopReason.COMPLETED);
-				iterator.remove();
+		}
+		if (!ScalingState.enabled()) {
+			return;
+		}
+		for (BossSession session : List.copyOf(BOSS_ACTIONS.values())) {
+			if (session.reason != null) {
 				continue;
 			}
-			if (now % MARKER_INTERVAL_TICKS == 0) {
-				spawnMarker(session.level(), session.center(), session.action());
+			LivingEntity owner = session.context.owner();
+			if (!eligibleBoss(owner) || session.level().getEntity(session.ownerId()) != owner) {
+				removeOwner(owner);
+			} else {
+				tick(session);
 			}
 		}
 	}
 
-	private static void tickBossActions(long now) {
-		Iterator<Map.Entry<UUID, BossSession>> iterator = BOSS_ACTIONS.entrySet().iterator();
-		while (iterator.hasNext()) {
-			BossSession session = iterator.next().getValue();
-			if (!(session.level().getEntity(session.ownerId()) instanceof LivingEntity owner)
-					|| !owner.isAlive()
-					|| MonsterScaler.kindOf(owner) != MonsterScaler.Kind.BOSS) {
-				finishBoss(session, LegendaryActionInstance.StopReason.OWNER_INVALID);
-				iterator.remove();
-				continue;
-			}
-			boolean keepRunning;
-			try {
-				keepRunning = session.instance().tick(session.context(), session.age());
-			} catch (RuntimeException exception) {
-				SummyThreat.LOGGER.error("[Summy Threat] 传奇动作 {} tick 失败",
-						session.action().id(), exception);
-				keepRunning = false;
-			}
-			session.age++;
-			if (!keepRunning || session.age >= TEST_SAFETY_TIMEOUT_TICKS) {
-				finishBoss(session, LegendaryActionInstance.StopReason.COMPLETED);
-				iterator.remove();
+	public static void pauseBossActions(MinecraftServer server) {
+		for (BossSession session : List.copyOf(BOSS_ACTIONS.values())) {
+			cancel(session, LegendaryActionInstance.StopReason.CANCELLED);
+		}
+		COMBAT_TICKS.clear();
+		LegendaryRiposteService.clearAll();
+		FrightfulPresenceService.clearFormal(server);
+	}
+
+	private static boolean tick(Session session) {
+		session.ticking = true;
+		boolean keepRunning = false;
+		try {
+			keepRunning = session.instance.tick(session.context, session.age++);
+		} catch (RuntimeException exception) {
+			SummyThreat.LOGGER.error("[Summy Threat] 传奇动作 {} tick 失败",
+					session.action().id(), exception);
+		} finally {
+			session.ticking = false;
+			if (session.reason != null) {
+				stop(session);
 			}
 		}
+		if (!keepRunning || session.age >= TEST_SAFETY_TIMEOUT_TICKS) {
+			cancel(session, LegendaryActionInstance.StopReason.COMPLETED);
+		}
+		return session.reason == null;
 	}
 
 	@SubscribeEvent
-	public static void onServerStopped(ServerStoppedEvent event) {
-		TEST_TRACKER.clearAll();
-		TEST_SESSIONS.clear();
-		for (BossSession session : BOSS_ACTIONS.values()) {
-			finishBoss(session, LegendaryActionInstance.StopReason.SERVER_STOPPED);
+	public static void onServerStopping(ServerStoppingEvent event) {
+		pauseBossActions(event.getServer());
+		for (TestSession session : List.copyOf(TEST_SESSIONS)) {
+			cancel(session, LegendaryActionInstance.StopReason.SERVER_STOPPED);
 		}
-		BOSS_ACTIONS.clear();
-		COMBAT_TICKS.clear();
-		LegendaryRiposteService.clearAll();
+		TEST_TRACKER.clearAll();
 	}
 
 	private static void clearPlayer(UUID playerId) {
-		TEST_TRACKER.clear(playerId);
-		Iterator<TestSession> iterator = TEST_SESSIONS.iterator();
-		while (iterator.hasNext()) {
-			TestSession session = iterator.next();
+		for (TestSession session : List.copyOf(TEST_SESSIONS)) {
 			if (session.playerId().equals(playerId)) {
-				finish(session, LegendaryActionInstance.StopReason.CANCELLED);
-				iterator.remove();
+				cancel(session, LegendaryActionInstance.StopReason.CANCELLED);
 			}
 		}
 	}
 
-	private static void finish(TestSession session,
-			LegendaryActionInstance.StopReason reason) {
-		TEST_TRACKER.finish(session.playerId(), session.action());
-		try {
-			session.instance().stop(session.context(), reason);
-		} catch (RuntimeException exception) {
-			SummyThreat.LOGGER.error("[Summy Threat] 传奇动作 {} 清理失败",
-					session.action().id(), exception);
+	private static void cancel(Session session, LegendaryActionInstance.StopReason reason) {
+		if (session.reason != null) {
+			return;
+		}
+		session.reason = reason;
+		session.context.cancel();
+		if (session instanceof TestSession test) {
+			TEST_SESSIONS.remove(test);
+			TEST_TRACKER.finish(test.playerId(), test.action());
+		} else {
+			BOSS_ACTIONS.remove(session.context.owner().getUUID(), session);
+		}
+		if (!session.ticking) {
+			stop(session);
 		}
 	}
 
-	private static void finishBoss(BossSession session,
-			LegendaryActionInstance.StopReason reason) {
+	private static void stop(Session session) {
 		try {
-			session.instance().stop(session.context(), reason);
+			session.instance.stop(session.context, session.reason);
 		} catch (RuntimeException exception) {
 			SummyThreat.LOGGER.error("[Summy Threat] 传奇动作 {} 清理失败",
 					session.action().id(), exception);
@@ -325,83 +342,50 @@ public final class LegendaryActionRuntime {
 		}
 	}
 
-	private static final class TestSession {
-		private final UUID playerId;
-		private final LegendaryActionContext context;
-		private final LegendaryActionInstance instance;
-		private int age;
+	private static class Session {
+		final LegendaryActionContext context;
+		final LegendaryActionInstance instance;
+		int age;
+		boolean ticking;
+		LegendaryActionInstance.StopReason reason;
 
-		private TestSession(UUID playerId, LegendaryActionContext context,
-				LegendaryActionInstance instance) {
-			this.playerId = playerId;
+		Session(LegendaryActionContext context, LegendaryActionInstance instance) {
 			this.context = context;
 			this.instance = instance;
 		}
 
-		private UUID playerId() {
-			return playerId;
-		}
-
-		private LegendaryActionContext context() {
-			return context;
-		}
-
-		private LegendaryActionInstance instance() {
-			return instance;
-		}
-
-		private int age() {
-			return age;
-		}
-
-		private ServerLevel level() {
+		ServerLevel level() {
 			return context.level();
 		}
 
-		private Vec3 center() {
-			return context.center();
-		}
-
-		private LegendaryActionId action() {
+		LegendaryActionId action() {
 			return context.action();
 		}
 	}
 
-	private static final class BossSession {
+	private static final class TestSession extends Session {
+		private final UUID playerId;
+
+		TestSession(UUID playerId, LegendaryActionContext context, LegendaryActionInstance instance) {
+			super(context, instance);
+			this.playerId = playerId;
+		}
+
+		UUID playerId() {
+			return playerId;
+		}
+	}
+
+	private static final class BossSession extends Session {
 		private final UUID ownerId;
-		private final LegendaryActionContext context;
-		private final LegendaryActionInstance instance;
-		private int age;
 
-		private BossSession(UUID ownerId, LegendaryActionContext context,
-				LegendaryActionInstance instance) {
+		BossSession(UUID ownerId, LegendaryActionContext context, LegendaryActionInstance instance) {
+			super(context, instance);
 			this.ownerId = ownerId;
-			this.context = context;
-			this.instance = instance;
 		}
 
-		private UUID ownerId() {
+		UUID ownerId() {
 			return ownerId;
-		}
-
-		private LegendaryActionContext context() {
-			return context;
-		}
-
-		private LegendaryActionInstance instance() {
-			return instance;
-		}
-
-		private int age() {
-			return age;
-		}
-
-		private ServerLevel level() {
-			return context.level();
-		}
-
-		private LegendaryActionId action() {
-			return context.action();
 		}
 	}
 }

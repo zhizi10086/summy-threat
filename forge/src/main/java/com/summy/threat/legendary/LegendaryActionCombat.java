@@ -34,7 +34,7 @@ public final class LegendaryActionCombat {
 	public static boolean hit(LegendaryActionContext context, LivingEntity target,
 			DamageKind kind, double base) {
 		LivingEntity owner = context.owner();
-		if (!target.isAlive()) {
+		if (context.cancelled() || !target.isAlive()) {
 			return false;
 		}
 		DamageSource source = source(owner, kind);
@@ -44,13 +44,9 @@ public final class LegendaryActionCombat {
 		float amount = LegendaryActionMath.damage(base,
 				ScalingState.relativeAttackMultiplier(tl), ScalingState.rAtk(),
 				LeaderTargeting.isPlayerSide(target));
-		target.invulnerableTime = 0;
-		try {
-			return ThreatHitContext.call(target, source, ThreatCategory.LEGENDARY_ACTION,
-					context.action().id(), () -> target.hurt(source, amount));
-		} finally {
-			target.invulnerableTime = 0;
-		}
+		return LegendaryDamageSettlement.hit(target, source, () ->
+				ThreatHitContext.call(target, source, ThreatCategory.LEGENDARY_ACTION,
+						context.action().id(), () -> target.hurt(source, amount))) && !context.cancelled();
 	}
 
 	public static DamageSource source(LivingEntity owner, DamageKind kind) {
@@ -67,6 +63,13 @@ public final class LegendaryActionCombat {
 		return targets(context, center, radius, target ->
 				LeaderTargeting.isTarget(context.owner(), target)
 						|| (includeTestTarget && context.test() && target == context.target()));
+	}
+
+	public static List<LivingEntity> cylinderTargets(LegendaryActionContext context, Vec3 center,
+			double radius, double below, double above) {
+		return targets(context, center, radius, below, above, target ->
+				LeaderTargeting.isTarget(context.owner(), target)
+						|| (context.test() && target == context.target()), true);
 	}
 
 	public static List<Player> playerTargets(LegendaryActionContext context,
@@ -168,11 +171,22 @@ public final class LegendaryActionCombat {
 	private static List<LivingEntity> targets(LegendaryActionContext context,
 			Vec3 center, double radius,
 			java.util.function.Predicate<LivingEntity> predicate) {
+		return targets(context, center, radius, radius, radius, predicate, false);
+	}
+
+	private static List<LivingEntity> targets(LegendaryActionContext context, Vec3 center, double radius,
+			double below, double above, java.util.function.Predicate<LivingEntity> predicate, boolean cylinder) {
+		if (context.cancelled()) {
+			return List.of();
+		}
 		ServerLevel level = context.level();
-		AABB box = new AABB(center, center).inflate(radius);
+		AABB box = new AABB(center.x - radius, center.y - below, center.z - radius,
+				center.x + radius, center.y + above, center.z + radius).inflate(1.0E-6D);
 		List<LivingEntity> out = new ArrayList<>();
 		for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, box)) {
-			if (!target.isAlive() || target.position().distanceTo(center) > radius
+			Vec3 delta = target.position().subtract(center);
+			double distanceSquared = cylinder ? delta.horizontalDistanceSqr() : delta.lengthSqr();
+			if (!target.isAlive() || delta.y < -below || delta.y > above || distanceSquared > radius * radius
 					|| !predicate.test(target)) {
 				continue;
 			}

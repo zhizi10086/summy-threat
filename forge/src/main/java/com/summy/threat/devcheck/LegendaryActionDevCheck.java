@@ -17,12 +17,21 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.level.GameType;
 
+import com.summy.threat.equipment.ThreatCategory;
+import com.summy.threat.equipment.ThreatHitContext;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.level.GameRules;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 
 /** 逐项启动 12 个传奇动作并核对关键可观察结果。 */
-final class LegendaryActionDevCheck {
+public final class LegendaryActionDevCheck {
 	private static final boolean AUTO_ONLY =
 			Boolean.getBoolean("summy_threat.legendaryautoonly");
 	private static final List<LegendaryActionId> ACTIONS = List.of(
@@ -49,11 +58,15 @@ final class LegendaryActionDevCheck {
 	private static double baseX;
 	private static double baseY;
 	private static double baseZ;
-	private static float healthBefore;
+	private static final DamageProbe DAMAGE = new DamageProbe();
+	private static boolean previousDoMobSpawning;
+	private static boolean previousInvulnerable;
 	private static GameType previousGameMode;
 	private static CameraType previousCameraType;
 	private static double previousMaxHealth;
 	private static Zombie automaticBoss;
+	private static Zombie concurrentBoss;
+	private static boolean reentrantDeath;
 	private static long automaticBossReadyAt;
 
 	private LegendaryActionDevCheck() {
@@ -92,6 +105,12 @@ final class LegendaryActionDevCheck {
 	private static void initialize(ServerPlayer player) {
 		initialized = true;
 		previousGameMode = player.gameMode.getGameModeForPlayer();
+		previousInvulnerable = player.isInvulnerable();
+		player.setInvulnerable(false);
+		var spawning = player.level().getGameRules().getRule(GameRules.RULE_DOMOBSPAWNING);
+		previousDoMobSpawning = spawning.get();
+		spawning.set(false, player.server);
+		MinecraftForge.EVENT_BUS.register(DAMAGE);
 		player.setGameMode(GameType.SURVIVAL);
 		AttributeInstance maxHealth = player.getAttribute(Attributes.MAX_HEALTH);
 		previousMaxHealth = maxHealth == null ? player.getMaxHealth() : maxHealth.getBaseValue();
@@ -117,7 +136,15 @@ final class LegendaryActionDevCheck {
 		player.teleportTo(level, baseX, baseY, baseZ, 0.0F, 0.0F);
 		player.setXRot(28.0F);
 		player.setHealth(player.getMaxHealth());
-		healthBefore = player.getHealth();
+		// 测试世界的旧怪和旧光柱会干扰本次动作的伤害及清理断言。
+		for (var entity : level.getEntities(player, player.getBoundingBox().inflate(64.0D),
+				entity -> entity instanceof Enemy || entity instanceof JadeLightBeamEntity)) {
+			entity.discard();
+		}
+		DAMAGE.player = player;
+		DAMAGE.ability = ACTIONS.get(actionIndex);
+		DAMAGE.hits = 0;
+		player.invulnerableTime = 0;
 		LegendaryActionId action = ACTIONS.get(actionIndex);
 		LegendaryActionRuntime.TestStartResult result =
 				LegendaryActionRuntime.startTest(player, player, action);
@@ -144,6 +171,7 @@ final class LegendaryActionDevCheck {
 		} else if (action == LegendaryActionId.DECAY_TIDE && phase == 40) {
 			player.teleportTo(level, baseX + 6.0D, baseY, baseZ, 0.0F, 0.0F);
 		} else if (action == LegendaryActionId.ECHO_SENTENCE && phase == 60) {
+			player.invulnerableTime = 0;
 			player.hurt(player.damageSources().playerAttack(player), 1.0F);
 		}
 	}
@@ -231,14 +259,9 @@ final class LegendaryActionDevCheck {
 				automaticBoss = null;
 				return;
 			}
-			automaticBoss.moveTo(baseX + 8.0D, baseY, baseZ);
-			automaticBoss.setNoAi(true);
-			automaticBoss.setPersistenceRequired();
-			automaticBoss.setTarget(player);
-			LegendaryActionStateData.setSelection(
-					automaticBoss.getPersistentData(), LegendaryActionId.JADE_LIGHT);
-			MonsterScaler.scaleNow(automaticBoss, 20, MonsterScaler.Kind.BOSS, false);
-			level.addFreshEntity(automaticBoss);
+			prepareBoss(automaticBoss, player, baseX + 8.0D, baseY, baseZ, LegendaryActionId.JADE_LIGHT);
+			concurrentBoss = EntityType.ZOMBIE.create(level);
+			prepareBoss(concurrentBoss, player, baseX - 8.0D, baseY, baseZ, LegendaryActionId.COLLAPSING_HORIZON);
 			ThreatDevCheck.logDetailed("LEGENDARY_AUTO_START");
 		}
 		player.teleportTo(level, baseX, baseY, baseZ, player.getYRot(), player.getXRot());
@@ -258,11 +281,33 @@ final class LegendaryActionDevCheck {
 			ThreatDevCheck.checkDetailed("传奇动作自动触发进入 600 tick 冷却",
 					automaticBossReadyAt >= now + 500L,
 					"nextReady=" + automaticBossReadyAt + " now=" + now);
+		} else if (phase == 225) {
+			player.invulnerableTime = 0;
+			DAMAGE.killOwner = automaticBoss;
+			DAMAGE.player = player;
+		} else if (phase == 250) {
+			ThreatDevCheck.checkDetailed("同刻致死回调结束光柱，另一个 Boss 会话仍运行",
+					reentrantDeath && !automaticBoss.isAlive()
+							&& automaticRunningActions(automaticBoss.getUUID()) == 0
+							&& automaticRunningActions(concurrentBoss.getUUID()) == 1,
+					"death=" + reentrantDeath + " second=" + automaticRunningActions(concurrentBoss.getUUID()));
+			concurrentBoss.discard();
 			automaticBoss.discard();
 			automaticBoss = null;
 			ThreatDevCheck.logDetailed("LEGENDARY_AUTO_DONE");
 			finish(player);
 		}
+	}
+
+	private static void prepareBoss(Zombie boss, ServerPlayer player,
+			double x, double y, double z, LegendaryActionId action) {
+		boss.moveTo(x, y, z);
+		boss.setNoAi(true);
+		boss.setPersistenceRequired();
+		boss.setTarget(player);
+		LegendaryActionStateData.setSelection(boss.getPersistentData(), action);
+		MonsterScaler.scaleNow(boss, 20, MonsterScaler.Kind.BOSS, false);
+		player.serverLevel().addFreshEntity(boss);
 	}
 
 	private static void logAutomaticBossState(ServerPlayer player, int phase) {
@@ -306,8 +351,34 @@ final class LegendaryActionDevCheck {
 	}
 
 	private static void checkHealthLoss(ServerPlayer player, String label) {
-		ThreatDevCheck.checkDetailed(label, player.getHealth() < healthBefore,
-				"before=" + healthBefore + " now=" + player.getHealth());
+		ThreatDevCheck.checkDetailed(label, DAMAGE.hits > 0, "技能来源命中=" + DAMAGE.hits);
+	}
+
+	public static final class DamageProbe {
+		ServerPlayer player;
+		LegendaryActionId ability;
+		int hits;
+		Zombie killOwner;
+
+		@SubscribeEvent(priority = EventPriority.MONITOR)
+		public void observe(LivingDamageEvent event) {
+			if (event.getEntity() == player && killOwner != null
+					&& event.getSource().getEntity() == killOwner && event.getAmount() > 0.0F) {
+				Zombie boss = killOwner;
+				killOwner = null;
+				boss.kill();
+				reentrantDeath = !boss.isAlive();
+			}
+			if (event.getEntity() != player || event.getSource().getEntity() != player
+					|| event.getAmount() <= 0.0F || ability == null) {
+				return;
+			}
+			var hit = ThreatHitContext.current(player, event.getSource());
+			if (hit != null && hit.category() == ThreatCategory.LEGENDARY_ACTION
+					&& ability.id().equals(hit.abilityId())) {
+				hits++;
+			}
+		}
 	}
 
 	private static void capture(LegendaryActionId action) {
@@ -323,6 +394,9 @@ final class LegendaryActionDevCheck {
 			return;
 		}
 		finished = true;
+		MinecraftForge.EVENT_BUS.unregister(DAMAGE);
+		player.level().getGameRules().getRule(GameRules.RULE_DOMOBSPAWNING).set(previousDoMobSpawning, player.server);
+		player.setInvulnerable(previousInvulnerable);
 		player.setNoGravity(false);
 		player.teleportTo(player.serverLevel(), baseX, baseY, baseZ, 0.0F, 0.0F);
 		AttributeInstance maxHealth = player.getAttribute(Attributes.MAX_HEALTH);

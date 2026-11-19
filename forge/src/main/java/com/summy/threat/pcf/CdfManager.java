@@ -2,6 +2,7 @@ package com.summy.threat.pcf;
 
 import com.summy.threat.Config;
 import com.summy.threat.scaling.MonsterScaler;
+import com.summy.threat.scaling.ScalingState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
@@ -21,6 +22,7 @@ import net.minecraftforge.event.level.ChunkDataEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayList;
@@ -43,34 +45,48 @@ public final class CdfManager {
 
 	private static final Map<CdfKey, CdfState> STATES = new ConcurrentHashMap<>();
 
+	// 持久时钟只累计缩放启用的时间，跨停服和停用保留进度。
+	private static final String CLOCK_ID = "summy_threat_cdf_clock";
+	private static final Map<CdfKey, Long> LEAVING = new HashMap<>();
+	private static volatile Map<CdfKey, List<ServerPlayer>> occupied = Map.of();
+	private static CdfClock clock;
+	private static volatile long effectiveNow;
+
 	private CdfManager() {
 	}
 
 	public static double current(ServerLevel level, BlockPos pos) {
-		CdfKey key = key(level, pos);
-		CdfState state = state(level, key);
-		if (!hasPlayers(level, key) && state.decay(level.getGameTime())) {
-			markDirty(level, key);
-		}
-		return state.value;
+		return snapshot(level, pos).value();
 	}
 
 	public static Snapshot snapshot(ServerLevel level, BlockPos pos) {
 		CdfKey key = key(level, pos);
-		CdfState state = state(level, key);
-		if (!hasPlayers(level, key) && state.decay(level.getGameTime())) {
+		boolean present = hasPlayers(level, key);
+		CdfState state = STATES.get(key);
+		if (!ScalingState.enabled()) {
+			return new Snapshot(state == null ? 0.0D : state.value, 0.0D,
+					state == null ? 0.0D : state.peakPcf, 0.0D, 0L, present,
+					state == null ? 0L : state.lastUpdate);
+		}
+		ensureClock(level.getServer());
+		state = state(level, key);
+		if (!present && !occupied.containsKey(key) && state.decay(effectiveNow)) {
 			markDirty(level, key);
 		}
 		return new Snapshot(state.value, maxPcf(level, key), state.peakPcf,
-				state.killBonus, state.deathPenaltyUntil, hasPlayers(level, key), state.lastUpdate);
+				state.killBonus, state.deathPenaltyUntil, present, state.lastUpdate);
 	}
 
 	public static void setCurrent(ServerLevel level, BlockPos pos, double value) {
+		if (!ScalingState.enabled()) {
+			return;
+		}
+		ensureClock(level.getServer());
 		CdfKey key = key(level, pos);
 		CdfState state = state(level, key);
 		state.value = clamp(value, 0.0D, 20.0D);
 		state.peakPcf = Math.max(state.peakPcf, state.value);
-		state.lastUpdate = level.getGameTime();
+		state.lastUpdate = effectiveNow;
 		state.killBonus = 0.0D;
 		state.deathPenaltyUntil = 0L;
 		markDirty(level, key);
@@ -103,8 +119,8 @@ public final class CdfManager {
 		if (state == null) {
 			return;
 		}
-		if (!hasPlayers(level, key)) {
-			state.decay(level.getGameTime());
+		if (ScalingState.enabled() && !hasPlayers(level, key) && !occupied.containsKey(key)) {
+			state.decay(effectiveNow);
 		}
 		CompoundTag saved = new CompoundTag();
 		saved.putDouble(VALUE, state.value);
@@ -114,48 +130,129 @@ public final class CdfManager {
 	}
 
 	@SubscribeEvent
+	public static void onChunkReady(ChunkEvent.Load event) {
+		if (event.getLevel() instanceof ServerLevel level) {
+			CdfKey key = key(level, event.getChunk().getPos());
+			LEAVING.remove(key);
+			if (event.isNewChunk() && ScalingState.enabled()) {
+				ensureClock(level.getServer());
+				STATES.computeIfAbsent(key, ignored -> {
+					CdfState state = new CdfState();
+					state.lastUpdate = effectiveNow;
+					return state;
+				});
+			}
+		}
+	}
+
+	@SubscribeEvent
 	public static void onChunkUnload(ChunkEvent.Unload event) {
-		// 区块卸载可能发生在 Save 事件之前（停服路径尤其明显）；这里不主动移除状态，
-		// 由 Save 事件写入 NBT。运行期状态由 ServerStoppedEvent 统一清理。
+		if (event.getLevel() instanceof ServerLevel level) {
+			CdfKey key = key(level, event.getChunk().getPos());
+			CdfState state = STATES.get(key);
+			if (state != null) {
+				state.killBonus = 0.0D;
+				// Forge 在卸载事件之后同步保存，下一游戏刻再清理缓存。
+				LEAVING.put(key, level.getGameTime());
+			}
+		}
 	}
 
 	@SubscribeEvent
 	public static void onServerTick(TickEvent.ServerTickEvent event) {
-		if (event.phase != TickEvent.Phase.END || event.getServer().getTickCount() % 20 != 0) {
+		if (event.phase != TickEvent.Phase.END) {
 			return;
 		}
 		MinecraftServer server = event.getServer();
-		long now = server.overworld().getGameTime();
+		for (var iterator = LEAVING.entrySet().iterator(); iterator.hasNext();) {
+			var entry = iterator.next();
+			ServerLevel level = server.getLevel(entry.getKey().dimension());
+			if (level != null && level.getGameTime() <= entry.getValue()) {
+				continue;
+			}
+			if (level == null || !loaded(level, entry.getKey())) {
+				STATES.remove(entry.getKey());
+			}
+			iterator.remove();
+		}
+		if (!ScalingState.enabled()) {
+			endVisits();
+			return;
+		}
+		ensureClock(server);
+		effectiveNow = ++clock.time;
+		clock.setDirty();
 		Map<CdfKey, List<ServerPlayer>> groups = new HashMap<>();
 		for (ServerLevel level : server.getAllLevels()) {
 			for (ServerPlayer player : level.players()) {
 				groups.computeIfAbsent(key(level, player.blockPosition()), ignored -> new ArrayList<>()).add(player);
 			}
 		}
-		for (Map.Entry<CdfKey, List<ServerPlayer>> entry : groups.entrySet()) {
-			List<ServerPlayer> players = entry.getValue();
-			if (players.isEmpty()) {
-				continue;
+		for (var entry : occupied.entrySet()) {
+			if (!groups.containsKey(entry.getKey())) {
+				endVisit(entry.getKey(), entry.getValue().get(0).serverLevel().getServer());
 			}
-			ServerLevel level = players.get(0).serverLevel();
+		}
+		for (var entry : groups.entrySet()) {
+			ServerLevel level = entry.getValue().get(0).serverLevel();
 			CdfState state = state(level, entry.getKey());
-			double target = maxPcf(players);
-			state.peakPcf = Math.max(state.peakPcf, target);
-			double rate = doubleCfg(Config.CDF_RISE_RATE, 0.01D)
-					+ Math.min(state.killBonus, doubleCfg(Config.CDF_KILL_RISE_MAX_BONUS, 0.05D))
-					- (now < state.deathPenaltyUntil ? doubleCfg(Config.CDF_DEATH_RISE_PENALTY, 0.10D) : 0.0D);
-			rate = Math.max(0.0D, rate);
-			if (target > state.value) {
-				state.value = Math.max(state.value, state.value + (target - state.value) * rate);
+			if (!occupied.containsKey(entry.getKey()) && state.decay(effectiveNow)) {
 				markDirty(level, entry.getKey());
 			}
-			state.lastUpdate = now;
+			if (server.getTickCount() % 20 == 0) {
+				double target = maxPcf(entry.getValue());
+				state.peakPcf = Math.max(state.peakPcf, target);
+				double rate = doubleCfg(Config.CDF_RISE_RATE, 0.01D)
+						+ Math.min(state.killBonus, doubleCfg(Config.CDF_KILL_RISE_MAX_BONUS, 0.05D))
+						- (effectiveNow < state.deathPenaltyUntil
+								? doubleCfg(Config.CDF_DEATH_RISE_PENALTY, 0.10D) : 0.0D);
+				state.value = rise(state.value, target, rate);
+				markDirty(level, entry.getKey());
+			}
+			state.lastUpdate = effectiveNow;
+		}
+		occupied = groups;
+	}
+
+	static double rise(double value, double target, double rate) {
+		return clamp(value + Math.max(0.0D, target - value) * clamp(rate, 0.0D, 1.0D), 0.0D, 20.0D);
+	}
+
+	private static void ensureClock(MinecraftServer server) {
+		if (clock == null) {
+			long initial = server.overworld().getGameTime();
+			clock = server.overworld().getDataStorage().computeIfAbsent(
+					CdfClock::load, () -> new CdfClock(initial), CLOCK_ID);
+			effectiveNow = clock.time;
+		}
+	}
+
+	private static void endVisits() {
+		for (var entry : occupied.entrySet()) {
+			endVisit(entry.getKey(), entry.getValue().get(0).serverLevel().getServer());
+		}
+		occupied = Map.of();
+	}
+
+	private static void endVisit(CdfKey key, MinecraftServer server) {
+		CdfState state = STATES.get(key);
+		if (state != null) {
+			state.killBonus = 0.0D;
+			state.lastUpdate = effectiveNow;
+			ServerLevel level = server.getLevel(key.dimension());
+			if (level != null) {
+				markDirty(level, key);
+			}
 		}
 	}
 
 	@SubscribeEvent
 	public static void onLivingDeath(LivingDeathEvent event) {
-		long now = event.getEntity().level().getGameTime();
+		if (!ScalingState.enabled() || event.getEntity().level().isClientSide()) {
+			return;
+		}
+		ensureClock(((ServerLevel) event.getEntity().level()).getServer());
+		long now = effectiveNow;
 		if (event.getEntity() instanceof ServerPlayer player) {
 			CdfKey key = key(player.serverLevel(), player.blockPosition());
 			CdfState state = state(player.serverLevel(), key);
@@ -181,12 +278,17 @@ public final class CdfManager {
 
 	@SubscribeEvent
 	public static void onServerAboutToStart(ServerAboutToStartEvent event) {
-		STATES.clear();
+		reset();
+	}
+
+	@SubscribeEvent
+	public static void onServerStarted(ServerStartedEvent event) {
+		ensureClock(event.getServer());
 	}
 
 	@SubscribeEvent
 	public static void onServerStopped(ServerStoppedEvent event) {
-		STATES.clear();
+		reset();
 	}
 
 	private static CdfState state(ServerLevel level, CdfKey key) {
@@ -195,7 +297,7 @@ public final class CdfManager {
 
 	private static CdfState legacyState(ServerLevel level, CdfKey key) {
 		CdfState state = new CdfState();
-		long now = level.getGameTime();
+		long now = effectiveNow;
 		ChunkPos chunk = new ChunkPos(key.chunk());
 		BlockPos center = new BlockPos(chunk.getMinBlockX() + 8, 64, chunk.getMinBlockZ() + 8);
 		SpawnRegion region = SpawnRegion.detect(level, Vec3.atCenterOf(center), MobSpawnType.NATURAL);
@@ -234,7 +336,41 @@ public final class CdfManager {
 
 	private static void markDirty(ServerLevel level, CdfKey key) {
 		ChunkPos chunk = new ChunkPos(key.chunk());
-		level.getChunkAt(new BlockPos(chunk.getMinBlockX(), 0, chunk.getMinBlockZ())).setUnsaved(true);
+		var loaded = level.getChunkSource().getChunkNow(chunk.x, chunk.z);
+		if (loaded != null) {
+			loaded.setUnsaved(true);
+		}
+	}
+
+	private static boolean loaded(ServerLevel level, CdfKey key) {
+		ChunkPos chunk = new ChunkPos(key.chunk());
+		return level.getChunkSource().getChunkNow(chunk.x, chunk.z) != null;
+	}
+
+	private static void reset() {
+		STATES.clear();
+		LEAVING.clear();
+		occupied = Map.of();
+		clock = null;
+		effectiveNow = 0L;
+	}
+
+	private static final class CdfClock extends net.minecraft.world.level.saveddata.SavedData {
+		long time;
+
+		CdfClock(long time) {
+			this.time = time;
+		}
+
+		static CdfClock load(CompoundTag tag) {
+			return new CdfClock(tag.getLong("time"));
+		}
+
+		@Override
+		public CompoundTag save(CompoundTag tag) {
+			tag.putLong("time", time);
+			return tag;
+		}
 	}
 
 	private static ServerPlayer playerOf(DamageSource source) {
@@ -264,9 +400,9 @@ public final class CdfManager {
 	}
 
 	private static final class CdfState {
-		private double value;
-		private long lastUpdate;
-		private double peakPcf;
+		private volatile double value;
+		private volatile long lastUpdate;
+		private volatile double peakPcf;
 		private double killBonus;
 		private long deathPenaltyUntil;
 

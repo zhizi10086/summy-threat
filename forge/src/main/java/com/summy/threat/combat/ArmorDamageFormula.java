@@ -70,7 +70,7 @@ public final class ArmorDamageFormula {
 		if (ea <= 0.0D) {
 			return 0.0D;
 		}
-		return Math.max(0.0D, 1.0D + (ea - 1.0D) * clamp(rHp, 0.0D, 1.0D));
+		return Math.max(0.0D, 1.0D + (ea - 1.0D) * clamp(rHp, 0.0D, 2.0D));
 	}
 
 	/** 总开关：配置未加载时按启用处理（受伤流程发生在配置加载之后，这里只是兜底） */
@@ -88,7 +88,7 @@ public final class ArmorDamageFormula {
 					cfg(Config.PLAYER_MAX, FALLBACK_PLAYER_MAX));
 		}
 		double cap = cfg(Config.MONSTER_EFFECTIVE_EA_CAP, FALLBACK_MONSTER_EFFECTIVE_EA_CAP);
-		double compressed = compressEffectiveArmor(ea, cap, ScalingState.rHp());
+		double compressed = compressEffectiveArmor(ea, cap, ScalingState.enabled() ? ScalingState.rHp() : 1.0D);
 		return monsterReduction(compressed,
 				cfg(Config.MONSTER_MAX, FALLBACK_MONSTER_MAX),
 				cap);

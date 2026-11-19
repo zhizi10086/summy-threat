@@ -9,6 +9,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -34,6 +37,7 @@ public final class CombatMeter {
 	/** 单个目标（被数值化的怪）的战斗记录 */
 	private static final class Target {
 		long firstTick = -1L;
+		long lastHitTick;
 		double dealt;
 		double bypass;
 		double shieldAbsorbed;
@@ -69,8 +73,8 @@ public final class CombatMeter {
 		PLAYERS.remove(player.getUUID());
 	}
 
-	// LOWEST：在卓越护盾（LOW）吸收之后读取最终生命伤害与本次护盾吸收量。
-	@SubscribeEvent(priority = EventPriority.LOWEST)
+	// 在减伤与护盾监听器处理之后读取本次伤害，计量不修改结算。
+	@SubscribeEvent(priority = EventPriority.MONITOR)
 	public static void onDamage(LivingDamageEvent event) {
 		MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
 		if (server == null) {
@@ -89,14 +93,18 @@ public final class CombatMeter {
 		boolean bypass = event.getSource().is(DamageTypeTags.BYPASSES_ARMOR);
 
 		if (victim.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED) && attacker instanceof Player player) {
+			// 溢出封顶：LivingDamageEvent 触发时"吸收已结算、生命尚未扣减"，所以按目标当前生命封顶，
+			// 即"最多只计到打死为止"——否则斩杀类超量伤害会把有效 DPS 抬高。
+			double absorbed = EximusShield.consumeAbsorbed(victim);
+			double counted = Math.min(Math.max(0.0F, amount), Math.max(0.0D, victim.getHealth())) + absorbed;
+			if (!(counted > 0.0D)) {
+				return;
+			}
 			Target target = TARGETS.computeIfAbsent(victim.getUUID(), id -> new Target());
 			if (target.firstTick < 0L) {
 				target.firstTick = now;
 			}
-			// 溢出封顶：LivingDamageEvent 触发时"吸收已结算、生命尚未扣减"，所以按目标当前生命封顶，
-			// 即"最多只计到打死为止"——否则斩杀类超量伤害会把有效 DPS 抬高。
-			double absorbed = EximusShield.consumeAbsorbed(victim);
-			double counted = Math.min(amount, Math.max(0.0D, victim.getHealth())) + absorbed;
+			target.lastHitTick = now;
 			target.dealt += counted;
 			target.shieldAbsorbed += absorbed;
 			if (bypass) {
@@ -110,7 +118,7 @@ public final class CombatMeter {
 			return;
 		}
 
-		if (victim instanceof Player player && attacker != null
+		if (amount > 0.0F && victim instanceof Player player && attacker != null
 				&& attacker.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED)) {
 			Stats s = stats(player);
 			s.takenSum += amount;
@@ -179,10 +187,33 @@ public final class CombatMeter {
 				? String.valueOf(attacker.getPersistentData().getInt(MonsterScaler.TAG_TL)) : "—";
 	}
 
-	/** 开服：清掉上一场会话遗留的"逐目标"记录（旧 tick 计数会污染跨会话的计时与 DPS） */
+	/** 服务器重新开服时，两种统计同时重置，避免沿用旧 tick 基准。 */
 	@SubscribeEvent
 	public static void onServerAboutToStart(ServerAboutToStartEvent event) {
 		TARGETS.clear();
+		PLAYERS.clear();
+	}
+
+	@SubscribeEvent
+	public static void onServerStopped(ServerStoppedEvent event) {
+		TARGETS.clear();
+		PLAYERS.clear();
+	}
+
+	@SubscribeEvent
+	public static void onEntityLeave(EntityLeaveLevelEvent event) {
+		Entity entity = event.getEntity();
+		if (!event.getLevel().isClientSide() && entity.getRemovalReason() != Entity.RemovalReason.UNLOADED_TO_CHUNK) {
+			TARGETS.remove(entity.getUUID());
+		}
+	}
+
+	@SubscribeEvent
+	public static void onServerTick(TickEvent.ServerTickEvent event) {
+		if (event.phase == TickEvent.Phase.END) {
+			long now = event.getServer().getTickCount();
+			TARGETS.values().removeIf(target -> now - target.lastHitTick >= 600);
+		}
 	}
 
 	/** 最近窗口的实际 DPS（窗口内伤害 ÷ 窗口已过秒数） */

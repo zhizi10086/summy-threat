@@ -47,7 +47,7 @@ final class FrightfulPresenceAction implements LegendaryActionHandler {
 					}
 				}
 				FrightfulPresenceService.apply(context.owner(), affected,
-						level.getGameTime());
+						level.getGameTime(), context.test());
 				LegendaryVisuals.burst(level, context.center(),
 						color, 90, 8.0D, 1.8F);
 				LegendaryVisuals.sound(level, context.center(),

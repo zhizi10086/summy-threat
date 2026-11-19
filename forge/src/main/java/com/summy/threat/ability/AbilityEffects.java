@@ -84,7 +84,7 @@ public final class AbilityEffects {
 	}
 
 	public static boolean enabled() {
-		return Config.SPEC.isLoaded() && Config.TL_ABILITIES_ENABLED.get();
+		return Config.SPEC.isLoaded() && ScalingState.enabled() && Config.TL_ABILITIES_ENABLED.get();
 	}
 
 	/** 该实体身上的能力（解析标签；未知 id 忽略）。 */
@@ -168,7 +168,7 @@ public final class AbilityEffects {
 		return pool.remove(pool.size() - 1);
 	}
 
-	private static void refreshStaticModifiers(LivingEntity entity, int tl) {
+	public static void refreshStaticModifiers(LivingEntity entity, int tl) {
 		AttributeInstance speed = entity.getAttribute(Attributes.MOVEMENT_SPEED);
 		AttributeInstance attack = entity.getAttribute(Attributes.ATTACK_DAMAGE);
 		if (speed != null) {

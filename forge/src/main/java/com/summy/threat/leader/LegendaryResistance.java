@@ -41,11 +41,12 @@ public final class LegendaryResistance {
 	}
 
 	public static boolean enabled() {
-		return !Config.SPEC.isLoaded() || Config.LEGENDARY_RESISTANCE_ENABLED.get();
+		return Config.SPEC.isLoaded() && com.summy.threat.scaling.ScalingState.enabled()
+				&& Config.LEGENDARY_RESISTANCE_ENABLED.get();
 	}
 
 	public static boolean isProtected(LivingEntity entity) {
-		return entity.getPersistentData().getBoolean(TAG_RESISTANCE)
+		return enabled() && entity.getPersistentData().getBoolean(TAG_RESISTANCE)
 				&& MonsterScaler.kindOf(entity) == MonsterScaler.Kind.LEADER;
 	}
 

@@ -65,11 +65,8 @@ final class DoomClockAction implements LegendaryActionHandler {
 
 		private void detonate(LegendaryActionContext context, int sector) {
 			ServerLevel level = context.level();
-			for (LivingEntity target : LegendaryActionCombat.defaultTargets(
-					context, center, 20.0D, true)) {
-				if (Math.abs(target.getY() - center.y) > 8.0D) {
-					continue;
-				}
+			for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
+					context, center, 20.0D, 8.0D, 8.0D)) {
 				double relative = angle(center, target.position()) - baseAngle;
 				double normalized = Math.atan2(Math.sin(relative), Math.cos(relative));
 				double sectorAngle = LegendaryActionMath.clockwiseSectorOffset(sector);

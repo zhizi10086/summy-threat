@@ -130,7 +130,7 @@ public final class EximusArchetypeEffects {
 		if (entity.level().isClientSide()) {
 			return;
 		}
-		if (!EximusShield.isEximus(entity)) {
+		if (!ScalingState.enabled() || !EximusShield.isEximus(entity)) {
 			// 标签被清空/破盾后不再推进原型，同时兜底移除前摇定身。
 			if (STORM.containsKey(entity.getUUID())) {
 				resetStorm(entity);
@@ -1206,6 +1206,9 @@ public final class EximusArchetypeEffects {
 
 	@SubscribeEvent(priority = EventPriority.NORMAL)
 	public static void onFrostDamage(LivingDamageEvent event) {
+		if (!ScalingState.enabled()) {
+			return;
+		}
 		LivingEntity victim = event.getEntity();
 		FrostShield shield = frostShieldOf(victim);
 		if (shield == null || event.getSource().is(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
@@ -1232,6 +1235,9 @@ public final class EximusArchetypeEffects {
 	// LOW：在坚韧/冰盾（NORMAL）之后、卓越护盾（LOWEST）之前结算守护转移。
 	@SubscribeEvent(priority = EventPriority.LOW)
 	public static void onGuardianDamage(LivingDamageEvent event) {
+		if (!ScalingState.enabled()) {
+			return;
+		}
 		LivingEntity victim = event.getEntity();
 		if (event.getSource().is(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
 			return;
@@ -1356,6 +1362,33 @@ public final class EximusArchetypeEffects {
 		if (speed != null) {
 			speed.removeModifier(VAMPIRE_SLOW_SPEED);
 		}
+	}
+
+	public static void pauseRuntime(net.minecraft.server.MinecraftServer server) {
+		for (ServerLevel level : server.getAllLevels()) {
+			for (var entity : level.getAllEntities()) {
+				if (entity instanceof LivingEntity living) {
+					if (STORM.containsKey(living.getUUID())) {
+						resetStorm(living);
+					}
+					if (ROOTED.contains(living.getUUID())) {
+						root(living, false);
+					}
+					if (FROST_SLOW.containsKey(living.getUUID())) {
+						removeFrostSlow(living);
+					}
+					if (VAMPIRE_SLOW.containsKey(living.getUUID())) {
+						removeVampireSlow(living);
+					}
+				}
+			}
+		}
+		FLAME.clear();
+		FROST_STATE.clear();
+		FROST_PENDING.clear();
+		SHOCK.clear();
+		CLOUDS.clear();
+		CLOUD_HIT.clear();
 	}
 
 	@SubscribeEvent

@@ -33,9 +33,7 @@ import com.summy.threat.leader.LeaderSpawnController;
 import com.summy.threat.legendary.LegendaryActionRuntime;
 import com.summy.threat.legendary.LegendaryActionHandlers;
 import com.summy.threat.legendary.ModLegendaryEntities;
-import com.summy.threat.legendary.EchoSentenceService;
 import com.summy.threat.legendary.FrightfulPresenceService;
-import com.summy.threat.legendary.LegendaryRiposteService;
 import com.summy.threat.item.EquipmentDropHandler;
 import com.summy.threat.network.ModNetwork;
 import com.summy.threat.pcf.CdfManager;
@@ -127,8 +125,7 @@ public class SummyThreat {
 		MinecraftForge.EVENT_BUS.register(LeaderSpawnController.class);
 		MinecraftForge.EVENT_BUS.register(LegendaryResistance.class);
 		MinecraftForge.EVENT_BUS.register(LegendaryActionRuntime.class);
-		MinecraftForge.EVENT_BUS.register(LegendaryRiposteService.class);
-		MinecraftForge.EVENT_BUS.register(EchoSentenceService.class);
+		MinecraftForge.EVENT_BUS.register(com.summy.threat.legendary.LegendaryDamageSettlement.class);
 		MinecraftForge.EVENT_BUS.register(FrightfulPresenceService.class);
 		MinecraftForge.EVENT_BUS.register(EquipmentDropHandler.class);
 		MinecraftForge.EVENT_BUS.register(PcfManager.class);
@@ -147,26 +144,65 @@ public class SummyThreat {
 	}
 
 	private static void onConfigEvent(ModConfigEvent event) {
-		// 只认自己的配置，别把其它模组的配置加载/重载也当成应用时机
-		if (!MOD_ID.equals(event.getConfig().getModId())) {
+		if (!MOD_ID.equals(event.getConfig().getModId()) || !Config.SPEC.isLoaded()) {
 			return;
 		}
-		AttributeCaps.apply();
-		// 数值表 / 档位 / 全局 TL 都从配置读，配置一变就刷新
-		ScalingState.refresh();
-		if (!ThreatConfigApi.isApiWriteInProgress()) {
-			ThreatConfigApi.notifyReload(ThreatConfigApi.snapshot());
-		}
 		var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
-		if (server != null) {
-			ModNetwork.broadcastRegistry(server);
+		if (server == null) {
+			net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+					net.minecraftforge.api.distmarker.Dist.CLIENT,
+					() -> com.summy.threat.client.ClientConfigApply::enqueue);
+			return;
+		}
+		Runnable apply = () -> {
+			if (net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer() == server
+					&& Config.SPEC.isLoaded()) {
+				ThreatConfigApi.notifyReload(ThreatConfigApi.snapshot());
+			}
+		};
+		if (server.isSameThread()) {
+			apply.run();
+		} else {
+			server.execute(apply);
 		}
 	}
 
-	/** 开服时判定生态档位并写一条日志，便于实机核对（尤其是 ∅ 档短路） */
+	public static void applyServerConfiguration(net.minecraft.server.MinecraftServer server) {
+		AttributeCaps.apply();
+		boolean previouslyEnabled = ScalingState.enabled();
+		ScalingState.refresh();
+		if (server != null && previouslyEnabled != ScalingState.enabled()) {
+			refreshMonsterMechanisms(server);
+		}
+	}
+
+	public static void refreshMonsterMechanisms(net.minecraft.server.MinecraftServer server) {
+		boolean enabled = ScalingState.enabled();
+		if (!enabled) {
+			LegendaryActionRuntime.pauseBossActions(server);
+			EximusArchetypeEffects.pauseRuntime(server);
+		}
+		for (var level : server.getAllLevels()) {
+			for (var entity : level.getAllEntities()) {
+				if (entity instanceof net.minecraft.world.entity.LivingEntity living) {
+					if (!enabled && MonsterScaler.kindOf(living) == MonsterScaler.Kind.LEADER) {
+						LeaderActiveEffects.cleanupLeader(living);
+						LeaderAuraEffects.cleanupLeader(living);
+					}
+					MonsterScaler.refreshRuntimeMechanisms(living);
+				}
+			}
+		}
+	}
+
+	@SubscribeEvent
+	public static void resetConfiguration(net.minecraftforge.event.server.ServerAboutToStartEvent event) {
+		ThreatConfigApi.resetNotifications();
+	}
+
 	@SubscribeEvent
 	public static void onServerStarted(ServerStartedEvent event) {
-		ScalingState.refresh();
+		ThreatConfigApi.notifyReload(ThreatConfigApi.snapshot());
 		ScalingState.Tier tier = ScalingState.tier();
 		int globalTl = ScalingState.globalTl();
 		if (tier == ScalingState.Tier.NONE) {

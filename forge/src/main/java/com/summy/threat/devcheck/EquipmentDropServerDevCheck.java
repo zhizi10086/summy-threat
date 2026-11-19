@@ -40,6 +40,9 @@ public final class EquipmentDropServerDevCheck {
 			ServerPlayer player = FakePlayerFactory.getMinecraft(level);
 			pendingB15Player = player;
 			pendingB15Failures = new ArrayList<>(EquipmentSystemDevCheck.start(player));
+			if (Boolean.getBoolean("summy_threat.auditcheck")) {
+				pendingB15Failures.addAll(AuditRegressionDevCheck.run(level));
+			}
 			return;
 		}
 		ServerPlayer onlinePlayer = event.getServer().getPlayerList().getPlayers().stream()

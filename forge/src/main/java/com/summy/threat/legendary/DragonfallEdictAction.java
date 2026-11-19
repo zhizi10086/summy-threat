@@ -39,7 +39,7 @@ final class DragonfallEdictAction implements LegendaryActionHandler {
 			for (LivingEntity target : LegendaryActionCombat.defaultTargets(
 					context, context.owner().position(), 48.0D, true)) {
 				double support = supportDistance(level, target);
-				boolean airborne = target.isFallFlying() || support > 4.0D;
+				boolean airborne = target.isFallFlying() || support < 0.0D || support > 4.0D;
 				if (!airborne) {
 					continue;
 				}

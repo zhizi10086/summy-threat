@@ -51,11 +51,8 @@ final class CollapsingHorizonAction implements LegendaryActionHandler {
 			LegendaryVisuals.ring(level, center, OUTER_RADIUS,
 					LegendaryActionId.COLLAPSING_HORIZON.color(), 72, 0.8F, 0.06D);
 			if (activeAge % 10 == 0) {
-				for (LivingEntity target : LegendaryActionCombat.defaultTargets(
-						context, center, OUTER_RADIUS, true)) {
-					if (Math.abs(target.getY() - center.y) > 8.0D) {
-						continue;
-					}
+				for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
+					context, center, OUTER_RADIUS, 8.0D, 8.0D)) {
 					double distance = horizontalDistance(target.position(), center);
 					if (distance > safeRadius) {
 						LegendaryActionCombat.hit(context, target,

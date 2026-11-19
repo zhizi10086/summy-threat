@@ -67,8 +67,8 @@ public final class LeaderSpawnController {
 				tryMarkManualLeader(level, mob, event.getSpawnType());
 				return;
 			}
-			if (event.getSpawnType() == MobSpawnType.STRUCTURE
-					&& registerStructureCandidate(level, mob, event.getSpawnType())) {
+			if (event.getSpawnType() == MobSpawnType.STRUCTURE) {
+				// 实体加入世界时再核对已加载的结构记录。
 				return;
 			}
 		}
@@ -98,14 +98,22 @@ public final class LeaderSpawnController {
 			applyPendingLeader(level, mob, false);
 			return;
 		}
+		if (event.loadedFromDisk() && mob.getPersistentData().getBoolean(MonsterScaler.TAG_SCALED)) {
+			return;
+		}
 		if (MonsterScaler.isFixedLeaderType(mob)
 				&& !mob.getPersistentData().getBoolean(MonsterScaler.TAG_MANUAL_LEADER)) {
-			if (registerStructureCandidate(level, mob, MobSpawnType.STRUCTURE)) {
-				return;
-			}
-			tryMarkManualLeader(level, mob, MobSpawnType.COMMAND);
-			if (mob.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER_PENDING)) {
-				applyPendingLeader(level, mob, false);
+			MobSpawnType type = SpawnRegion.recordedSpawnType(mob);
+			if (type == MobSpawnType.STRUCTURE) {
+				if (registerStructureCandidate(level, mob, type)
+						&& mob.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER_PENDING)) {
+					applyPendingLeader(level, mob, true);
+				}
+			} else if (isManualType(type)) {
+				tryMarkManualLeader(level, mob, type);
+				if (mob.getPersistentData().getBoolean(MonsterScaler.TAG_LEADER_PENDING)) {
+					applyPendingLeader(level, mob, false);
+				}
 			}
 		}
 	}
@@ -133,6 +141,9 @@ public final class LeaderSpawnController {
 
 	private static boolean registerStructureCandidate(ServerLevel level, Mob mob,
 			MobSpawnType spawnType) {
+		if (spawnType != MobSpawnType.STRUCTURE) {
+			return false;
+		}
 		StructureSpec spec = structureSpec(mob);
 		if (spec == null) {
 			return false;
@@ -178,9 +189,8 @@ public final class LeaderSpawnController {
 			return;
 		}
 		boolean leader = leaders.contains(mob.getUUID()) && !candidate.vetoed();
-		applyCurrentCandidate(mob, leader, candidate.tl());
 		if (leader) {
-			applyPendingLeader(level, mob, true);
+			applyCurrentRole(level, mob, candidate, true);
 		} else if (MonsterScaler.kindOf(mob) == MonsterScaler.Kind.LEADER
 				&& mob.getPersistentData().getBoolean(MonsterScaler.TAG_FIXED_LEADER)) {
 			demoteFixedLeader(level, mob, candidate.tl());

@@ -51,12 +51,14 @@ public final class JadeLightBeamEntity extends Entity {
 
 	@Override
 	protected void readAdditionalSaveData(CompoundTag tag) {
-		expiresAt = tag.getLong("ExpiresAt");
+		// 旧存档中的光柱没有对应的动作会话。
+		if (!level().isClientSide()) {
+			discard();
+		}
 	}
 
 	@Override
 	protected void addAdditionalSaveData(CompoundTag tag) {
-		tag.putLong("ExpiresAt", expiresAt);
 	}
 
 	@Override

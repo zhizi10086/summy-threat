@@ -235,7 +235,7 @@ final class FreeTierSettings {
 		if (Config.SPEC.isLoaded()) {
 			Config.SPEC.save();
 		}
-		ScalingState.refreshPreservingTl();
+		com.summy.threat.api.ThreatConfigApi.notifyReload(com.summy.threat.api.ThreatConfigApi.snapshot());
 	}
 
 	private static String format(Object value) {

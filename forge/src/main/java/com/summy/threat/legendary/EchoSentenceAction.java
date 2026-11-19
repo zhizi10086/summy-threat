@@ -93,11 +93,8 @@ final class EchoSentenceAction implements LegendaryActionHandler {
 
 		private void resolve(LegendaryActionContext context, PendingEcho echo) {
 			ServerLevel level = context.level();
-			for (LivingEntity target : LegendaryActionCombat.defaultTargets(
-					context, echo.position, 2.5D, true)) {
-				if (Math.abs(target.getY() - echo.position.y) > 2.0D) {
-					continue;
-				}
+			for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
+					context, echo.position, 2.5D, 2.0D, 2.0D)) {
 				LegendaryActionCombat.hit(context, target,
 						LegendaryActionCombat.DamageKind.SONIC_BOOM, 65.0D);
 			}

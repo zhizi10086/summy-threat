@@ -124,7 +124,7 @@ public final class LeaderActiveEffects {
 	}
 
 	public static void tickLeader(LivingEntity owner, long now) {
-		if (MonsterScaler.kindOf(owner) != MonsterScaler.Kind.LEADER) {
+		if (!ScalingState.enabled() || MonsterScaler.kindOf(owner) != MonsterScaler.Kind.LEADER) {
 			cleanupLeader(owner);
 			return;
 		}
@@ -676,7 +676,7 @@ public final class LeaderActiveEffects {
 	public static void onLivingDamage(LivingDamageEvent event) {
 		LivingEntity owner = event.getEntity();
 		IronState state = IRON.get(owner.getUUID());
-		if (state == null || event.isCanceled() || event.getAmount() <= 0.0F) {
+		if (!ScalingState.enabled() || state == null || event.isCanceled() || event.getAmount() <= 0.0F) {
 			return;
 		}
 		long now = owner.level().getGameTime();

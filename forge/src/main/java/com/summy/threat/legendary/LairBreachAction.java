@@ -71,11 +71,8 @@ final class LairBreachAction implements LegendaryActionHandler {
 
 		private void erupt(LegendaryActionContext context, Vec3 vent) {
 			ServerLevel level = context.level();
-			for (LivingEntity target : LegendaryActionCombat.defaultTargets(
-					context, vent, 3.2D, true)) {
-				if (Math.abs(target.getY() - vent.y) > 4.0D) {
-					continue;
-				}
+			for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
+					context, vent, 3.2D, 4.0D, 4.0D)) {
 				if (LegendaryActionCombat.hit(context, target,
 						LegendaryActionCombat.DamageKind.EXPLOSION, 75.0D)) {
 					LegendaryActionCombat.push(target, vent, 0.4D, 0.25D,

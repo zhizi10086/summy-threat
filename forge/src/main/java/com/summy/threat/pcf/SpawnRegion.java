@@ -92,15 +92,20 @@ public enum SpawnRegion {
 	}
 
 	private static MobSpawnType spawnType(LivingEntity entity) {
-		CompoundTag data = entity.getPersistentData();
-		if (!data.contains(TAG_SPAWN_TYPE)) {
-			return MobSpawnType.NATURAL;
+		MobSpawnType type = recordedSpawnType(entity);
+		return type == null ? MobSpawnType.NATURAL : type;
+	}
+
+	public static MobSpawnType recordedSpawnType(LivingEntity entity) {
+		String raw = entity.getPersistentData().getString(TAG_SPAWN_TYPE);
+		if (!raw.isEmpty()) {
+			try {
+				return MobSpawnType.valueOf(raw);
+			} catch (IllegalArgumentException ignored) {
+				// 损坏的旧标记回退到 Forge 的实际生成类型。
+			}
 		}
-		try {
-			return MobSpawnType.valueOf(data.getString(TAG_SPAWN_TYPE));
-		} catch (IllegalArgumentException e) {
-			return MobSpawnType.NATURAL;
-		}
+		return entity instanceof Mob mob ? mob.getSpawnType() : null;
 	}
 
 	private static boolean hasStructure(ServerLevel level, BlockPos pos) {

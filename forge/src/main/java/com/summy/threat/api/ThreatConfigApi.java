@@ -2,8 +2,8 @@ package com.summy.threat.api;
 
 import com.summy.threat.Config;
 import com.summy.threat.api.event.ThreatConfigChangedEvent;
-import com.summy.threat.attribute.AttributeCaps;
-import com.summy.threat.scaling.ScalingState;
+import com.summy.threat.SummyThreat;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.common.MinecraftForge;
 
@@ -22,9 +22,10 @@ public final class ThreatConfigApi {
 	private static final Map<String, Key> KEYS = new LinkedHashMap<>();
 	private static final Map<String, List<String>> GROUPS = new LinkedHashMap<>();
 	private static final ThreadLocal<Boolean> EVENT_WRITE = ThreadLocal.withInitial(() -> false);
-	private static final ThreadLocal<Boolean> API_WRITE = ThreadLocal.withInitial(() -> false);
-	private static String lastReloadFingerprint = "";
-	private static long lastReloadAt;
+	private static Map<String, ?> lastPublished = Map.of();
+	private static final java.util.Set<String> WARNED_FIXED = new java.util.HashSet<>();
+	private static final Map<String, String> FIXED_MODES = Map.of(
+			"multiplayer.normal_pcf_mode", "weighted", "multiplayer.boss_anchor", "highest");
 
 	private record Key(String path, String group, ForgeConfigSpec.ConfigValue<?> value,
 			ForgeConfigSpec.ValueSpec spec, String type) {
@@ -54,7 +55,8 @@ public final class ThreatConfigApi {
 	}
 
 	public static Object get(String path) {
-		return jsValue(readValue(require(path).value()));
+		Key key = require(path);
+		return configuredValue(key);
 	}
 
 	public static Object defaultValue(String path) {
@@ -64,7 +66,7 @@ public final class ThreatConfigApi {
 	/** 当前全部配置值快照，供重载事件与调试展示。 */
 	public static Map<String, Object> snapshot() {
 		Map<String, Object> out = new LinkedHashMap<>();
-		KEYS.forEach((path, key) -> out.put(path, jsValue(readValue(key.value()))));
+		KEYS.forEach((path, key) -> out.put(path, configuredValue(key)));
 		return out;
 	}
 
@@ -81,12 +83,19 @@ public final class ThreatConfigApi {
 		if (!Config.SPEC.isLoaded()) {
 			throw new IllegalStateException("SERVER 配置尚未加载；请在 ServerEvents.loaded 后写配置");
 		}
+		var server = ServerLifecycleHooks.getCurrentServer();
+		if (server != null && !server.isSameThread()) {
+			throw new IllegalStateException("配置写入必须在服务端线程执行");
+		}
 		if (EVENT_WRITE.get()) {
 			throw new IllegalStateException("禁止在 SummyThreatEvents.config.changed 内递归写配置");
 		}
 		Map<String, Parsed> parsed = new LinkedHashMap<>();
 		for (Map.Entry<String, ?> entry : values.entrySet()) {
 			Key key = require(entry.getKey());
+			if (FIXED_MODES.containsKey(key.path())) {
+				throw new IllegalArgumentException("配置为只读兼容项：" + key.path());
+			}
 			parsed.put(key.path(), new Parsed(key, parse(key, entry.getValue())));
 		}
 		if (parsed.isEmpty()) {
@@ -108,50 +117,75 @@ public final class ThreatConfigApi {
 	}
 
 	public static void notifyReload(Map<String, ?> currentValues) {
-		Map<String, Object> values = new LinkedHashMap<>();
-		if (currentValues != null) {
-			currentValues.forEach((key, value) -> values.put(key, jsValue(value)));
-		}
-		String fingerprint = values.toString();
-		long now = System.nanoTime();
-		if (fingerprint.equals(lastReloadFingerprint) && now - lastReloadAt < 2_000_000_000L) {
+		var server = ServerLifecycleHooks.getCurrentServer();
+		if (server != null && !server.isSameThread()) {
+			server.execute(() -> notifyReload(snapshot()));
 			return;
 		}
-		lastReloadFingerprint = fingerprint;
-		lastReloadAt = now;
-		MinecraftForge.EVENT_BUS.post(new ThreatConfigChangedEvent("reload", Map.of(), values));
+		warnFixedModes();
+		publish("reload", Map.of(), currentValues, currentValues);
 	}
 
-	public static boolean isApiWriteInProgress() {
-		return API_WRITE.get();
+	public static void resetNotifications() {
+		lastPublished = Map.of();
+		WARNED_FIXED.clear();
 	}
 
-	private static void writeAll(Collection<Parsed> changes, Map<String, Object> oldValues,
-			String source) {
-		API_WRITE.set(true);
-		try {
-			for (Parsed change : changes) {
-				write(change.key().value(), change.value());
+	private static Object configuredValue(Key key) {
+		String fixed = FIXED_MODES.get(key.path());
+		return fixed == null ? jsValue(readValue(key.value())) : fixed;
+	}
+
+	private static void warnFixedModes() {
+		FIXED_MODES.forEach((path, expected) -> {
+			Object configured = readValue(require(path).value());
+			if (!expected.equals(configured) && WARNED_FIXED.add(path)) {
+				SummyThreat.LOGGER.warn("[Summy Threat] {} 为只读策略，忽略旧值 {}，采用 {}",
+						path, configured, expected);
 			}
-			Config.SPEC.save();
-			AttributeCaps.apply();
-			ScalingState.refresh();
-		} catch (Throwable throwable) {
-			rollback(changes, oldValues);
-			throw new IllegalStateException("配置写入失败，已回滚：" + throwable.getMessage(), throwable);
-		} finally {
-			API_WRITE.remove();
+		});
+	}
+
+	private static void publish(String source, Map<String, ?> oldValues,
+			Map<String, ?> newValues, Map<String, ?> snapshot) {
+		if (snapshot.equals(lastPublished)) {
+			return;
 		}
-		Map<String, Object> newValues = new LinkedHashMap<>();
-		for (Parsed change : changes) {
-			newValues.put(change.key().path(), jsValue(change.key().value().get()));
-		}
+		lastPublished = Map.copyOf(snapshot);
+		var server = ServerLifecycleHooks.getCurrentServer();
+		SummyThreat.applyServerConfiguration(server);
 		EVENT_WRITE.set(true);
 		try {
 			MinecraftForge.EVENT_BUS.post(new ThreatConfigChangedEvent(source, oldValues, newValues));
 		} finally {
 			EVENT_WRITE.remove();
 		}
+		if (server != null) {
+			com.summy.threat.network.ModNetwork.broadcastRegistry(server);
+		}
+	}
+
+	private static void writeAll(Collection<Parsed> changes, Map<String, Object> oldValues,
+			String source) {
+		try {
+			for (Parsed change : changes) {
+				write(change.key().value(), change.value());
+			}
+			Config.SPEC.save();
+		} catch (RuntimeException exception) {
+			try {
+				rollback(changes, oldValues);
+				Config.SPEC.save();
+			} catch (RuntimeException rollbackFailure) {
+				exception.addSuppressed(rollbackFailure);
+			}
+			throw new IllegalStateException("配置写入失败：" + exception.getMessage(), exception);
+		}
+		Map<String, Object> newValues = new LinkedHashMap<>();
+		for (Parsed change : changes) {
+			newValues.put(change.key().path(), jsValue(change.key().value().get()));
+		}
+		publish(source, oldValues, newValues, snapshot());
 	}
 
 	@SuppressWarnings({"rawtypes", "unchecked"})

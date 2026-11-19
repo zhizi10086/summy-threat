@@ -147,8 +147,18 @@ final class KubeJSCompatDevCheck {
 		String magicCapKey = "magic_resistance.hard_cap_percent";
 		String magicTableKey = "magic_resistance.leader_boss_tl20";
 
+		boolean fixedRejected = false;
+		try {
+			ThreatConfigApi.setMany(Map.of(stringKey, "custom", "multiplayer.boss_anchor", "lowest"));
+		} catch (IllegalArgumentException expected) {
+			fixedRejected = true;
+		}
+		ThreatDevCheck.checkDetailed("多人 PCF 固定策略兼容读取并拒绝写入", fixedRejected
+				&& "weighted".equals(ThreatConfigApi.get(stringKey))
+				&& "highest".equals(ThreatConfigApi.get("multiplayer.boss_anchor")), "fixed modes");
+
 		Map<String, Object> original = new LinkedHashMap<>();
-		for (String key : List.of(booleanKey, integerKey, doubleKey, stringKey, enumKey, listKey,
+		for (String key : List.of(booleanKey, integerKey, doubleKey, enumKey, listKey,
 				regenDoubleKey, regenListKey, modBossAttackKey, equipmentThresholdKey,
 				magicCapKey, magicTableKey)) {
 			original.put(key, ThreatConfigApi.get(key));
@@ -193,7 +203,6 @@ final class KubeJSCompatDevCheck {
 		changes.put(booleanKey, changedBoolean);
 		changes.put(integerKey, changedInteger);
 		changes.put(doubleKey, 0.31D);
-		changes.put(stringKey, "kjs_test");
 		changes.put(enumKey, changedEnum);
 		changes.put(listKey, List.of("summy_threat:api_test"));
 		changes.put(regenDoubleKey, 0.75D);
@@ -209,7 +218,7 @@ final class KubeJSCompatDevCheck {
 					== changedBoolean
 					&& ((Number) ThreatConfigApi.get(integerKey)).intValue() == changedInteger
 					&& Math.abs(((Number) ThreatConfigApi.get(doubleKey)).doubleValue() - 0.31D) < 1.0E-6D
-					&& "kjs_test".equals(ThreatConfigApi.get(stringKey))
+					&& "weighted".equals(ThreatConfigApi.get(stringKey))
 					&& changedEnum.equals(ThreatConfigApi.get(enumKey))
 					&& List.of("summy_threat:api_test").equals(ThreatConfigApi.get(listKey))
 					&& Math.abs(((Number) ThreatConfigApi.get(regenDoubleKey)).doubleValue() - 0.75D) < 1.0E-6D

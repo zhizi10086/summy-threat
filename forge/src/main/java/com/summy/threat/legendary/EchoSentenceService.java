@@ -1,10 +1,8 @@
 package com.summy.threat.legendary;
 
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
-import net.minecraftforge.event.entity.living.LivingDamageEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.LivingEntity;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,12 +24,16 @@ public final class EchoSentenceService {
 		ACTIVE.remove(ownerId, instance);
 	}
 
-	@SubscribeEvent(priority = EventPriority.NORMAL)
-	public static void onDamage(LivingDamageEvent event) {
-		EchoSentenceAction.Instance instance = ACTIVE.get(event.getEntity().getUUID());
-		net.minecraft.world.entity.Entity direct = event.getSource().getDirectEntity();
-		if (instance == null || event.getAmount() <= 0.0F
-				|| !(event.getSource().getEntity() instanceof ServerPlayer player)
+	static boolean active(LivingEntity owner) {
+		return ACTIVE.containsKey(owner.getUUID());
+	}
+
+	static void onSettledDamage(LivingEntity owner, DamageSource source) {
+		EchoSentenceAction.Instance instance = ACTIVE.get(owner.getUUID());
+		net.minecraft.world.entity.Entity direct = source.getDirectEntity();
+		if (instance == null
+				|| !(source.getEntity() instanceof ServerPlayer player)
+				|| !LegendaryActionRuntime.validPlayer(owner, player)
 				|| !(direct == player || direct instanceof net.minecraft.world.entity.projectile.Projectile)) {
 			return;
 		}

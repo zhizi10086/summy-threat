@@ -66,10 +66,9 @@ final class DragonLairPulseAction implements LegendaryActionHandler {
 						color, 90, 1.45F, 0.06D,
 						gapCenter, Math.toRadians(30.0D));
 				double inner = Math.max(0.0D, radius - 2.5D);
-				for (LivingEntity target : LegendaryActionCombat.defaultTargets(
-						context, center, MAX_RADIUS, true)) {
+				for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
+					context, center, MAX_RADIUS, 4.0D, 4.0D)) {
 					if (wave.hit.contains(target.getUUID())
-							|| Math.abs(target.getY() - center.y) > 4.0D
 							|| !LegendaryActionCombat.hasWavePath(level, center, target)) {
 						continue;
 					}

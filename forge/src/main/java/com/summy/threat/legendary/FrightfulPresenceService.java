@@ -31,7 +31,7 @@ public final class FrightfulPresenceService {
 	private FrightfulPresenceService() {
 	}
 
-	public static void apply(LivingEntity owner, List<Player> players, long now) {
+	public static void apply(LivingEntity owner, List<Player> players, long now, boolean test) {
 		for (Player player : players) {
 			if (!(player instanceof ServerPlayer serverPlayer)) {
 				continue;
@@ -48,7 +48,7 @@ public final class FrightfulPresenceService {
 			if (state == null) {
 				state = new FearState(owner.getUUID(), player.getUUID(),
 						now + DURATION_TICKS,
-						now, -1L);
+						now, -1L, test);
 				ACTIVE.put(player.getUUID(), state);
 			} else {
 				state.endAt = now + DURATION_TICKS;
@@ -78,7 +78,7 @@ public final class FrightfulPresenceService {
 						player.getBoundingBox().inflate(64.0D),
 						entity -> entity.getUUID().equals(state.ownerId))
 				.stream().findFirst().orElse(null);
-		if (owner == null || !owner.isAlive()) {
+		if (owner == null || !owner.isAlive() || !LegendaryActionRuntime.validPlayer(owner, player)) {
 			end(player, state, true, now);
 			return;
 		}
@@ -121,7 +121,8 @@ public final class FrightfulPresenceService {
 			return amount;
 		}
 		FearState state = ACTIVE.get(player.getUUID());
-		if (state != null && state.ownerId.equals(dragon.getUUID())) {
+		if (state != null && state.ownerId.equals(dragon.getUUID())
+				&& (state.test || com.summy.threat.scaling.ScalingState.enabled())) {
 			return amount * 0.8F;
 		}
 		return amount;
@@ -150,6 +151,31 @@ public final class FrightfulPresenceService {
 		}
 		ACTIVE.clear();
 		IMMUNITY.clear();
+	}
+
+	static void clearFormal(net.minecraft.server.MinecraftServer server) {
+		for (var entry : List.copyOf(ACTIVE.entrySet())) {
+			if (!entry.getValue().test) {
+				clear(server, entry.getKey(), entry.getValue());
+			}
+		}
+	}
+
+	static void clearOwner(UUID ownerId, ServerLevel level) {
+		for (var entry : List.copyOf(ACTIVE.entrySet())) {
+			if (entry.getValue().ownerId.equals(ownerId)) {
+				clear(level.getServer(), entry.getKey(), entry.getValue());
+			}
+		}
+	}
+
+	private static void clear(net.minecraft.server.MinecraftServer server, UUID playerId, FearState state) {
+		ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+		if (player != null) {
+			end(player, state, false, player.level().getGameTime());
+		} else {
+			ACTIVE.remove(playerId, state);
+		}
 	}
 
 	private static void end(ServerPlayer player, FearState state, boolean grantImmunity,
@@ -190,13 +216,15 @@ public final class FrightfulPresenceService {
 	private static final class FearState {
 		private final UUID ownerId;
 		private final UUID modifierId;
+		private final boolean test;
 		private long endAt;
 		private long lastVisibleAt;
 		private long lastFarAt;
 
 		private FearState(UUID ownerId, UUID playerId, long endAt, long lastVisibleAt,
-				long lastFarAt) {
+				long lastFarAt, boolean test) {
 			this.ownerId = ownerId;
+			this.test = test;
 			this.modifierId = modifierId(playerId, ownerId);
 			this.endAt = endAt;
 			this.lastVisibleAt = lastVisibleAt;

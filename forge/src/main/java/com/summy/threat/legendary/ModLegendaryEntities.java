@@ -16,6 +16,7 @@ public final class ModLegendaryEntities {
 			ENTITY_TYPES.register("jade_light_beam", () -> EntityType.Builder
 					.<JadeLightBeamEntity>of(JadeLightBeamEntity::new, MobCategory.MISC)
 					.sized(0.1F, 0.1F)
+					.noSave()
 					.clientTrackingRange(16)
 					.updateInterval(1)
 					.build(SummyThreat.MOD_ID + ":jade_light_beam"));

@@ -257,7 +257,7 @@ public final class SummyThreatCommand {
 			return 0;
 		}
 		Config.ENVIRONMENT_TIER_MODE.set(mode);
-		ScalingState.refresh();
+		com.summy.threat.api.ThreatConfigApi.notifyReload(com.summy.threat.api.ThreatConfigApi.snapshot());
 		ctx.getSource().sendSuccess(() -> Component.literal(
 				"[Summy Threat] 档位模式已设为 %s（实际档位 %s，r_hp=%.2f，r_atk=%.2f）".formatted(
 						mode, ScalingState.tier(), ScalingState.rHp(), ScalingState.rAtk())), true);
@@ -344,7 +344,7 @@ public final class SummyThreatCommand {
 		if (Config.SPEC.isLoaded()) {
 			Config.SPEC.save();
 		}
-		ScalingState.setGlobalTl(tl);
+		com.summy.threat.api.ThreatConfigApi.notifyReload(com.summy.threat.api.ThreatConfigApi.snapshot());
 		String suffix = tl == -2
 				? "新刷的敌对生物不会数值化"
 				: tl == -1
@@ -382,6 +382,9 @@ public final class SummyThreatCommand {
 	private static int setPcf(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
 		double value = DoubleArgumentType.getDouble(ctx, "value");
+		if (!ScalingState.enabled()) {
+			return fail(ctx, "怪物侧缩放已停用");
+		}
 		PcfManager.setValue(player, value);
 		ctx.getSource().sendSuccess(() -> Component.literal(
 				"[Summy Threat] PCF 已设为 %s（%s）".formatted(fmt(value), player.getGameProfile().getName())), true);
@@ -406,6 +409,9 @@ public final class SummyThreatCommand {
 		ServerLevel level = ctx.getSource().getLevel();
 		BlockPos pos = BlockPos.containing(ctx.getSource().getPosition());
 		double value = DoubleArgumentType.getDouble(ctx, "value");
+		if (!ScalingState.enabled()) {
+			return fail(ctx, "怪物侧缩放已停用");
+		}
 		CdfManager.setCurrent(level, pos, value);
 		ctx.getSource().sendSuccess(() -> Component.literal(
 				"[Summy Threat] 当前区块 CDF 已设为 %s".formatted(fmt(value))), true);

@@ -52,11 +52,8 @@ final class ReverseGravityAction implements LegendaryActionHandler {
 				return false;
 			}
 			boolean fallingWarning = activeAge >= LIFT_TICKS - 10;
-			for (LivingEntity target : LegendaryActionCombat.defaultTargets(
-					context, center, 12.0D, true)) {
-				if (Math.abs(target.getY() - center.y) > 4.0D) {
-					continue;
-				}
+			for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
+					context, center, 12.0D, 4.0D, 6.0D)) {
 				double start = startHeights.computeIfAbsent(target.getUUID(),
 						ignored -> target.getY());
 				if (target.getY() >= start + 6.0D

@@ -65,7 +65,7 @@ final class JadeLightAction implements LegendaryActionHandler {
 	private static Map<UUID, Player> selectTargets(LegendaryActionContext context) {
 		Map<UUID, Player> selected = new LinkedHashMap<>();
 		if (context.target() instanceof Player target
-				&& target.isAlive()
+				&& LegendaryActionRuntime.validPlayer(context.owner(), target)
 				&& (context.test() || target != context.owner())
 				&& target.distanceTo(context.owner()) <= 32.0D) {
 			selected.put(target.getUUID(), target);
@@ -103,7 +103,7 @@ final class JadeLightAction implements LegendaryActionHandler {
 					return true;
 				}
 				LivingEntity target = entity(level, beam.targetId);
-				boolean invalid = target == null || !target.isAlive()
+				boolean invalid = !LegendaryActionRuntime.validPlayer(context.owner(), target)
 						|| target.level() != level
 						|| target.position().distanceTo(beam.entity.position()) > 32.0D;
 				if (invalid) {

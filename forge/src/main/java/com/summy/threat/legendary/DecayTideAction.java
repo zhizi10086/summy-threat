@@ -61,10 +61,9 @@ final class DecayTideAction implements LegendaryActionHandler {
 				LegendaryVisuals.ring(level, center, radius,
 						LegendaryActionId.DECAY_TIDE.color(), 64, 1.3F, 0.06D);
 				double inner = Math.max(0.0D, radius - 1.2D);
-				for (LivingEntity target : LegendaryActionCombat.defaultTargets(
-						context, center, MAX_RADIUS, true)) {
+				for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
+					context, center, MAX_RADIUS, 18.0D, 0.8D)) {
 					if (wave.hit.contains(target.getUUID())
-							|| target.getY() > center.y + 0.8D
 							|| !LegendaryActionCombat.hasWavePath(level, center, target)) {
 						continue;
 					}
