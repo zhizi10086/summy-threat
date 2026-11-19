@@ -73,6 +73,25 @@ class LegendaryActionMathTest {
 	}
 
 	@Test
+	void waveGeometryKeepsTheLastWaveAndRotatesTheDragonGap() {
+		var dragon = LegendaryWavePattern.DRAGON;
+		var decay = LegendaryWavePattern.DECAY;
+		assertEquals(113, dragon.endAge());
+		assertEquals(108, decay.endAge());
+		assertEquals(32, dragon.waveAge(dragon.endAge() - 1, 3));
+		assertTrue(dragon.isPresent(dragon.waveAge(dragon.endAge() - 1, 3)));
+		assertTrue(!dragon.isPresent(dragon.waveAge(dragon.endAge(), 3)));
+		assertEquals(7.2D, dragon.radiusAt(dragon.waveAge(62, 1)), 1.0E-9D);
+		assertEquals(1.2D, decay.width, 1.0E-9D);
+		double base = 2.8D;
+		double gap = dragon.gapCenter(base, 1);
+		assertTrue(!dragon.inDangerAngle(gap - 2.0D * Math.PI, base, 1));
+		assertTrue(!dragon.inDangerAngle(gap + Math.toRadians(29.9D), base, 1));
+		assertTrue(dragon.inDangerAngle(gap + Math.toRadians(30.1D), base, 1));
+		assertTrue(decay.inDangerAngle(base, base, 0));
+	}
+
+	@Test
 	void reverseGravityProducesNetUpwardMotionAgainstVanillaGravity() {
 		double lift = LegendaryActionMath.reverseGravityLiftVelocity();
 		assertTrue(lift > 0.08D);

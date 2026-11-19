@@ -89,7 +89,7 @@ final class DoomClockAction implements LegendaryActionHandler {
 		@Override
 		public void stop(LegendaryActionContext context, StopReason reason) {
 			if (visual != null) {
-				visual.discard();
+				visual.finish(reason);
 			}
 		}
 

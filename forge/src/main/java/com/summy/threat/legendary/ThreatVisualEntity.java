@@ -22,6 +22,8 @@ public final class ThreatVisualEntity extends Entity {
 	public static final byte WARNING = 0, ACTIVE = 1, IMPACT = 2, FADING = 3;
 	public static final int LOCKED = 1;
 	static final float JADE_BEAM_HEIGHT = 12.0F;
+	private static final int FADE_IN_TICKS = 6;
+	private static final int FADE_OUT_TICKS = 10;
 
 	private static final EntityDataAccessor<Byte> CATEGORY = SynchedEntityData.defineId(ThreatVisualEntity.class, EntityDataSerializers.BYTE);
 	private static final EntityDataAccessor<String> VISUAL_ID = SynchedEntityData.defineId(ThreatVisualEntity.class, EntityDataSerializers.STRING);
@@ -36,6 +38,7 @@ public final class ThreatVisualEntity extends Entity {
 	private static final EntityDataAccessor<Vector3f> OFFSET = SynchedEntityData.defineId(ThreatVisualEntity.class, EntityDataSerializers.VECTOR3);
 
 	private long expiresAt;
+	private int clientFadeStart;
 	private Vector3f previousOffset = new Vector3f();
 
 	public ThreatVisualEntity(EntityType<? extends ThreatVisualEntity> type, Level level) {
@@ -48,11 +51,17 @@ public final class ThreatVisualEntity extends Entity {
 	@javax.annotation.Nullable
 	static ThreatVisualEntity spawnGround(ServerLevel level, LegendaryActionId id, Vec3 center,
 			int lifetime, float radius, float angle, float intensity) {
+		return spawnGround(level, id, center, lifetime, radius, angle, intensity, id.color());
+	}
+
+	@javax.annotation.Nullable
+	static ThreatVisualEntity spawnGround(ServerLevel level, LegendaryActionId id, Vec3 center,
+			int lifetime, float radius, float angle, float intensity, int color) {
 		ThreatVisualEntity visual = ModLegendaryEntities.THREAT_VISUAL.get().create(level);
 		if (visual == null) {
 			return null;
 		}
-		visual.initialize(LEGENDARY, id.id(), PRIMARY, id.color(), level.getGameTime() + lifetime);
+		visual.initialize(LEGENDARY, id.id(), PRIMARY, color, level.getGameTime() + lifetime);
 		visual.setPos(center.x, center.y, center.z);
 		visual.update(WARNING, 0.0F, radius, angle, intensity, 0, Vec3.ZERO);
 		return level.addFreshEntity(visual) ? visual : null;
@@ -74,6 +83,38 @@ public final class ThreatVisualEntity extends Entity {
 		entityData.set(INTENSITY, intensity);
 		entityData.set(FLAGS, flags);
 		entityData.set(OFFSET, new Vector3f((float) offset.x, (float) offset.y, (float) offset.z));
+	}
+
+	/** 正常收尾只延长渲染，技能实例已从服务器的运行列表移除。 */
+	void finish(LegendaryActionInstance.StopReason reason) {
+		if (isRemoved()) {
+			return;
+		}
+		if (reason != LegendaryActionInstance.StopReason.COMPLETED) {
+			discard();
+			return;
+		}
+		entityData.set(PHASE, FADING);
+		// 给相位同步留两刻余量，客户端能先降到零，再收到移除。
+		expiresAt = level().getGameTime() + FADE_OUT_TICKS + 2;
+	}
+
+	@Override
+	public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
+		super.onSyncedDataUpdated(key);
+		if (key == PHASE && level().isClientSide() && phase() == FADING) {
+			clientFadeStart = tickCount;
+		}
+	}
+
+	float opacity(float partialTick) {
+		float age = tickCount + partialTick;
+		float fadeIn = net.minecraft.util.Mth.clamp(age / FADE_IN_TICKS, 0.0F, 1.0F);
+		if (phase() != FADING) {
+			return fadeIn;
+		}
+		float fadeOut = net.minecraft.util.Mth.clamp(1.0F - (age - clientFadeStart) / FADE_OUT_TICKS, 0.0F, 1.0F);
+		return Math.min(fadeIn, fadeOut);
 	}
 
 	public byte category() { return entityData.get(CATEGORY); }

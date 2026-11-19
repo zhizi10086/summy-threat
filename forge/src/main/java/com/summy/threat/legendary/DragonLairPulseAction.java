@@ -13,10 +13,7 @@ import java.util.UUID;
 
 /** 龙巢脉冲：四道带旋转安全缺口的元素环。 */
 final class DragonLairPulseAction implements LegendaryActionHandler {
-	private static final int WARNING_TICKS = 35;
-	private static final int WAVE_INTERVAL = 15;
-	private static final double SPEED = 0.6D;
-	private static final double MAX_RADIUS = 18.0D;
+	private static final LegendaryWavePattern PATTERN = LegendaryWavePattern.DRAGON;
 
 	@Override
 	public LegendaryActionInstance start(LegendaryActionContext context) {
@@ -26,7 +23,11 @@ final class DragonLairPulseAction implements LegendaryActionHandler {
 		}
 		Vec3 center = LegendaryActionCombat.groundProjection(context.owner(), 20.0D);
 		double baseAngle = Math.atan2(target.getZ() - center.z, target.getX() - center.x);
-		return new Instance(center, baseAngle);
+		ThreatVisualEntity visual = ThreatVisualEntity.spawnGround(context.level(),
+				LegendaryActionId.DRAGON_LAIR_PULSE, center, PATTERN.endAge() + 20,
+				(float) LegendaryWavePattern.MAX_RADIUS, (float) baseAngle, 0.0F,
+				LegendaryVisuals.dragonColor(context.owner()));
+		return new Instance(center, baseAngle, visual);
 	}
 
 	private static final class Instance implements LegendaryActionInstance {
@@ -34,40 +35,44 @@ final class DragonLairPulseAction implements LegendaryActionHandler {
 		private final double baseAngle;
 		private final List<Wave> waves = new ArrayList<>();
 
-		private Instance(Vec3 center, double baseAngle) {
+		@javax.annotation.Nullable
+		private final ThreatVisualEntity visual;
+
+		private Instance(Vec3 center, double baseAngle, @javax.annotation.Nullable ThreatVisualEntity visual) {
 			this.center = center;
 			this.baseAngle = baseAngle;
+			this.visual = visual;
 		}
 
 		@Override
 		public boolean tick(LegendaryActionContext context, int age) {
+			if (age >= PATTERN.endAge()) {
+				return false;
+			}
 			ServerLevel level = context.level();
-			int color = LegendaryVisuals.dragonColor(context.owner());
-			if (age < WARNING_TICKS) {
-				LegendaryVisuals.ring(level, center, 5.0D,
-						color, 36, 1.2F, 0.06D);
+			if (visual != null && !visual.isRemoved()) {
+				byte phase = age < PATTERN.warningTicks ? ThreatVisualEntity.WARNING : ThreatVisualEntity.ACTIVE;
+				visual.update(phase, age / (float) PATTERN.endAge(), (float) LegendaryWavePattern.MAX_RADIUS,
+						(float) baseAngle, 0.0F, 0, Vec3.ZERO);
+			}
+			if (age < PATTERN.warningTicks) {
 				if (age % 7 == 0) {
 					LegendaryVisuals.sound(level, center, SoundEvents.ENDER_DRAGON_GROWL,
 							0.75F, 0.65F + age * 0.01F);
 				}
 				return true;
 			}
-			int activeAge = age - WARNING_TICKS;
-			for (int index = 0; index < 4; index++) {
-				if (activeAge == index * WAVE_INTERVAL) {
-					waves.add(new Wave(age, index));
+			for (int index = 0; index < LegendaryWavePattern.COUNT; index++) {
+				if (PATTERN.waveAge(age, index) == 0) {
+					waves.add(new Wave(index));
 				}
 			}
-			waves.removeIf(wave -> age - wave.startAge > MAX_RADIUS / SPEED + 2);
+			waves.removeIf(wave -> !PATTERN.isPresent(PATTERN.waveAge(age, wave.index)));
 			for (Wave wave : waves) {
-				double radius = Math.min(MAX_RADIUS, (age - wave.startAge) * SPEED);
-				double gapCenter = baseAngle + Math.toRadians(wave.index * 90.0D);
-				LegendaryVisuals.ringWithGap(level, center, radius,
-						color, 90, 1.45F, 0.06D,
-						gapCenter, Math.toRadians(30.0D));
-				double inner = Math.max(0.0D, radius - 2.5D);
+				double radius = PATTERN.radiusAt(PATTERN.waveAge(age, wave.index));
+				double inner = Math.max(0.0D, radius - PATTERN.width);
 				for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
-					context, center, MAX_RADIUS, 4.0D, 4.0D)) {
+					context, center, LegendaryWavePattern.MAX_RADIUS, 4.0D, 4.0D)) {
 					if (wave.hit.contains(target.getUUID())
 							|| !LegendaryActionCombat.hasWavePath(level, center, target)) {
 						continue;
@@ -76,8 +81,7 @@ final class DragonLairPulseAction implements LegendaryActionHandler {
 					double angle = Math.atan2(target.getZ() - center.z,
 							target.getX() - center.x);
 					if (distance >= inner && distance <= radius
-							&& LegendaryVisuals.angularDistance(angle, gapCenter)
-									> Math.toRadians(30.0D)) {
+							&& PATTERN.inDangerAngle(angle, baseAngle, wave.index)) {
 						if (LegendaryActionCombat.hit(context, target,
 								LegendaryActionCombat.DamageKind.INDIRECT_MAGIC, 70.0D)) {
 							wave.hit.add(target.getUUID());
@@ -85,8 +89,14 @@ final class DragonLairPulseAction implements LegendaryActionHandler {
 					}
 				}
 			}
-			return age < LegendaryActionMath.waveEndExclusiveAge(
-					WARNING_TICKS + 3 * WAVE_INTERVAL, MAX_RADIUS, SPEED);
+			return true;
+		}
+
+		@Override
+		public void stop(LegendaryActionContext context, StopReason reason) {
+			if (visual != null) {
+				visual.finish(reason);
+			}
 		}
 
 		private static double horizontalDistance(Vec3 first, Vec3 second) {
@@ -97,12 +107,10 @@ final class DragonLairPulseAction implements LegendaryActionHandler {
 	}
 
 	private static final class Wave {
-		private final int startAge;
 		private final int index;
 		private final Set<UUID> hit = new HashSet<>();
 
-		private Wave(int startAge, int index) {
-			this.startAge = startAge;
+		private Wave(int index) {
 			this.index = index;
 		}
 	}

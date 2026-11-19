@@ -20,7 +20,8 @@ import java.util.UUID;
 final class JadeLightAction implements LegendaryActionHandler {
 	private static final int WARNING_TICKS = 30;
 	private static final int ACTIVE_TICKS = 160;
-	private static final double SPEED = 0.13D;
+	// 原版玩家平地基础步行约 4.317 格/秒，每秒 20 刻。
+	private static final double SPEED = 4.317D / 20.0D * 0.90D;
 	private static final double CONTACT_RADIUS = 0.4D;
 	private static final double CONTACT_HEIGHT = 4.0D;
 
@@ -156,9 +157,7 @@ final class JadeLightAction implements LegendaryActionHandler {
 						}
 					}
 				}
-				byte phase = beam.impactTicks > 0 ? ThreatVisualEntity.IMPACT
-						: age >= WARNING_TICKS + ACTIVE_TICKS - 8 ? ThreatVisualEntity.FADING
-						: ThreatVisualEntity.ACTIVE;
+				byte phase = beam.impactTicks > 0 ? ThreatVisualEntity.IMPACT : ThreatVisualEntity.ACTIVE;
 				updateVisual(beam, phase, (age - WARNING_TICKS) / (float) ACTIVE_TICKS);
 			}
 			return true;
@@ -215,7 +214,9 @@ final class JadeLightAction implements LegendaryActionHandler {
 		@Override
 		public void stop(LegendaryActionContext context, StopReason reason) {
 			for (Beam beam : beams) {
-				beam.discardVisual();
+				if (beam.hasVisual()) {
+					beam.visual.finish(reason);
+				}
 			}
 			beams.clear();
 		}

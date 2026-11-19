@@ -15,54 +15,61 @@ import java.util.UUID;
 
 /** 凋亡潮汐：四道低矮扩散波，可以跳跃规避。 */
 final class DecayTideAction implements LegendaryActionHandler {
-	private static final int WARNING_TICKS = 30;
-	private static final int WAVE_INTERVAL = 15;
-	private static final double WAVE_SPEED = 0.6D;
-	private static final double MAX_RADIUS = 18.0D;
+	private static final LegendaryWavePattern PATTERN = LegendaryWavePattern.DECAY;
 
 	@Override
 	public LegendaryActionInstance start(LegendaryActionContext context) {
 		if (context.target() == null || !context.target().isAlive()) {
 			return null;
 		}
-		return new Instance(LegendaryActionCombat.groundProjection(context.owner(), 16.0D));
+		Vec3 center = LegendaryActionCombat.groundProjection(context.owner(), 16.0D);
+		ThreatVisualEntity visual = ThreatVisualEntity.spawnGround(context.level(),
+				LegendaryActionId.DECAY_TIDE, center, PATTERN.endAge() + 20,
+				(float) LegendaryWavePattern.MAX_RADIUS, 0.0F, 0.0F);
+		return new Instance(center, visual);
 	}
 
 	private static final class Instance implements LegendaryActionInstance {
 		private final Vec3 center;
 		private final List<Wave> waves = new ArrayList<>();
 
-		private Instance(Vec3 center) {
+		@javax.annotation.Nullable
+		private final ThreatVisualEntity visual;
+
+		private Instance(Vec3 center, @javax.annotation.Nullable ThreatVisualEntity visual) {
 			this.center = center;
+			this.visual = visual;
 		}
 
 		@Override
 		public boolean tick(LegendaryActionContext context, int age) {
+			if (age >= PATTERN.endAge()) {
+				return false;
+			}
 			ServerLevel level = context.level();
-			if (age < WARNING_TICKS) {
-				LegendaryVisuals.ring(level, center, 3.0D,
-						LegendaryActionId.DECAY_TIDE.color(), 28, 1.1F, 0.05D);
+			if (visual != null && !visual.isRemoved()) {
+				byte phase = age < PATTERN.warningTicks ? ThreatVisualEntity.WARNING : ThreatVisualEntity.ACTIVE;
+				visual.update(phase, age / (float) PATTERN.endAge(), (float) LegendaryWavePattern.MAX_RADIUS,
+						0.0F, 0.0F, 0, Vec3.ZERO);
+			}
+			if (age < PATTERN.warningTicks) {
 				if (age % 7 == 0) {
 					LegendaryVisuals.sound(level, center, SoundEvents.WITHER_AMBIENT,
 							0.6F, 0.65F + age * 0.01F);
 				}
 				return true;
 			}
-			int activeAge = age - WARNING_TICKS;
-			for (int waveIndex = 0; waveIndex < 4; waveIndex++) {
-				if (activeAge == waveIndex * WAVE_INTERVAL) {
-					waves.add(new Wave(age));
+			for (int index = 0; index < LegendaryWavePattern.COUNT; index++) {
+				if (PATTERN.waveAge(age, index) == 0) {
+					waves.add(new Wave(index));
 				}
 			}
-			waves.removeIf(wave -> age - wave.startAge > MAX_RADIUS / WAVE_SPEED + 2);
+			waves.removeIf(wave -> !PATTERN.isPresent(PATTERN.waveAge(age, wave.index)));
 			for (Wave wave : waves) {
-				double radius = Math.min(MAX_RADIUS,
-						(age - wave.startAge) * WAVE_SPEED);
-				LegendaryVisuals.ring(level, center, radius,
-						LegendaryActionId.DECAY_TIDE.color(), 64, 1.3F, 0.06D);
-				double inner = Math.max(0.0D, radius - 1.2D);
+				double radius = PATTERN.radiusAt(PATTERN.waveAge(age, wave.index));
+				double inner = Math.max(0.0D, radius - PATTERN.width);
 				for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
-					context, center, MAX_RADIUS, 18.0D, 0.8D)) {
+					context, center, LegendaryWavePattern.MAX_RADIUS, 18.0D, 0.8D)) {
 					if (wave.hit.contains(target.getUUID())
 							|| !LegendaryActionCombat.hasWavePath(level, center, target)) {
 						continue;
@@ -79,8 +86,14 @@ final class DecayTideAction implements LegendaryActionHandler {
 					}
 				}
 			}
-			return age < LegendaryActionMath.waveEndExclusiveAge(
-					WARNING_TICKS + 3 * WAVE_INTERVAL, MAX_RADIUS, WAVE_SPEED);
+			return true;
+		}
+
+		@Override
+		public void stop(LegendaryActionContext context, StopReason reason) {
+			if (visual != null) {
+				visual.finish(reason);
+			}
 		}
 
 		private static double horizontalDistance(Vec3 first, Vec3 second) {
@@ -91,11 +104,11 @@ final class DecayTideAction implements LegendaryActionHandler {
 	}
 
 	private static final class Wave {
-		private final int startAge;
+		private final int index;
 		private final Set<UUID> hit = new HashSet<>();
 
-		private Wave(int startAge) {
-			this.startAge = startAge;
+		private Wave(int index) {
+			this.index = index;
 		}
 	}
 }
