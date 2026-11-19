@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * 区块难度因子（CDF）：区块历史活动强度。
@@ -292,7 +293,18 @@ public final class CdfManager {
 	}
 
 	private static CdfState state(ServerLevel level, CdfKey key) {
-		return STATES.computeIfAbsent(key, ignored -> legacyState(level, key));
+		return resolveState(STATES, key, () -> legacyState(level, key));
+	}
+
+	static <K, V> V resolveState(Map<K, V> cache, K key, Supplier<V> initialize) {
+		V existing = cache.get(key);
+		if (existing != null) {
+			return existing;
+		}
+		// ??????????????????????????????????????
+		V initial = initialize.get();
+		V loaded = cache.putIfAbsent(key, initial);
+		return loaded == null ? initial : loaded;
 	}
 
 	private static CdfState legacyState(ServerLevel level, CdfKey key) {
