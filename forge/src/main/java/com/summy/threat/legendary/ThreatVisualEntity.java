@@ -7,6 +7,7 @@ import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
@@ -20,6 +21,7 @@ public final class ThreatVisualEntity extends Entity {
 	public static final byte PRIMARY = 0, BEAM = 1, MARKER = 2, AURA = 3, GROUND_RING = 4;
 	public static final byte WARNING = 0, ACTIVE = 1, IMPACT = 2, FADING = 3;
 	public static final int LOCKED = 1;
+	static final float JADE_BEAM_HEIGHT = 12.0F;
 
 	private static final EntityDataAccessor<Byte> CATEGORY = SynchedEntityData.defineId(ThreatVisualEntity.class, EntityDataSerializers.BYTE);
 	private static final EntityDataAccessor<String> VISUAL_ID = SynchedEntityData.defineId(ThreatVisualEntity.class, EntityDataSerializers.STRING);
@@ -40,6 +42,20 @@ public final class ThreatVisualEntity extends Entity {
 		super(type, level);
 		noPhysics = true;
 		setNoGravity(true);
+	}
+
+	/** 场地代理固定在地面投影，生成失败时技能照常结算。 */
+	@javax.annotation.Nullable
+	static ThreatVisualEntity spawnGround(ServerLevel level, LegendaryActionId id, Vec3 center,
+			int lifetime, float radius, float angle, float intensity) {
+		ThreatVisualEntity visual = ModLegendaryEntities.THREAT_VISUAL.get().create(level);
+		if (visual == null) {
+			return null;
+		}
+		visual.initialize(LEGENDARY, id.id(), PRIMARY, id.color(), level.getGameTime() + lifetime);
+		visual.setPos(center.x, center.y, center.z);
+		visual.update(WARNING, 0.0F, radius, angle, intensity, 0, Vec3.ZERO);
+		return level.addFreshEntity(visual) ? visual : null;
 	}
 
 	void initialize(byte category, String id, byte role, int color, long expiresAt) {
@@ -115,7 +131,7 @@ public final class ThreatVisualEntity extends Entity {
 
 	@Override
 	public boolean shouldRenderAtSqrDistance(double distanceSquared) {
-		// ??????????????????????????????
+		// 裁剪距离随客户端视距缩放，避免远处持续渲染。
 		double range = 64.0D * getViewScale();
 		return distanceSquared < range * range;
 	}
@@ -124,8 +140,15 @@ public final class ThreatVisualEntity extends Entity {
 	public AABB getBoundingBoxForCulling() {
 		Vector3f offset = offset();
 		Vec3 beam = position().add(offset.x(), offset.y(), offset.z());
-		return new AABB(position(), beam).inflate(Math.max(1.0F, radius()), 1.0D, Math.max(1.0F, radius()))
-				.expandTowards(0.0D, 12.0D, 0.0D);
+		float horizontal = Math.max(1.0F, radius());
+		if (role() == PRIMARY && LegendaryActionId.COLLAPSING_HORIZON.id().equals(visualId())) {
+			// 同步半径是安全圈，裁剪仍须覆盖固定外圈。
+			horizontal = (float) CollapsingHorizonAction.OUTER_RADIUS;
+		}
+		// 原有图元沿用纵向裁剪余量，发射球也在该余量内。
+		double height = role() == PRIMARY ? 0.0D : JADE_BEAM_HEIGHT;
+		return new AABB(position(), beam).inflate(horizontal, 1.0D, horizontal)
+				.expandTowards(0.0D, height, 0.0D);
 	}
 
 	@Override

@@ -9,6 +9,35 @@ import net.minecraft.world.phys.Vec3;
 final class DoomClockAction implements LegendaryActionHandler {
 	private static final int WARNING_TICKS = 30;
 	private static final int STEP_TICKS = 15;
+	private static final int END_TICK = WARNING_TICKS + STEP_TICKS * 4;
+	private static final double OUTER_RADIUS = 20.0D;
+
+	static int detonationAt(int age) {
+		int activeAge = age - WARNING_TICKS;
+		return age < WARNING_TICKS || age >= END_TICK || activeAge % STEP_TICKS != 0
+				? -1 : activeAge / STEP_TICKS;
+	}
+
+	/** 余闪结束后转到下一扇区。第四次引爆后不再预警。 */
+	static Cue visualCue(int age) {
+		int activeAge = age - WARNING_TICKS;
+		if (activeAge >= 0) {
+			int sector = activeAge / STEP_TICKS;
+			int sinceBurst = activeAge % STEP_TICKS;
+			if (sector < 4 && sinceBurst < 4) {
+				return new Cue(sector, ThreatVisualEntity.IMPACT, 1.0F - sinceBurst * 0.14F);
+			}
+		}
+		int next = activeAge < 0 ? 0 : Math.min(4, activeAge / STEP_TICKS + 1);
+		if (next == 4) {
+			return new Cue(3, ThreatVisualEntity.ACTIVE, 0.0F);
+		}
+		int remaining = WARNING_TICKS + STEP_TICKS * next - age;
+		float intensity = remaining <= 5 ? (remaining % 2 == 1 ? 0.84F : 0.48F) : 0.32F;
+		return new Cue(next, ThreatVisualEntity.WARNING, intensity);
+	}
+
+	record Cue(int sector, byte phase, float intensity) {}
 
 	@Override
 	public LegendaryActionInstance start(LegendaryActionContext context) {
@@ -18,55 +47,56 @@ final class DoomClockAction implements LegendaryActionHandler {
 		}
 		Vec3 center = LegendaryActionCombat.groundProjection(context.owner(), 20.0D);
 		double baseAngle = angle(center, target.position());
-		return new Instance(center, baseAngle);
+		return new Instance(center, baseAngle, ThreatVisualEntity.spawnGround(context.level(),
+				LegendaryActionId.DOOM_CLOCK, center, END_TICK + 20, (float) OUTER_RADIUS,
+				(float) baseAngle, visualCue(0).intensity()));
 	}
 
 	private static final class Instance implements LegendaryActionInstance {
 		private final Vec3 center;
 		private final double baseAngle;
-		private int lastPulse = -1;
+		@javax.annotation.Nullable
+		private final ThreatVisualEntity visual;
 
-		private Instance(Vec3 center, double baseAngle) {
+		private Instance(Vec3 center, double baseAngle, @javax.annotation.Nullable ThreatVisualEntity visual) {
 			this.center = center;
 			this.baseAngle = baseAngle;
+			this.visual = visual;
 		}
 
 		@Override
 		public boolean tick(LegendaryActionContext context, int age) {
-			ServerLevel level = context.level();
-			if (age < WARNING_TICKS) {
-				LegendaryVisuals.ring(level, center, 20.0D,
-						LegendaryActionId.DOOM_CLOCK.color(), 80, 1.1F, 0.06D);
-				for (int sector = 0; sector < 4; sector++) {
-					drawBoundary(level, sector);
-				}
-				if (age % 6 == 0) {
-					LegendaryVisuals.sound(level, center, SoundEvents.BELL_BLOCK,
-							0.55F, 0.7F + age * 0.012F);
-				}
-				return true;
-			}
-			int activeAge = age - WARNING_TICKS;
-			if (activeAge >= STEP_TICKS * 4) {
+			if (age >= END_TICK) {
 				return false;
 			}
-			int pulse = activeAge / STEP_TICKS;
-			int within = activeAge % STEP_TICKS;
-			int activeSector = pulse;
-			if (within >= STEP_TICKS - 5) {
-				drawSector(level, activeSector, 1.5F, 0.06D);
+			if (visual != null && !visual.isRemoved()) {
+				Cue cue = visualCue(age);
+				float direction = (float) (baseAngle + LegendaryActionMath.clockwiseSectorOffset(cue.sector()));
+				visual.update(cue.phase(), age / (float) END_TICK, (float) OUTER_RADIUS,
+						direction, cue.intensity(), 0, Vec3.ZERO);
 			}
-			if (within == 0 && pulse != lastPulse) {
-				lastPulse = pulse;
-				detonate(context, pulse);
+			if (age < WARNING_TICKS && age % 6 == 0) {
+				LegendaryVisuals.sound(context.level(), center, SoundEvents.BELL_BLOCK,
+						0.55F, 0.7F + age * 0.012F);
+			}
+			int sector = detonationAt(age);
+			if (sector >= 0) {
+				detonate(context, sector);
 			}
 			return true;
+		}
+
+		@Override
+		public void stop(LegendaryActionContext context, StopReason reason) {
+			if (visual != null) {
+				visual.discard();
+			}
 		}
 
 		private void detonate(LegendaryActionContext context, int sector) {
 			ServerLevel level = context.level();
 			for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
-					context, center, 20.0D, 8.0D, 8.0D)) {
+					context, center, OUTER_RADIUS, 8.0D, 8.0D)) {
 				double relative = angle(center, target.position()) - baseAngle;
 				double normalized = Math.atan2(Math.sin(relative), Math.cos(relative));
 				double sectorAngle = LegendaryActionMath.clockwiseSectorOffset(sector);
@@ -75,36 +105,10 @@ final class DoomClockAction implements LegendaryActionHandler {
 							LegendaryActionCombat.DamageKind.INDIRECT_MAGIC, 55.0D);
 				}
 			}
-			drawSector(level, sector, 1.8F, 0.1D);
 			LegendaryVisuals.sound(level, center, SoundEvents.LIGHTNING_BOLT_THUNDER,
 					0.65F, 1.45F);
 		}
 
-		private void drawSector(ServerLevel level, int sector, float scale,
-				double yOffset) {
-			double centerAngle = baseAngle
-					+ LegendaryActionMath.clockwiseSectorOffset(sector);
-			for (double radius = 2.0D; radius <= 20.0D; radius += 2.0D) {
-				for (int offset = -3; offset <= 3; offset++) {
-					double angle = centerAngle + offset * Math.PI / 24.0D;
-					level.sendParticles(LegendaryVisuals.dust(
-									LegendaryActionId.DOOM_CLOCK.color(), scale),
-							center.x + Math.cos(angle) * radius,
-							center.y + yOffset,
-							center.z + Math.sin(angle) * radius,
-							1, 0.0D, 0.0D, 0.0D, 0.0D);
-				}
-			}
-		}
-
-		private void drawBoundary(ServerLevel level, int sector) {
-			double angle = baseAngle
-					+ LegendaryActionMath.clockwiseSectorOffset(sector) - Math.PI / 4.0D;
-			Vec3 end = center.add(Math.cos(angle) * 20.0D, 0.0D,
-					Math.sin(angle) * 20.0D);
-			LegendaryVisuals.line(level, center.add(0.0D, 0.06D, 0.0D), end,
-					LegendaryActionId.DOOM_CLOCK.color(), 0.8D, 1.0F);
-		}
 	}
 
 	private static double angle(Vec3 center, Vec3 point) {

@@ -69,7 +69,7 @@ public final class LegendaryActionRuntime {
 			return TestStartResult.NO_ACTION_INSTANCE;
 		}
 		TEST_SESSIONS.add(new TestSession(player.getUUID(), context, instance));
-		if (action != LegendaryActionId.JADE_LIGHT) {
+		if (needsTestMarker(action)) {
 			spawnMarker(player.serverLevel(), center, action);
 		}
 		return TestStartResult.STARTED;
@@ -229,7 +229,7 @@ public final class LegendaryActionRuntime {
 			}
 			if (!session.context.owner().isAlive() || session.context.owner().level() != session.level()) {
 				cancel(session, LegendaryActionInstance.StopReason.OWNER_INVALID);
-			} else if (tick(session) && session.action() != LegendaryActionId.JADE_LIGHT
+			} else if (tick(session) && needsTestMarker(session.action())
 					&& now % MARKER_INTERVAL_TICKS == 0) {
 				spawnMarker(session.level(), session.context.center(), session.action());
 			}
@@ -324,6 +324,13 @@ public final class LegendaryActionRuntime {
 
 	private static LegendaryActionInstance diagnosticInstance(LegendaryActionId action) {
 		return (context, age) -> age < 40;
+	}
+
+	private static boolean needsTestMarker(LegendaryActionId action) {
+		return switch (action) {
+			case JADE_LIGHT, COLLAPSING_HORIZON, DOOM_CLOCK -> false;
+			default -> true;
+		};
 	}
 
 	private static void spawnMarker(ServerLevel level, Vec3 center, LegendaryActionId action) {

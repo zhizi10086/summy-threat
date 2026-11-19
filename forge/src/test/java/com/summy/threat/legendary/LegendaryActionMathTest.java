@@ -48,6 +48,26 @@ class LegendaryActionMathTest {
 	}
 
 	@Test
+	void doomClockTelegraphsTheUpcomingSectorAndNeverWrapsAfterTheFourth() {
+		int[] bursts = {30, 45, 60, 75};
+		for (int sector = 0; sector < bursts.length; sector++) {
+			int burst = bursts[sector];
+			var warning = DoomClockAction.visualCue(burst - 5);
+			assertEquals(sector, warning.sector());
+			assertEquals(ThreatVisualEntity.WARNING, warning.phase());
+			assertTrue(warning.intensity() > DoomClockAction.visualCue(burst - 6).intensity());
+			var impact = DoomClockAction.visualCue(burst);
+			assertEquals(sector, impact.sector());
+			assertEquals(ThreatVisualEntity.IMPACT, impact.phase());
+			assertEquals(sector, DoomClockAction.detonationAt(burst));
+			assertEquals(-1, DoomClockAction.detonationAt(burst + 1));
+		}
+		assertEquals(ThreatVisualEntity.IMPACT, DoomClockAction.visualCue(78).phase());
+		assertEquals(0.0F, DoomClockAction.visualCue(79).intensity());
+		assertEquals(0.0F, DoomClockAction.visualCue(89).intensity());
+	}
+
+	@Test
 	void finalWaveKeepsRunningUntilMaximumRadiusIsCleared() {
 		assertEquals(78, LegendaryActionMath.waveEndExclusiveAge(45, 18.0D, 0.6D));
 	}
