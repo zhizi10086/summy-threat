@@ -7,6 +7,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LegendaryActionMathTest {
 	@Test
+	void jadeVisualAnchorFollowsFeetWithoutChangingTheContactVolume() {
+		double feet = 8.0D;
+		double height = 1.8D;
+		double contactTop = LegendaryActionMath.jadeContactAnchorY(feet, height);
+		assertEquals(10.15D, contactTop, 1.0E-6D);
+		assertEquals(6.15D, LegendaryActionMath.jadeContactMinY(contactTop, 4.0D), 1.0E-6D);
+		assertEquals(feet, LegendaryActionMath.jadeVisualAnchorY(contactTop, height), 1.0E-6D);
+		assertEquals(feet, LegendaryActionMath.jadeVisualAnchorY(
+				LegendaryActionMath.jadeContactAnchorY(feet, 0.6D), 0.6D), 1.0E-6D);
+	}
+
+	@Test
 	void damageAppliesAttackCurveAndPlayerSideFactor() {
 		assertEquals(240.0F, LegendaryActionMath.damage(120.0D, 2.0D, 1.0D, true));
 		assertEquals(2_400.0F, LegendaryActionMath.damage(120.0D, 2.0D, 1.0D, false));

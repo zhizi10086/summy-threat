@@ -21,6 +21,16 @@ public final class ModLegendaryEntities {
 					.updateInterval(1)
 					.build(SummyThreat.MOD_ID + ":jade_light_beam"));
 
+	public static final RegistryObject<EntityType<ThreatVisualEntity>> THREAT_VISUAL =
+			ENTITY_TYPES.register("threat_visual", () -> EntityType.Builder
+					.<ThreatVisualEntity>of(ThreatVisualEntity::new, MobCategory.MISC)
+					.sized(0.1F, 0.1F)
+					.noSave()
+					.noSummon()
+					.clientTrackingRange(16)
+					.updateInterval(1)
+					.build(SummyThreat.MOD_ID + ":threat_visual"));
+
 	private ModLegendaryEntities() {
 	}
 }

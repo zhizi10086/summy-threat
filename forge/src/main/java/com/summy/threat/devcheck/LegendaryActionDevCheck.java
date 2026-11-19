@@ -1,6 +1,6 @@
 package com.summy.threat.devcheck;
 
-import com.summy.threat.legendary.JadeLightBeamEntity;
+import com.summy.threat.legendary.ThreatVisualEntity;
 import com.summy.threat.legendary.LegendaryActionId;
 import com.summy.threat.legendary.LegendaryActionRuntime;
 import com.summy.threat.legendary.LegendaryActionState;
@@ -138,7 +138,7 @@ public final class LegendaryActionDevCheck {
 		player.setHealth(player.getMaxHealth());
 		// 测试世界的旧怪和旧光柱会干扰本次动作的伤害及清理断言。
 		for (var entity : level.getEntities(player, player.getBoundingBox().inflate(64.0D),
-				entity -> entity instanceof Enemy || entity instanceof JadeLightBeamEntity)) {
+				entity -> entity instanceof Enemy || entity instanceof ThreatVisualEntity)) {
 			entity.discard();
 		}
 		DAMAGE.player = player;
@@ -183,7 +183,7 @@ public final class LegendaryActionDevCheck {
 		}
 		if (action == LegendaryActionId.JADE_LIGHT && phase == 60) {
 			ThreatDevCheck.checkDetailed("翠玉之光产生接触光柱",
-					!level.getEntitiesOfClass(JadeLightBeamEntity.class,
+					!level.getEntitiesOfClass(ThreatVisualEntity.class,
 							player.getBoundingBox().inflate(32.0D)).isEmpty(), "no beam");
 			checkHealthLoss(player, "翠玉之光接触并命中玩家");
 		} else if (action == LegendaryActionId.MIRROR_STEP && phase == 50) {
@@ -220,7 +220,7 @@ public final class LegendaryActionDevCheck {
 			}
 			if (action == LegendaryActionId.JADE_LIGHT) {
 				ThreatDevCheck.checkDetailed("翠玉之光结束后清理专用实体",
-						level.getEntitiesOfClass(JadeLightBeamEntity.class,
+						level.getEntitiesOfClass(ThreatVisualEntity.class,
 								player.getBoundingBox().inflate(64.0D)).isEmpty(),
 						"beam remains");
 			}

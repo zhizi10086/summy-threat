@@ -69,7 +69,9 @@ public final class LegendaryActionRuntime {
 			return TestStartResult.NO_ACTION_INSTANCE;
 		}
 		TEST_SESSIONS.add(new TestSession(player.getUUID(), context, instance));
-		spawnMarker(player.serverLevel(), center, action);
+		if (action != LegendaryActionId.JADE_LIGHT) {
+			spawnMarker(player.serverLevel(), center, action);
+		}
 		return TestStartResult.STARTED;
 	}
 
@@ -227,7 +229,8 @@ public final class LegendaryActionRuntime {
 			}
 			if (!session.context.owner().isAlive() || session.context.owner().level() != session.level()) {
 				cancel(session, LegendaryActionInstance.StopReason.OWNER_INVALID);
-			} else if (tick(session) && now % MARKER_INTERVAL_TICKS == 0) {
+			} else if (tick(session) && session.action() != LegendaryActionId.JADE_LIGHT
+					&& now % MARKER_INTERVAL_TICKS == 0) {
 				spawnMarker(session.level(), session.context.center(), session.action());
 			}
 		}

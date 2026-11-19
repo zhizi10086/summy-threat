@@ -17,5 +17,7 @@ public final class LegendaryClientEvents {
 	public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
 		event.registerEntityRenderer(ModLegendaryEntities.JADE_LIGHT_BEAM.get(),
 				JadeLightBeamRenderer::new);
+		event.registerEntityRenderer(ModLegendaryEntities.THREAT_VISUAL.get(),
+				ThreatVisualRenderer::new);
 	}
 }

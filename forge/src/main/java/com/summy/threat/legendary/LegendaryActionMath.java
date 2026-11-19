@@ -20,6 +20,14 @@ public final class LegendaryActionMath {
 		return Math.min(12, 1 << Math.min(4, previousHits));
 	}
 
+	public static double jadeContactAnchorY(double feetY, double height) {
+		return feetY + height + 0.35D;
+	}
+
+	public static double jadeVisualAnchorY(double contactY, double height) {
+		return contactY - height - 0.35D;
+	}
+
 	public static double jadeContactMinY(double anchorY, double height) {
 		return anchorY - height;
 	}

@@ -4,6 +4,7 @@ import com.summy.threat.SummyThreat;
 import com.summy.threat.api.ThreatConfigApi;
 import com.summy.threat.eximus.EximusShield;
 import com.summy.threat.legendary.JadeLightBeamEntity;
+import com.summy.threat.legendary.ThreatVisualEntity;
 import com.summy.threat.legendary.LegendaryActionCombat;
 import com.summy.threat.legendary.LegendaryActionContext;
 import com.summy.threat.legendary.LegendaryActionId;
@@ -94,6 +95,8 @@ final class AuditRegressionDevCheck {
 			} finally {
 				ThreatConfigApi.set("scaling_debug.global_tl", oldTl);
 			}
+			ThreatVisualEntity visual = ModLegendaryEntities.THREAT_VISUAL.get().create(level);
+			check(failures, "通用威胁视觉代理不可写入存档", !visual.save(new CompoundTag()));
 			JadeLightBeamEntity beam = ModLegendaryEntities.JADE_LIGHT_BEAM.get().create(level);
 			check(failures, "翠玉光柱不可写入存档", !beam.save(new CompoundTag()));
 			beam.load(new CompoundTag());
