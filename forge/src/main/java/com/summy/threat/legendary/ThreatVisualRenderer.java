@@ -36,6 +36,8 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 	private static final ResourceLocation SHELL = texture("shell");
 	private static final float RING_OUTER_DIAMETER_UV = 0.942F;
 	private static final float SECTOR_OUTER_DIAMETER_UV = 0.930F;
+	// 原贴图的最后一行可见像素位于第 123 行，反转后宽端贴住天幕。
+	private static final float COLUMN_ROOT_V = 123.5F / 128.0F;
 	private static final int WHITE = 0xFFFFFF;
 
 	public ThreatVisualRenderer(EntityRendererProvider.Context context) {
@@ -437,7 +439,7 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 		boolean warning = entity.phase() == ThreatVisualEntity.WARNING;
 		float flash = entity.phase() == ThreatVisualEntity.FADING ? 0.0F : entity.intensity();
 		Vec3 origin = entity.getPosition(partialTick);
-		float scroll = -entity.moteTime(partialTick) * 0.073F;
+		float flow = (entity.moteTime(partialTick) * 0.10F) % 1.0F;
 		for (int id : entity.targetIds()) {
 			Entity target = entity.level().getEntity(id);
 			if (target == null || !target.isAlive()) {
@@ -454,19 +456,38 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 			if (!warning) {
 				pose.mulPose(Axis.YP.rotationDegrees(-entityRenderDispatcher.camera.getYRot()));
 				var layer = buffers.getBuffer(RenderType.entityTranslucentEmissive(COLUMN));
-				drawFallingStrip(layer, pose.last(), -0.95F, top, scroll, color, fade * (0.44F + 0.37F * flash));
-				drawFallingStrip(layer, pose.last(), 0.95F, top, scroll + 0.45F, color, fade * (0.44F + 0.37F * flash));
+				float source = top - 0.48F;
+				float side = radius * 0.54F;
+				float strength = fade * (0.64F + 0.28F * flash);
+				drawDownwardJet(layer, pose.last(), -side, source, flow, strength);
+				drawDownwardJet(layer, pose.last(), side, source, (flow + 0.5F) % 1.0F, strength);
 			}
 			pose.popPose();
 		}
 	}
 
-	private static void drawFallingStrip(VertexConsumer buffer, PoseStack.Pose matrix, float center,
-			float top, float scroll, int color, float alpha) {
-		vertex(buffer, matrix, center - 0.34F, 0.25F, 0.0F, 0.0F, 1.0F + scroll, color, alpha * 0.24F);
-		vertex(buffer, matrix, center + 0.34F, 0.25F, 0.0F, 1.0F, 1.0F + scroll, color, alpha * 0.24F);
-		vertex(buffer, matrix, center + 0.34F, top, 0.0F, 1.0F, scroll, color, alpha);
-		vertex(buffer, matrix, center - 0.34F, top, 0.0F, 0.0F, scroll, color, alpha);
+	private static void drawDownwardJet(VertexConsumer buffer, PoseStack.Pose matrix, float center,
+			float source, float flow, float alpha) {
+		float end = 0.25F;
+		drawInvertedColumn(buffer, matrix, center, 0.47F, source, end,
+				0xBCA0FF, alpha, alpha * 0.30F);
+
+		// 亮纹从环下向尖端落下，淡过两端后再开始下一轮。
+		float length = source - end;
+		float streakTop = source - flow * length * 0.70F;
+		float streakBottom = streakTop - length * 0.30F;
+		float streakWidth = Mth.lerp(flow, 0.30F, 0.08F);
+		float streakAlpha = alpha * 0.85F * Math.min(1.0F, Math.min(flow, 1.0F - flow) * 6.0F);
+		drawInvertedColumn(buffer, matrix, center, streakWidth, streakTop, streakBottom,
+				0xF4E8FF, streakAlpha, streakAlpha * 0.40F);
+	}
+
+	private static void drawInvertedColumn(VertexConsumer buffer, PoseStack.Pose matrix, float center,
+			float halfWidth, float top, float bottom, int color, float topAlpha, float bottomAlpha) {
+		vertex(buffer, matrix, center - halfWidth, bottom, 0.0F, 0.0F, 0.0F, color, bottomAlpha);
+		vertex(buffer, matrix, center + halfWidth, bottom, 0.0F, 1.0F, 0.0F, color, bottomAlpha);
+		vertex(buffer, matrix, center + halfWidth, top, 0.0F, 1.0F, COLUMN_ROOT_V, color, topAlpha);
+		vertex(buffer, matrix, center - halfWidth, top, 0.0F, 0.0F, COLUMN_ROOT_V, color, topAlpha);
 	}
 
 	private static void drawTargetRunes(ThreatVisualEntity entity, PoseStack pose, MultiBufferSource buffers,
