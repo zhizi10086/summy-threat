@@ -10,7 +10,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 /** 本模组最小网络层：同步 KJS 展示元数据与装备客户端配置快照。 */
 public final class ModNetwork {
-	private static final String PROTOCOL = "3";
+	private static final String PROTOCOL = "4";
 	public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
 			.named(new ResourceLocation(SummyThreat.MOD_ID, "main"))
 			.networkProtocolVersion(() -> PROTOCOL)
@@ -28,6 +28,16 @@ public final class ModNetwork {
 				.decoder(RegistrySyncPacket::decode)
 				.consumerMainThread(RegistrySyncPacket::handle)
 				.add();
+		CHANNEL.messageBuilder(FrightfulPresencePacket.class, id, NetworkDirection.PLAY_TO_CLIENT)
+				.encoder(FrightfulPresencePacket::encode)
+				.decoder(FrightfulPresencePacket::decode)
+				.consumerMainThread(FrightfulPresencePacket::handle)
+				.add();
+	}
+
+	public static void sendFrightfulPresence(ServerPlayer player, int duration, int color) {
+		CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+				new FrightfulPresencePacket(duration, color));
 	}
 
 	public static void sendRegistry(ServerPlayer player) {

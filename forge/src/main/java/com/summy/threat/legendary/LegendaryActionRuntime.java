@@ -3,7 +3,6 @@ package com.summy.threat.legendary;
 import com.summy.threat.SummyThreat;
 import com.summy.threat.scaling.MonsterScaler;
 import com.summy.threat.scaling.ScalingState;
-import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,7 +14,6 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,7 +24,6 @@ import java.util.UUID;
 
 /** 传奇动作公共生命周期与玩家中心测试入口。 */
 public final class LegendaryActionRuntime {
-	private static final int MARKER_INTERVAL_TICKS = 5;
 	private static final int TEST_SAFETY_TIMEOUT_TICKS = 1200;
 	private static final LegendaryTestTracker TEST_TRACKER = new LegendaryTestTracker();
 	private static final LegendaryActionHandlerRegistry HANDLERS =
@@ -69,9 +66,6 @@ public final class LegendaryActionRuntime {
 			return TestStartResult.NO_ACTION_INSTANCE;
 		}
 		TEST_SESSIONS.add(new TestSession(player.getUUID(), context, instance));
-		if (needsTestMarker(action)) {
-			spawnMarker(player.serverLevel(), center, action);
-		}
 		return TestStartResult.STARTED;
 	}
 
@@ -222,16 +216,14 @@ public final class LegendaryActionRuntime {
 		if (event.phase != TickEvent.Phase.END) {
 			return;
 		}
-		long now = event.getServer().overworld().getGameTime();
 		for (TestSession session : List.copyOf(TEST_SESSIONS)) {
 			if (session.reason != null) {
 				continue;
 			}
 			if (!session.context.owner().isAlive() || session.context.owner().level() != session.level()) {
 				cancel(session, LegendaryActionInstance.StopReason.OWNER_INVALID);
-			} else if (tick(session) && needsTestMarker(session.action())
-					&& now % MARKER_INTERVAL_TICKS == 0) {
-				spawnMarker(session.level(), session.context.center(), session.action());
+			} else {
+				tick(session);
 			}
 		}
 		if (!ScalingState.enabled()) {
@@ -324,34 +316,6 @@ public final class LegendaryActionRuntime {
 
 	private static LegendaryActionInstance diagnosticInstance(LegendaryActionId action) {
 		return (context, age) -> age < 40;
-	}
-
-	private static boolean needsTestMarker(LegendaryActionId action) {
-		return switch (action) {
-			case JADE_LIGHT, MIRROR_STEP, COLLAPSING_HORIZON, LAIR_BREACH,
-					DOOM_CLOCK, REVERSE_GRAVITY, LEGENDARY_RIPOSTE,
-					DRAGON_LAIR_PULSE, DECAY_TIDE -> false;
-			default -> true;
-		};
-	}
-
-	private static void spawnMarker(ServerLevel level, Vec3 center, LegendaryActionId action) {
-		int color = action.color();
-		DustParticleOptions particle = new DustParticleOptions(new Vector3f(
-				((color >> 16) & 0xFF) / 255.0F,
-				((color >> 8) & 0xFF) / 255.0F,
-				(color & 0xFF) / 255.0F), 1.0F);
-		for (int i = 0; i < 24; i++) {
-			double angle = Math.PI * 2.0D * i / 24.0D;
-			level.sendParticles(particle,
-					center.x + Math.cos(angle) * 1.5D, center.y + 0.25D,
-					center.z + Math.sin(angle) * 1.5D, 1,
-					0.0D, 0.0D, 0.0D, 0.0D);
-		}
-		for (int i = 1; i <= 6; i++) {
-			level.sendParticles(particle, center.x, center.y + i * 0.6D, center.z,
-					1, 0.02D, 0.02D, 0.02D, 0.0D);
-		}
 	}
 
 	private static class Session {

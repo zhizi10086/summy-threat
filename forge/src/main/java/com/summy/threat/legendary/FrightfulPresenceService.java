@@ -1,5 +1,6 @@
 package com.summy.threat.legendary;
 
+import com.summy.threat.network.ModNetwork;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
@@ -9,14 +10,15 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -54,6 +56,7 @@ public final class FrightfulPresenceService {
 				state.endAt = now + DURATION_TICKS;
 			}
 			applySlow(serverPlayer, state);
+			ModNetwork.sendFrightfulPresence(serverPlayer, DURATION_TICKS, LegendaryVisuals.dragonColor(owner));
 			if (serverPlayer.level() instanceof ServerLevel level) {
 				level.sendParticles(LegendaryVisuals.dust(
 								LegendaryVisuals.dragonColor(owner), 1.2F),
@@ -128,13 +131,31 @@ public final class FrightfulPresenceService {
 		return amount;
 	}
 
+	@SubscribeEvent(priority = EventPriority.MONITOR)
+	public static void onDeath(LivingDeathEvent event) {
+		if (!event.isCanceled() && event.getEntity() instanceof ServerPlayer player) {
+			clearPlayer(player);
+		}
+	}
+
+	@SubscribeEvent
+	public static void onDimensionChange(PlayerEvent.PlayerChangedDimensionEvent event) {
+		if (event.getEntity() instanceof ServerPlayer player) {
+			clearPlayer(player);
+		}
+	}
+
 	@SubscribeEvent
 	public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
 		if (event.getEntity() instanceof ServerPlayer player) {
-			FearState state = ACTIVE.get(player.getUUID());
-			if (state != null) {
-				end(player, state, false, player.level().getGameTime());
-			}
+			clearPlayer(player);
+		}
+	}
+
+	private static void clearPlayer(ServerPlayer player) {
+		FearState state = ACTIVE.get(player.getUUID());
+		if (state != null) {
+			end(player, state, false, player.level().getGameTime());
 		}
 	}
 
@@ -182,6 +203,9 @@ public final class FrightfulPresenceService {
 			long now) {
 		ACTIVE.remove(player.getUUID());
 		removeSlow(player, state);
+		if (player.connection != null && player.connection.isAcceptingMessages()) {
+			ModNetwork.sendFrightfulPresence(player, 0, 0);
+		}
 		if (grantImmunity) {
 			immunityMap(player.getUUID()).put(state.ownerId, now + IMMUNITY_TICKS);
 		}

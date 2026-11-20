@@ -239,10 +239,7 @@ public final class LegendaryActionDevCheck {
 	}
 
 	private static boolean hasVisualProxy(LegendaryActionId action) {
-		return action == LegendaryActionId.MIRROR_STEP
-				|| action == LegendaryActionId.LAIR_BREACH
-				|| action == LegendaryActionId.REVERSE_GRAVITY
-				|| action == LegendaryActionId.LEGENDARY_RIPOSTE;
+		return action != LegendaryActionId.JADE_LIGHT;
 	}
 
 	private static List<ThreatVisualEntity> visualProxies(ServerLevel level, LegendaryActionId action) {

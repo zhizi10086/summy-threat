@@ -3,6 +3,8 @@ package com.summy.threat.legendary;
 import com.summy.threat.SummyThreat;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
+import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -11,6 +13,12 @@ import net.minecraftforge.fml.common.Mod;
 		bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class LegendaryClientEvents {
 	private LegendaryClientEvents() {
+	}
+
+	@SubscribeEvent
+	public static void registerOverlays(RegisterGuiOverlaysEvent event) {
+		event.registerAbove(VanillaGuiOverlay.VIGNETTE.id(), "frightful_presence",
+				FrightfulPresenceOverlay.OVERLAY);
 	}
 
 	@SubscribeEvent

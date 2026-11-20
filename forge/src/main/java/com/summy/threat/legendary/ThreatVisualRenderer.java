@@ -12,7 +12,10 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
@@ -24,6 +27,7 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 	private static final ResourceLocation DRAGON_WAVE = texture("dragon_lair_wave");
 	private static final ResourceLocation DECAY_WAVE = texture("decay_tide_wave");
 	private static final ResourceLocation SHARD = texture("shard");
+	private static final ResourceLocation COLUMN = texture("column");
 	private static final ResourceLocation CLOUD = texture("cloud");
 	private static final ResourceLocation CRACK = texture("crack");
 	private static final ResourceLocation SECTOR = texture("sector");
@@ -74,6 +78,12 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 				drawReverseGravity(entity, pose, buffers, partialTick, color, fade);
 			} else if (LegendaryActionId.LEGENDARY_RIPOSTE.id().equals(entity.visualId())) {
 				drawLegendaryRiposte(entity, pose, buffers, partialTick, color, fade);
+			} else if (LegendaryActionId.FRIGHTFUL_PRESENCE.id().equals(entity.visualId())) {
+				drawFrightfulPresence(entity, pose, buffers, partialTick, color, fade);
+			} else if (LegendaryActionId.DRAGONFALL_EDICT.id().equals(entity.visualId())) {
+				drawDragonfall(entity, pose, buffers, partialTick, color, fade);
+			} else if (LegendaryActionId.ECHO_SENTENCE.id().equals(entity.visualId())) {
+				drawEchoSentence(entity, pose, buffers, partialTick, color, fade);
 			}
 			return;
 		}
@@ -405,6 +415,112 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 					entity.tickCount + partialTick, color, fade * 0.88F);
 		}
 		pose.popPose();
+	}
+
+	private static void drawFrightfulPresence(ThreatVisualEntity entity, PoseStack pose,
+			MultiBufferSource buffers, float partialTick, int color, float fade) {
+		float pressure = entity.progress();
+		float edge = entity.radius() / RING_OUTER_DIAMETER_UV;
+		drawRing(pose, buffers, edge, color, fade * (0.45F + pressure * 0.45F));
+		drawGround(pose, buffers, RING, edge * 0.82F, 0.042F, color, fade * pressure * 0.33F);
+		// 高处的两层环向内收拢，落地边界保持 24 格。
+		float sky = entity.intensity();
+		drawGround(pose, buffers, RING, edge * (0.94F - pressure * 0.24F),
+				sky, color, fade * 0.49F);
+		drawGround(pose, buffers, RING, edge * (0.80F - pressure * 0.24F),
+				sky + 1.1F, color, fade * 0.24F);
+		drawTargetRunes(entity, pose, buffers, partialTick, 0.84F, color, fade * 0.72F);
+	}
+
+	private void drawDragonfall(ThreatVisualEntity entity, PoseStack pose, MultiBufferSource buffers,
+			float partialTick, int color, float fade) {
+		boolean warning = entity.phase() == ThreatVisualEntity.WARNING;
+		float flash = entity.phase() == ThreatVisualEntity.FADING ? 0.0F : entity.intensity();
+		Vec3 origin = entity.getPosition(partialTick);
+		float scroll = -entity.moteTime(partialTick) * 0.073F;
+		for (int id : entity.targetIds()) {
+			Entity target = entity.level().getEntity(id);
+			if (target == null || !target.isAlive()) {
+				continue;
+			}
+			Vec3 feet = target.getPosition(partialTick).subtract(origin);
+			float top = target.getBbHeight() + 2.4F;
+			float radius = warning ? 2.55F - 0.52F * entity.progress() : 2.02F - 0.32F * flash;
+			pose.pushPose();
+			pose.translate(feet.x, feet.y, feet.z);
+			drawGround(pose, buffers, RING, radius, top, color, fade * (0.74F + flash * 0.23F));
+			drawGround(pose, buffers, RING, radius * 0.67F, top - 0.48F,
+					0xBCA0FF, fade * (0.4F + flash * 0.35F));
+			if (!warning) {
+				pose.mulPose(Axis.YP.rotationDegrees(-entityRenderDispatcher.camera.getYRot()));
+				var layer = buffers.getBuffer(RenderType.entityTranslucentEmissive(COLUMN));
+				drawFallingStrip(layer, pose.last(), -0.95F, top, scroll, color, fade * (0.44F + 0.37F * flash));
+				drawFallingStrip(layer, pose.last(), 0.95F, top, scroll + 0.45F, color, fade * (0.44F + 0.37F * flash));
+			}
+			pose.popPose();
+		}
+	}
+
+	private static void drawFallingStrip(VertexConsumer buffer, PoseStack.Pose matrix, float center,
+			float top, float scroll, int color, float alpha) {
+		vertex(buffer, matrix, center - 0.34F, 0.25F, 0.0F, 0.0F, 1.0F + scroll, color, alpha * 0.24F);
+		vertex(buffer, matrix, center + 0.34F, 0.25F, 0.0F, 1.0F, 1.0F + scroll, color, alpha * 0.24F);
+		vertex(buffer, matrix, center + 0.34F, top, 0.0F, 1.0F, scroll, color, alpha);
+		vertex(buffer, matrix, center - 0.34F, top, 0.0F, 0.0F, scroll, color, alpha);
+	}
+
+	private static void drawTargetRunes(ThreatVisualEntity entity, PoseStack pose, MultiBufferSource buffers,
+			float partialTick, float radius, int color, float alpha) {
+		Vec3 origin = entity.getPosition(partialTick);
+		for (int id : entity.targetIds()) {
+			Entity target = entity.level().getEntity(id);
+			if (target != null && target.isAlive()) {
+				Vec3 feet = target.getPosition(partialTick).subtract(origin);
+				pose.pushPose();
+				pose.translate(feet.x, feet.y, feet.z);
+				drawGround(pose, buffers, RUNE, radius, 0.045F, color, alpha);
+				pose.popPose();
+			}
+		}
+	}
+
+	private static void drawEchoSentence(ThreatVisualEntity entity, PoseStack pose, MultiBufferSource buffers,
+			float partialTick, int color, float fade) {
+		float wave = (entity.moteTime(partialTick) % 22.0F) / 22.0F;
+		drawGround(pose, buffers, RUNE, 2.6F, 0.036F, color, fade * 0.56F);
+		drawRing(pose, buffers, 2.7F + 4.3F * wave, color, fade * (0.65F - 0.48F * wave));
+		drawTargetRunes(entity, pose, buffers, partialTick, 0.7F, color, fade * 0.58F);
+
+		Vec3 origin = entity.getPosition(partialTick);
+		for (Tag tag : entity.echoes()) {
+			CompoundTag echo = (CompoundTag) tag;
+			Vec3 point = EchoSentenceAction.echoPosition(echo).subtract(origin);
+			float elapsed = entity.level().getGameTime() - echo.getLong("tick") + partialTick;
+			float radius = EchoSentenceAction.ECHO_RADIUS / RING_OUTER_DIAMETER_UV;
+			pose.pushPose();
+			pose.translate(point.x, point.y, point.z);
+			if (echo.getBoolean("impact")) {
+				float expansion = Mth.clamp(elapsed / EchoSentenceAction.ECHO_FLASH, 0.0F, 1.0F);
+				float flash = fade * (1.0F - expansion);
+				drawRing(pose, buffers, radius * (0.58F + 0.42F * expansion), 0xB4FFFF, flash);
+				drawGround(pose, buffers, RUNE, radius * 0.78F, 0.065F, color, flash * 0.68F);
+			} else {
+				float charge = Mth.clamp(1.0F + elapsed / EchoSentenceAction.ECHO_DELAY, 0.0F, 1.0F);
+				drawRing(pose, buffers, radius, color, fade * (0.65F + 0.35F * charge));
+				drawGround(pose, buffers, RUNE, radius * 0.78F, 0.052F, color, fade * 0.72F);
+				// 十颗音点随倒计时逐个亮起，完整外环始终标出原地爆发半径。
+				int lit = Mth.clamp(Mth.ceil(charge * EchoSentenceAction.ECHO_DELAY), 0, EchoSentenceAction.ECHO_DELAY);
+				for (int i = 0; i < EchoSentenceAction.ECHO_DELAY; i++) {
+					double angle = Math.PI * 2.0D * i / EchoSentenceAction.ECHO_DELAY;
+					pose.pushPose();
+					pose.translate(2.0D * Math.cos(angle), 0.12D, 2.0D * Math.sin(angle));
+					drawGround(pose, buffers, SHARD, 0.23F, 0.0F,
+							i < lit ? 0xB4FFFF : color, fade * (i < lit ? 1.0F : 0.28F));
+					pose.popPose();
+				}
+			}
+			pose.popPose();
+		}
 	}
 
 	private void drawShardRing(PoseStack pose, MultiBufferSource buffers, float radius,

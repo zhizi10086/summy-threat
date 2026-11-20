@@ -1,5 +1,6 @@
 package com.summy.threat.legendary;
 
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.LivingEntity;
@@ -7,40 +8,57 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /** 龙威坠界：持续压制高空玩家。 */
 final class DragonfallEdictAction implements LegendaryActionHandler {
 	private static final int WARNING_TICKS = 35;
 	private static final int ACTIVE_TICKS = 160;
+	private static final float RADIUS = 48.0F;
 
 	@Override
 	public LegendaryActionInstance start(LegendaryActionContext context) {
-		return context.target() != null && context.target().isAlive()
-				? new Instance() : null;
+		if (context.target() == null || !context.target().isAlive()) {
+			return null;
+		}
+		return new Instance(ThreatVisualEntity.spawnGround(context.level(),
+				LegendaryActionId.DRAGONFALL_EDICT, context.owner().position(),
+				WARNING_TICKS + ACTIVE_TICKS + 1, RADIUS, 0.0F, 0.0F));
 	}
 
 	private static final class Instance implements LegendaryActionInstance {
+		private final ThreatVisualEntity visual;
+
+		private Instance(@javax.annotation.Nullable ThreatVisualEntity visual) {
+			this.visual = visual;
+		}
+
 		@Override
 		public boolean tick(LegendaryActionContext context, int age) {
 			ServerLevel level = context.level();
-			if (age < WARNING_TICKS) {
-				LegendaryVisuals.ring(level, context.owner().position(), 18.0D,
-						LegendaryActionId.DRAGONFALL_EDICT.color(), 64, 1.2F, 0.08D);
-				if (age % 7 == 0) {
-					LegendaryVisuals.sound(level, context.center(),
-							SoundEvents.ENDER_DRAGON_GROWL, 0.8F, 0.72F + age * 0.01F);
-				}
-				return true;
-			}
 			int activeAge = age - WARNING_TICKS;
 			if (activeAge >= ACTIVE_TICKS) {
 				return false;
 			}
-			boolean damageTick = activeAge % 20 == 0;
+			boolean warning = activeAge < 0;
+			boolean damageTick = !warning && activeAge % 20 == 0;
+			if (warning) {
+				if (age % 7 == 0) {
+					LegendaryVisuals.sound(level, context.center(),
+							SoundEvents.ENDER_DRAGON_GROWL, 0.8F, 0.72F + age * 0.01F);
+				}
+			}
+			List<Integer> airborneIds = new ArrayList<>();
 			for (LivingEntity target : LegendaryActionCombat.defaultTargets(
-					context, context.owner().position(), 48.0D, true)) {
+					context, context.owner().position(), RADIUS, true)) {
 				double support = supportDistance(level, target);
 				boolean airborne = target.isFallFlying() || support < 0.0D || support > 4.0D;
 				if (!airborne) {
+					continue;
+				}
+				airborneIds.add(target.getId());
+				if (warning) {
 					continue;
 				}
 				Vec3 delta = target.getDeltaMovement();
@@ -48,10 +66,6 @@ final class DragonfallEdictAction implements LegendaryActionHandler {
 					LegendaryActionCombat.applyVelocity(target,
 							new Vec3(delta.x, -0.08D, delta.z));
 				}
-				level.sendParticles(LegendaryVisuals.dust(
-								LegendaryActionId.DRAGONFALL_EDICT.color(), 1.1F),
-						target.getX(), target.getY() + target.getBbHeight() + 1.5D, target.getZ(),
-						4, 0.25D, 0.1D, 0.25D, 0.01D);
 				if (damageTick) {
 					LegendaryActionCombat.hit(context, target,
 							LegendaryActionCombat.DamageKind.INDIRECT_MAGIC, 45.0D);
@@ -61,7 +75,23 @@ final class DragonfallEdictAction implements LegendaryActionHandler {
 				LegendaryVisuals.sound(level, context.center(),
 						SoundEvents.ENDER_DRAGON_FLAP, 1.0F, 0.65F);
 			}
+			if (visual != null && !visual.isRemoved()) {
+				Vec3 center = context.owner().position();
+				visual.setPos(center.x, center.y, center.z);
+				float flash = warning ? 0.0F : Math.max(0.0F, 1.0F - (activeAge % 20) / 5.0F);
+				visual.update(warning ? ThreatVisualEntity.WARNING : ThreatVisualEntity.ACTIVE,
+						warning ? age / (float) WARNING_TICKS : activeAge / (float) ACTIVE_TICKS,
+						RADIUS, 0.0F, flash, 0, Vec3.ZERO);
+				visual.updateDetails(airborneIds.stream().mapToInt(Integer::intValue).sorted().toArray(), new ListTag());
+			}
 			return true;
+		}
+
+		@Override
+		public void stop(LegendaryActionContext context, StopReason reason) {
+			if (visual != null) {
+				visual.finish(reason);
+			}
 		}
 
 		private static double supportDistance(ServerLevel level, LivingEntity target) {

@@ -1,6 +1,8 @@
 package com.summy.threat.legendary;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
@@ -37,6 +39,9 @@ public final class ThreatVisualEntity extends Entity {
 	private static final EntityDataAccessor<Integer> FLAGS = SynchedEntityData.defineId(ThreatVisualEntity.class, EntityDataSerializers.INT);
 	private static final EntityDataAccessor<Vector3f> OFFSET = SynchedEntityData.defineId(ThreatVisualEntity.class, EntityDataSerializers.VECTOR3);
 
+	// 多目标提示共用主代理。仅同步渲染所需的目标 ID 和冻结落点。
+	private static final EntityDataAccessor<CompoundTag> DETAILS = SynchedEntityData.defineId(
+			ThreatVisualEntity.class, EntityDataSerializers.COMPOUND_TAG);
 	private long expiresAt;
 	private int clientFadeStart;
 	private Vector3f previousOffset = new Vector3f();
@@ -137,6 +142,25 @@ public final class ThreatVisualEntity extends Entity {
 	public int flags() { return entityData.get(FLAGS); }
 	public Vector3f offset() { return entityData.get(OFFSET); }
 
+	void updateDetails(int[] targets, ListTag echoes) {
+		CompoundTag data = new CompoundTag();
+		if (targets.length > 0) {
+			data.putIntArray("targets", targets);
+		}
+		if (!echoes.isEmpty()) {
+			data.put("echoes", echoes);
+		}
+		entityData.set(DETAILS, data);
+	}
+
+	public int[] targetIds() {
+		return entityData.get(DETAILS).getIntArray("targets");
+	}
+
+	ListTag echoes() {
+		return entityData.get(DETAILS).getList("echoes", Tag.TAG_COMPOUND);
+	}
+
 	public Vector3f interpolatedOffset(float partialTick) {
 		return new Vector3f(previousOffset).lerp(offset(), partialTick);
 	}
@@ -154,6 +178,7 @@ public final class ThreatVisualEntity extends Entity {
 		entityData.define(INTENSITY, 0.0F);
 		entityData.define(FLAGS, 0);
 		entityData.define(OFFSET, new Vector3f());
+		entityData.define(DETAILS, new CompoundTag());
 	}
 
 	@Override
@@ -204,8 +229,26 @@ public final class ThreatVisualEntity extends Entity {
 				default -> 0.8D;
 			};
 		}
-		return new AABB(position(), beam).inflate(horizontal, 1.0D, horizontal)
+		AABB bounds = new AABB(position(), beam).inflate(horizontal, 1.0D, horizontal)
 				.expandTowards(0.0D, height, 0.0D);
+		if (LegendaryActionId.DRAGONFALL_EDICT.id().equals(visualId())
+				|| LegendaryActionId.ECHO_SENTENCE.id().equals(visualId())
+				|| LegendaryActionId.FRIGHTFUL_PRESENCE.id().equals(visualId())) {
+			// 头顶天幕与被标记单位可能远离代理本身。
+			bounds = bounds.expandTowards(0.0D, intensity(), 0.0D);
+			for (int id : targetIds()) {
+				Entity target = level().getEntity(id);
+				if (target != null) {
+					bounds = bounds.minmax(target.getBoundingBox().inflate(4.0D).expandTowards(0, 5, 0));
+				}
+			}
+			for (Tag tag : echoes()) {
+				Vec3 point = EchoSentenceAction.echoPosition((CompoundTag) tag);
+				bounds = bounds.minmax(new AABB(point, point).inflate(EchoSentenceAction.ECHO_RADIUS, 2.0D,
+						EchoSentenceAction.ECHO_RADIUS));
+			}
+		}
+		return bounds;
 	}
 
 	@Override

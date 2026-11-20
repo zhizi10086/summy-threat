@@ -2,35 +2,52 @@ package com.summy.threat.legendary;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.entity.player.Player;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /** 巨龙威仪：龙吼施加畏怖状态。 */
 final class FrightfulPresenceAction implements LegendaryActionHandler {
 	private static final int WARNING_TICKS = 35;
+	private static final float RADIUS = 24.0F;
 
 	@Override
 	public LegendaryActionInstance start(LegendaryActionContext context) {
-		return context.target() != null && context.target().isAlive()
-				? new Instance() : null;
+		if (context.target() == null || !context.target().isAlive()) {
+			return null;
+		}
+		ThreatVisualEntity visual = ThreatVisualEntity.spawnGround(context.level(),
+				LegendaryActionId.FRIGHTFUL_PRESENCE, context.owner().position(),
+				WARNING_TICKS + 1, RADIUS, 0.0F, 0.0F, LegendaryVisuals.dragonColor(context.owner()));
+		return new Instance(visual);
 	}
 
-	private static final class Instance implements LegendaryActionInstance {
+	private static List<Player> visiblePlayers(LegendaryActionContext context) {
+		return LegendaryActionCombat.playerTargets(context, context.owner().position(), RADIUS).stream()
+				.filter(player -> LegendaryActionCombat.hasLineOfSight(context.owner(), player))
+				.toList();
+	}
+
+	private record Instance(@javax.annotation.Nullable ThreatVisualEntity visual) implements LegendaryActionInstance {
 		@Override
 		public boolean tick(LegendaryActionContext context, int age) {
 			ServerLevel level = context.level();
-			int color = LegendaryVisuals.dragonColor(context.owner());
+			if (visual != null && !visual.isRemoved()) {
+				Vec3 ground = LegendaryActionCombat.groundProjection(context.owner(), 48.0D);
+				visual.setPos(ground.x, ground.y, ground.z);
+				float sky = (float) (context.owner().getY() - ground.y) + context.owner().getBbHeight() + 6.0F;
+				visual.update(age < WARNING_TICKS ? ThreatVisualEntity.WARNING : ThreatVisualEntity.IMPACT,
+						age / (float) WARNING_TICKS, RADIUS, 0.0F, sky, 0, Vec3.ZERO);
+				if (age % 5 == 0) {
+					int[] ids = age == WARNING_TICKS ? new int[0]
+							: visiblePlayers(context).stream().mapToInt(Entity::getId).sorted().toArray();
+					visual.updateDetails(ids, new ListTag());
+				}
+			}
 			if (age < WARNING_TICKS) {
-				LegendaryVisuals.ring(level, context.owner().position(), 24.0D,
-						color, 88,
-						1.0F + age / 50.0F, 0.12D);
-				level.sendParticles(LegendaryVisuals.endRod(),
-						context.owner().getX(),
-						context.owner().getY() + context.owner().getBbHeight() * 0.7D,
-						context.owner().getZ(), 4, 1.2D, 0.8D, 1.2D, 0.01D);
 				if (age % 7 == 0) {
 					LegendaryVisuals.sound(level, context.center(),
 							SoundEvents.ENDER_DRAGON_GROWL, 0.85F,
@@ -39,21 +56,19 @@ final class FrightfulPresenceAction implements LegendaryActionHandler {
 				return true;
 			}
 			if (age == WARNING_TICKS) {
-				List<Player> affected = new ArrayList<>();
-				for (Player target : LegendaryActionCombat.playerTargets(
-						context, context.owner().position(), 24.0D)) {
-					if (LegendaryActionCombat.hasLineOfSight(context.owner(), target)) {
-						affected.add(target);
-					}
-				}
-				FrightfulPresenceService.apply(context.owner(), affected,
+				FrightfulPresenceService.apply(context.owner(), visiblePlayers(context),
 						level.getGameTime(), context.test());
-				LegendaryVisuals.burst(level, context.center(),
-						color, 90, 8.0D, 1.8F);
 				LegendaryVisuals.sound(level, context.center(),
 						SoundEvents.ENDER_DRAGON_GROWL, 1.0F, 0.55F);
 			}
 			return false;
+		}
+
+		@Override
+		public void stop(LegendaryActionContext context, StopReason reason) {
+			if (visual != null) {
+				visual.finish(reason);
+			}
 		}
 	}
 }
