@@ -90,12 +90,15 @@ class LegendaryActionMathTest {
 	}
 
 	@Test
-	void reverseGravityColumnCoversWarningLiftAndFallWarning() {
-		assertEquals(2.0D, ReverseGravityAction.columnHeight(0), 1.0E-9D);
-		assertEquals(4.0D, ReverseGravityAction.columnHeight(30), 1.0E-9D);
-		assertEquals(10.0D, ReverseGravityAction.columnHeight(60), 1.0E-9D);
-		assertEquals(12.0D, ReverseGravityAction.columnHeight(70), 1.0E-9D);
-		assertEquals(12.0D, ReverseGravityAction.columnHeight(90), 1.0E-9D);
+	void eachLairBurstDecaysIndependentlyWhenTheNextVentBursts() {
+		assertEquals(35, LairBreachAction.burstTick(0));
+		assertEquals(40, LairBreachAction.burstTick(1));
+		assertEquals(45, LairBreachAction.burstTick(2));
+		assertEquals(50, LairBreachAction.burstTick(3));
+		assertEquals(0.375F, LairBreachAction.ventGlow(40, 0));
+		assertEquals(1.0F, LairBreachAction.ventGlow(40, 1));
+		assertEquals(0.0F, LairBreachAction.ventGlow(43, 0));
+		assertEquals(0.125F, LairBreachAction.ventGlow(57, 3));
 	}
 
 	@Test

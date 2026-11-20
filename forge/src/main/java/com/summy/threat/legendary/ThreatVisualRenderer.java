@@ -24,7 +24,7 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 	private static final ResourceLocation DRAGON_WAVE = texture("dragon_lair_wave");
 	private static final ResourceLocation DECAY_WAVE = texture("decay_tide_wave");
 	private static final ResourceLocation SHARD = texture("shard");
-	private static final ResourceLocation COLUMN = texture("column");
+	private static final ResourceLocation CLOUD = texture("cloud");
 	private static final ResourceLocation CRACK = texture("crack");
 	private static final ResourceLocation SECTOR = texture("sector");
 	private static final ResourceLocation RUNE = texture("rune");
@@ -53,8 +53,15 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 		if (entity.category() == ThreatVisualEntity.LEGENDARY && entity.role() == ThreatVisualEntity.PRIMARY) {
 			if (LegendaryActionId.COLLAPSING_HORIZON.id().equals(entity.visualId())) {
 				drawHorizon(entity, pose, buffers, color, fade);
+				drawMotes(entity, pose, buffers, ThreatFieldMotes.Band.ring(entity.radius(),
+						CollapsingHorizonAction.OUTER_RADIUS), 0, 24, partialTick, color, fade, 0.55F, false);
 			} else if (LegendaryActionId.DOOM_CLOCK.id().equals(entity.visualId())) {
 				drawClock(entity, pose, buffers, color, fade);
+				if (entity.intensity() > 0.0F) {
+					drawMotes(entity, pose, buffers, new ThreatFieldMotes.Band(0.0D, entity.radius(),
+							entity.angle() - Math.PI / 4.0D, Math.PI / 2.0D), 0, 14,
+							partialTick, color, fade * (0.65F + entity.intensity() * 0.35F), 0.55F, false);
+				}
 			} else if (LegendaryActionId.DRAGON_LAIR_PULSE.id().equals(entity.visualId())) {
 				drawWaveField(entity, LegendaryWavePattern.DRAGON, DRAGON_WAVE, pose, buffers, partialTick, color, fade);
 			} else if (LegendaryActionId.DECAY_TIDE.id().equals(entity.visualId())) {
@@ -62,9 +69,9 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 			} else if (LegendaryActionId.MIRROR_STEP.id().equals(entity.visualId())) {
 				drawMirrorStep(entity, pose, buffers, partialTick, color, fade);
 			} else if (LegendaryActionId.LAIR_BREACH.id().equals(entity.visualId())) {
-				drawLairBreach(entity, pose, buffers, color, fade);
+				drawLairBreach(entity, pose, buffers, partialTick, color, fade);
 			} else if (LegendaryActionId.REVERSE_GRAVITY.id().equals(entity.visualId())) {
-				drawReverseGravity(entity, pose, buffers, color, fade);
+				drawReverseGravity(entity, pose, buffers, partialTick, color, fade);
 			} else if (LegendaryActionId.LEGENDARY_RIPOSTE.id().equals(entity.visualId())) {
 				drawLegendaryRiposte(entity, pose, buffers, partialTick, color, fade);
 			}
@@ -178,7 +185,7 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 		}
 	}
 
-	private static void drawWaveField(ThreatVisualEntity entity, LegendaryWavePattern pattern, ResourceLocation texture,
+	private void drawWaveField(ThreatVisualEntity entity, LegendaryWavePattern pattern, ResourceLocation texture,
 			PoseStack pose, MultiBufferSource buffers, float partialTick, int color, float fade) {
 		if (entity.phase() == ThreatVisualEntity.WARNING) {
 			drawGround(pose, buffers, RING, (float) pattern.warningRadius / RING_OUTER_DIAMETER_UV,
@@ -213,6 +220,26 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 			double start = pattern.gapCenter(entity.angle(), index) + pattern.gapHalfWidth;
 			double span = 2.0D * Math.PI - 2.0D * pattern.gapHalfWidth;
 			drawWaveBand(buffer, matrix, start, span, inner, radius, dragon, color, alpha * fade);
+		}
+		// 先提交所有波带顶点，再切换贴图绘制光点。
+		for (int index = 0; index <= newest; index++) {
+			int waveAge = pattern.waveAge(age, index);
+			if (!pattern.isPresent(waveAge)) {
+				continue;
+			}
+			double outer = pattern.radiusAt(waveAge + interpolation);
+			if (outer < 0.8D) {
+				continue;
+			}
+			double start = pattern.gapCenter(entity.angle(), index) + pattern.gapHalfWidth;
+			var band = new ThreatFieldMotes.Band(Math.max(0.0D, outer - pattern.width),
+					outer, start, ThreatFieldMotes.FULL_CIRCLE - 2 * pattern.gapHalfWidth);
+			float alpha = index == newest ? 0.90F * blend : 0.48F;
+			if (index < LegendaryWavePattern.COUNT - 1) {
+				alpha *= Mth.clamp((33.0F - waveAge - interpolation) / 3.0F, 0.0F, 1.0F);
+			}
+			drawMotes(entity, pose, buffers, band, index * 6, 6, partialTick, color,
+					alpha * fade, dragon ? 0.55F : 0.38F, false);
 		}
 	}
 
@@ -261,6 +288,8 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 				baseAngle + entity.progress() * 180.0F, color, fade * (impact ? 0.96F : 0.7F));
 		drawShardDecals(pose, buffers, Math.max(0.5F, radius * 0.68F), 0.46F,
 				baseAngle + entity.progress() * 180.0F, color, fade * (impact ? 0.86F : 0.66F));
+		drawMotes(entity, pose, buffers, ThreatFieldMotes.Band.ring(0.0D, radius),
+				0, 8, partialTick, color, fade * 0.85F, 0.5F, false);
 		pose.popPose();
 
 		if (offset.lengthSquared() > 0.01F) {
@@ -272,9 +301,12 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 		}
 	}
 
-	private static void drawLairBreach(ThreatVisualEntity entity, PoseStack pose,
-			MultiBufferSource buffers, int color, float fade) {
+	private void drawLairBreach(ThreatVisualEntity entity, PoseStack pose,
+			MultiBufferSource buffers, float partialTick, int color, float fade) {
 		boolean warning = entity.phase() == ThreatVisualEntity.WARNING;
+		boolean fading = entity.phase() == ThreatVisualEntity.FADING;
+		float age = Math.round(entity.progress() * LairBreachAction.DURATION_TICKS);
+		float burstAge = age + (fading ? entity.fadeElapsed(partialTick) : partialTick);
 		int highlighted = Math.round(entity.angle());
 		int erupted = entity.flags();
 		for (int vent = 0; vent < 4; vent++) {
@@ -282,39 +314,65 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 			boolean isCurrent = vent == highlighted;
 			boolean hasErupted = (erupted & (1 << vent)) != 0;
 			float alpha = isCurrent ? 0.48F + entity.intensity() * 0.34F : hasErupted ? 0.2F : 0.42F;
+			float elapsed = burstAge - LairBreachAction.burstTick(vent);
 			pose.pushPose();
 			pose.translate(offset.x, 0.0D, offset.z);
 			drawGround(pose, buffers, RUNE, 1.55F, 0.032F, color, fade * alpha);
 			drawGround(pose, buffers, RING,
 					(float) LairBreachAction.VENT_RADIUS / RING_OUTER_DIAMETER_UV,
 					0.04F, color, fade * (isCurrent ? 0.76F : 0.4F));
-			if (isCurrent && !warning) {
-				float pulse = entity.intensity();
-				drawGround(pose, buffers, CRACK, 1.75F, 0.05F,
-						color, fade * pulse * 0.82F);
-				drawColumn(pose, buffers, 2.0F + pulse * 2.2F,
-						1.35F, color, fade * pulse);
+			if (hasErupted && elapsed < 8.0F) {
+				drawLairBurst(pose, buffers, Math.max(0.0F, elapsed), fade);
+			}
+			float moteElapsed = age - LairBreachAction.burstTick(vent);
+			if (!fading && (warning || !hasErupted || moteElapsed < 3.0F)) {
+				drawMotes(entity, pose, buffers, ThreatFieldMotes.Band.ring(0.0D, LairBreachAction.VENT_RADIUS),
+						vent * 4, 4, partialTick, color, fade * 0.72F, 0.53F, false);
 			}
 			pose.popPose();
 		}
 	}
 
-	private static void drawReverseGravity(ThreatVisualEntity entity, PoseStack pose,
-			MultiBufferSource buffers, int color, float fade) {
-		int age = Math.round(entity.progress() * ReverseGravityAction.DURATION_TICKS);
+	private void drawLairBurst(PoseStack pose, MultiBufferSource buffers, float elapsed, float fade) {
+		float travel = Mth.clamp(elapsed / 5.0F, 0.0F, 1.0F);
+		float ringRadius = Mth.lerp(1.0F - (1.0F - travel) * (1.0F - travel),
+				0.55F, (float) LairBreachAction.VENT_RADIUS);
+		float flash = Math.max(0.0F, 1.0F - elapsed / 3.5F);
+		drawGround(pose, buffers, CRACK, 1.6F + travel * 0.45F, 0.055F,
+				0xFFE0AD, fade * flash * 0.95F);
+		drawGround(pose, buffers, RING, ringRadius / RING_OUTER_DIAMETER_UV, 0.065F,
+				0xFFD19B, fade * (1.0F - elapsed / 8.0F) * 0.92F);
+		float smoke = (1.0F - elapsed / 8.0F) * Math.min(1.0F, (elapsed + 0.45F) / 2.0F);
+		for (int puff = 0; puff < 3; puff++) {
+			double angle = puff * ThreatFieldMotes.FULL_CIRCLE / 3.0D + 0.35D;
+			float spread = 0.24F + 1.22F * travel;
+			drawBillboard(pose, buffers, CLOUD, (float) Math.cos(angle) * spread,
+					0.48F + 0.45F * travel, (float) Math.sin(angle) * spread,
+					0.68F + travel * 0.52F, (puff - 1) * 19.0F, 0xB69779, fade * smoke * 0.86F);
+		}
+	}
+
+	private void drawReverseGravity(ThreatVisualEntity entity, PoseStack pose,
+			MultiBufferSource buffers, float partialTick, int color, float fade) {
 		float radius = entity.radius();
 		float phaseAlpha = entity.phase() == ThreatVisualEntity.WARNING ? 0.56F
-				: entity.phase() == ThreatVisualEntity.IMPACT ? 0.96F : 0.76F;
+				: entity.intensity() > 0.0F ? 0.96F : 0.76F;
 		drawGround(pose, buffers, RING, radius / RING_OUTER_DIAMETER_UV,
 				0.03F, color, fade * phaseAlpha);
-		drawColumn(pose, buffers, (float) ReverseGravityAction.columnHeight(age),
-				entity.phase() == ThreatVisualEntity.IMPACT ? 1.35F : 1.15F,
-				color, fade * phaseAlpha);
-		var offset = entity.interpolatedOffset(1.0F);
-		pose.pushPose();
-		pose.translate(offset.x(), offset.y(), offset.z());
-		drawGround(pose, buffers, RUNE, 0.88F, 0.035F, color, fade * 0.88F);
-		pose.popPose();
+		if (entity.phase() != ThreatVisualEntity.WARNING) {
+			float time = entity.moteTime(partialTick);
+			float pulse = entity.intensity() > 0.0F ? 0.55F + 0.45F * Mth.cos(time * 1.55F) : 0.0F;
+			drawMotes(entity, pose, buffers, ThreatFieldMotes.Band.ring(0.0D, radius), 0, 24,
+					partialTick, pulse > 0.4F ? 0xF0E8FF : 0xC9A8FF,
+					fade * (0.87F + 0.13F * pulse), ReverseGravityAction.MOTE_HEIGHT, true);
+		}
+		if ((entity.flags() & ThreatVisualEntity.LOCKED) != 0) {
+			var offset = entity.interpolatedOffset(partialTick);
+			pose.pushPose();
+			pose.translate(offset.x(), offset.y(), offset.z());
+			drawGround(pose, buffers, RUNE, 0.88F, 0.035F, color, fade * 0.88F);
+			pose.popPose();
+		}
 	}
 
 	private void drawLegendaryRiposte(ThreatVisualEntity entity, PoseStack pose,
@@ -327,6 +385,10 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 		drawGround(pose, buffers, RUNE, 1.1F, 0.04F, color, alpha * 0.8F);
 		drawGround(pose, buffers, CRACK, impact ? 2.2F : 0.85F,
 				0.05F, color, alpha * (impact ? 0.95F : 0.28F + charge * 0.35F));
+		if (charge >= 0.5F) {
+			drawMotes(entity, pose, buffers, ThreatFieldMotes.Band.ring(0.0D, entity.radius()),
+					0, 8, partialTick, color, alpha, 0.5F, false);
+		}
 		var bodyOffset = entity.interpolatedOffset(partialTick);
 		pose.pushPose();
 		pose.translate(bodyOffset.x(), bodyOffset.y(), bodyOffset.z());
@@ -387,19 +449,24 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 		pose.popPose();
 	}
 
-	private static void drawColumn(PoseStack pose, MultiBufferSource buffers, float height,
-			float halfWidth, int color, float alpha) {
-		var buffer = buffers.getBuffer(RenderType.entityTranslucentEmissive(COLUMN));
-		pose.pushPose();
-		for (int plane = 0; plane < 2; plane++) {
-			var matrix = pose.last();
-			vertex(buffer, matrix, -halfWidth, 0.035F, 0.0F, 0.0F, 1.0F, color, alpha);
-			vertex(buffer, matrix, halfWidth, 0.035F, 0.0F, 1.0F, 1.0F, color, alpha);
-			vertex(buffer, matrix, halfWidth, height, 0.0F, 1.0F, 0.0F, color, alpha);
-			vertex(buffer, matrix, -halfWidth, height, 0.0F, 0.0F, 0.0F, color, alpha);
-			pose.mulPose(Axis.YP.rotationDegrees(90.0F));
+	private void drawMotes(ThreatVisualEntity entity, PoseStack pose, MultiBufferSource buffers,
+			ThreatFieldMotes.Band band, int first, int count, float partialTick, int color,
+			float alpha, float maxY, boolean rising) {
+		if (alpha <= 0.02F) {
+			return;
 		}
-		pose.popPose();
+		float time = entity.moteTime(partialTick);
+		long seed = entity.getUUID().getLeastSignificantBits();
+		for (int slot = first; slot < Math.min(ThreatFieldMotes.BUDGET, first + count); slot++) {
+			Vec3 point = band.sample(seed, slot, time);
+			double phase = ThreatFieldMotes.unit(seed, slot * 4 + 2);
+			double height = rising ? phase + 0.017D * time : phase + 0.12D * Math.sin(time * 0.08D + phase * 8.0D);
+			float level = rising ? (float) (height - Math.floor(height)) : Mth.clamp((float) height, 0.0F, 1.0F);
+			float brightness = rising ? Math.min(1.0F, Math.min(level, 1.0F - level) * 9.0F) : 1.0F;
+			float size = (float) (0.10D + 0.09D * ThreatFieldMotes.unit(seed, slot * 4 + 3));
+			drawBillboard(pose, buffers, SHARD, (float) point.x, Mth.lerp(level, 0.3F, maxY),
+					(float) point.z, size, slot * 47.0F + time * 0.68F, color, alpha * brightness * 0.8F);
+		}
 	}
 
 	private static void drawBodyCrack(PoseStack pose, MultiBufferSource buffers,

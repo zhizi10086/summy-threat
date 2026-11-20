@@ -11,7 +11,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 巢穴裂变：四个裂口顺时针依次喷发。 */
+/** 巢穴裂变：四个裂口顺时针依次引爆。 */
 final class LairBreachAction implements LegendaryActionHandler {
 	private static final int WARNING_TICKS = 35;
 	static final int VENT_INTERVAL = 5;
@@ -38,8 +38,12 @@ final class LairBreachAction implements LegendaryActionHandler {
 	}
 
 	static float ventGlow(int age, int vent) {
-		int elapsed = age - WARNING_TICKS - vent * VENT_INTERVAL;
+		int elapsed = age - burstTick(vent);
 		return elapsed < 0 ? 0.0F : Math.max(0.0F, 1.0F - elapsed / 8.0F);
+	}
+
+	static int burstTick(int vent) {
+		return WARNING_TICKS + vent * VENT_INTERVAL;
 	}
 
 	static Vec3 ventCenter(Vec3 center, int vent) {
@@ -86,7 +90,7 @@ final class LairBreachAction implements LegendaryActionHandler {
 			ServerLevel level = context.level();
 			if (age < WARNING_TICKS) {
 				if (visual != null && !visual.isRemoved()) {
-					visual.update(ThreatVisualEntity.WARNING, age / (float) WARNING_TICKS,
+					visual.update(ThreatVisualEntity.WARNING, age / (float) DURATION_TICKS,
 							VISUAL_CULL_RADIUS, Math.min(3, age / 9),
 							0.25F + 0.45F * (age % 9) / 8.0F, 0, Vec3.ZERO);
 				}
@@ -97,7 +101,7 @@ final class LairBreachAction implements LegendaryActionHandler {
 				return true;
 			}
 			int index = ventIndex(age);
-			if (index >= 0 && (age - WARNING_TICKS) % VENT_INTERVAL == 0
+			if (index >= 0 && age == burstTick(index)
 					&& !erupted.get(index)) {
 				erupted.set(index, true);
 				erupt(context, vents.get(index));

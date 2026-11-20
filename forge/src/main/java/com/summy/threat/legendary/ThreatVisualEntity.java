@@ -117,6 +117,14 @@ public final class ThreatVisualEntity extends Entity {
 		return Math.min(fadeIn, fadeOut);
 	}
 
+	float moteTime(float partialTick) {
+		return phase() == FADING ? clientFadeStart : tickCount + partialTick;
+	}
+
+	float fadeElapsed(float partialTick) {
+		return phase() == FADING ? Math.max(0.0F, tickCount + partialTick - clientFadeStart) : 0.0F;
+	}
+
 	public byte category() { return entityData.get(CATEGORY); }
 	public String visualId() { return entityData.get(VISUAL_ID); }
 	public byte role() { return entityData.get(ROLE); }
@@ -188,12 +196,12 @@ public final class ThreatVisualEntity extends Entity {
 		}
 		double height = JADE_BEAM_HEIGHT;
 		if (role() == PRIMARY) {
-			// 地面贴花以外也要覆盖喷发柱、上升柱及身体裂纹。
+			// 地面贴花之外仍有烟雾、悬浮光点和身体裂纹。
 			height = switch (visualId()) {
-				case "lair_breach" -> 4.2D;
+				case "lair_breach" -> 2.0D;
 				case "legendary_riposte" -> 2.55D;
-				case "reverse_gravity" -> ReverseGravityAction.COLUMN_HEIGHT;
-				default -> 0.0D;
+				case "reverse_gravity" -> ReverseGravityAction.MOTE_HEIGHT;
+				default -> 0.8D;
 			};
 		}
 		return new AABB(position(), beam).inflate(horizontal, 1.0D, horizontal)

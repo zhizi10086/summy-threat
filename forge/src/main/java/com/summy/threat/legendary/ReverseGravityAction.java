@@ -14,16 +14,11 @@ import java.util.UUID;
 final class ReverseGravityAction implements LegendaryActionHandler {
 	private static final int WARNING_TICKS = 30;
 	private static final int LIFT_TICKS = 40;
-	static final int DURATION_TICKS = WARNING_TICKS + LIFT_TICKS;
-	static final float COLUMN_HEIGHT = 12.0F;
-
-	static double columnHeight(int age) {
-		if (age < WARNING_TICKS) {
-			return 2.0D + 2.0D * Math.max(0, age) / WARNING_TICKS;
-		}
-		int liftAge = Math.max(0, Math.min(LIFT_TICKS, age - WARNING_TICKS));
-		return 4.0D + 8.0D * liftAge / LIFT_TICKS;
-	}
+	private static final int DURATION_TICKS = WARNING_TICKS + LIFT_TICKS;
+	private static final double RADIUS = 12.0D;
+	private static final double BELOW = 4.0D;
+	private static final double ABOVE = 6.0D;
+	static final float MOTE_HEIGHT = 5.5F;
 
 	@Override
 	public LegendaryActionInstance start(LegendaryActionContext context) {
@@ -34,7 +29,7 @@ final class ReverseGravityAction implements LegendaryActionHandler {
 		Vec3 center = target.position();
 		ThreatVisualEntity visual = ThreatVisualEntity.spawnGround(context.level(),
 				LegendaryActionId.REVERSE_GRAVITY, center, DURATION_TICKS + 20,
-				12.0F, 0.0F, 0.0F);
+				(float) RADIUS, 0.0F, 0.0F);
 		return new Instance(center, visual);
 	}
 
@@ -66,7 +61,7 @@ final class ReverseGravityAction implements LegendaryActionHandler {
 			}
 			boolean fallingWarning = activeAge >= LIFT_TICKS - 10;
 			for (LivingEntity target : LegendaryActionCombat.cylinderTargets(
-					context, center, 12.0D, 4.0D, 6.0D)) {
+					context, center, RADIUS, BELOW, ABOVE)) {
 				double start = startHeights.computeIfAbsent(target.getUUID(),
 						ignored -> target.getY());
 				if (target.getY() >= start + 6.0D
@@ -78,11 +73,6 @@ final class ReverseGravityAction implements LegendaryActionHandler {
 						new Vec3(delta.x * 0.98D,
 								LegendaryActionMath.reverseGravityLiftVelocity(),
 								delta.z * 0.98D));
-				level.sendParticles(LegendaryVisuals.dust(
-								LegendaryActionId.REVERSE_GRAVITY.color(),
-								fallingWarning ? 1.5F : 1.0F),
-						target.getX(), target.getY() + 0.2D, target.getZ(),
-						2, 0.2D, 0.05D, 0.2D, 0.01D);
 			}
 			updateVisual(context, age, fallingWarning ? ThreatVisualEntity.IMPACT
 					: ThreatVisualEntity.ACTIVE, fallingWarning ? 1.0F : 0.0F);
@@ -98,10 +88,12 @@ final class ReverseGravityAction implements LegendaryActionHandler {
 				return;
 			}
 			LivingEntity tracked = context.target();
-			Vec3 offset = tracked != null && tracked.isAlive() && tracked.level() == context.level()
-					? tracked.position().subtract(center) : Vec3.ZERO;
-			visual.update(phase, age / (float) DURATION_TICKS, 12.0F, 0.0F,
-					intensity, tracked == null ? 0 : ThreatVisualEntity.LOCKED, offset);
+			boolean visible = tracked != null && tracked.isAlive() && tracked.level() == context.level();
+			Vec3 offset = visible ? tracked.position().subtract(center) : Vec3.ZERO;
+			visible = visible && offset.horizontalDistanceSqr() <= RADIUS * RADIUS
+					&& offset.y >= -BELOW && offset.y <= ABOVE;
+			visual.update(phase, age / (float) DURATION_TICKS, (float) RADIUS, 0.0F,
+					intensity, visible ? ThreatVisualEntity.LOCKED : 0, visible ? offset : Vec3.ZERO);
 		}
 
 		@Override
