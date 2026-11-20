@@ -68,6 +68,45 @@ class LegendaryActionMathTest {
 	}
 
 	@Test
+	void mirrorStepArrivalRingExpandsDuringTheExistingTenTickWarning() {
+		assertEquals(0.75F, MirrorStepAction.arrivalRadius(30), 1.0E-6F);
+		assertEquals(2.875F, MirrorStepAction.arrivalRadius(35), 1.0E-6F);
+		assertEquals(5.0F, MirrorStepAction.arrivalRadius(40), 1.0E-6F);
+		assertEquals(5.0F, MirrorStepAction.arrivalRadius(50), 1.0E-6F);
+	}
+
+	@Test
+	void lairBreachMarksFourVentsInClockwiseFiveTickIntervals() {
+		assertEquals(-1, LairBreachAction.ventIndex(34));
+		assertEquals(0, LairBreachAction.ventIndex(35));
+		assertEquals(0, LairBreachAction.ventIndex(39));
+		assertEquals(1, LairBreachAction.ventIndex(40));
+		assertEquals(2, LairBreachAction.ventIndex(45));
+		assertEquals(3, LairBreachAction.ventIndex(50));
+		assertEquals(-1, LairBreachAction.ventIndex(57));
+		assertEquals(1, LairBreachAction.eruptedFlags(35));
+		assertEquals(3, LairBreachAction.eruptedFlags(40));
+		assertEquals(15, LairBreachAction.eruptedFlags(50));
+	}
+
+	@Test
+	void reverseGravityColumnCoversWarningLiftAndFallWarning() {
+		assertEquals(2.0D, ReverseGravityAction.columnHeight(0), 1.0E-9D);
+		assertEquals(4.0D, ReverseGravityAction.columnHeight(30), 1.0E-9D);
+		assertEquals(10.0D, ReverseGravityAction.columnHeight(60), 1.0E-9D);
+		assertEquals(12.0D, ReverseGravityAction.columnHeight(70), 1.0E-9D);
+		assertEquals(12.0D, ReverseGravityAction.columnHeight(90), 1.0E-9D);
+	}
+
+	@Test
+	void legendaryRiposteCrackChargesOnlyDuringItsTwentyTickWarning() {
+		assertEquals(0.0F, LegendaryRiposteAction.chargeProgress(0), 1.0E-6F);
+		assertEquals(0.5F, LegendaryRiposteAction.chargeProgress(10), 1.0E-6F);
+		assertEquals(1.0F, LegendaryRiposteAction.chargeProgress(20), 1.0E-6F);
+		assertEquals(1.0F, LegendaryRiposteAction.chargeProgress(30), 1.0E-6F);
+	}
+
+	@Test
 	void finalWaveKeepsRunningUntilMaximumRadiusIsCleared() {
 		assertEquals(78, LegendaryActionMath.waveEndExclusiveAge(45, 18.0D, 0.6D));
 	}

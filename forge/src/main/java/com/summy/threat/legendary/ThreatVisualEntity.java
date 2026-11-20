@@ -186,8 +186,16 @@ public final class ThreatVisualEntity extends Entity {
 			// 同步半径是安全圈，裁剪仍须覆盖固定外圈。
 			horizontal = (float) CollapsingHorizonAction.OUTER_RADIUS;
 		}
-		// 原有图元沿用纵向裁剪余量，发射球也在该余量内。
-		double height = role() == PRIMARY ? 0.0D : JADE_BEAM_HEIGHT;
+		double height = JADE_BEAM_HEIGHT;
+		if (role() == PRIMARY) {
+			// 地面贴花以外也要覆盖喷发柱、上升柱及身体裂纹。
+			height = switch (visualId()) {
+				case "lair_breach" -> 4.2D;
+				case "legendary_riposte" -> 2.55D;
+				case "reverse_gravity" -> ReverseGravityAction.COLUMN_HEIGHT;
+				default -> 0.0D;
+			};
+		}
 		return new AABB(position(), beam).inflate(horizontal, 1.0D, horizontal)
 				.expandTowards(0.0D, height, 0.0D);
 	}

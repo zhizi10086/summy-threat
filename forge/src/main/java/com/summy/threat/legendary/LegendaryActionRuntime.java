@@ -328,7 +328,9 @@ public final class LegendaryActionRuntime {
 
 	private static boolean needsTestMarker(LegendaryActionId action) {
 		return switch (action) {
-			case JADE_LIGHT, COLLAPSING_HORIZON, DOOM_CLOCK, DRAGON_LAIR_PULSE, DECAY_TIDE -> false;
+			case JADE_LIGHT, MIRROR_STEP, COLLAPSING_HORIZON, LAIR_BREACH,
+					DOOM_CLOCK, REVERSE_GRAVITY, LEGENDARY_RIPOSTE,
+					DRAGON_LAIR_PULSE, DECAY_TIDE -> false;
 			default -> true;
 		};
 	}

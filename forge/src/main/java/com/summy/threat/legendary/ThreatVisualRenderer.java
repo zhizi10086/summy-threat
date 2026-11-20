@@ -14,6 +14,7 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 
 /** 客户端按视觉 ID 和角色绘制图元。 */
 public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntity> {
@@ -22,6 +23,9 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 	private static final ResourceLocation JADE_ORB = texture("jade_orb");
 	private static final ResourceLocation DRAGON_WAVE = texture("dragon_lair_wave");
 	private static final ResourceLocation DECAY_WAVE = texture("decay_tide_wave");
+	private static final ResourceLocation SHARD = texture("shard");
+	private static final ResourceLocation COLUMN = texture("column");
+	private static final ResourceLocation CRACK = texture("crack");
 	private static final ResourceLocation SECTOR = texture("sector");
 	private static final ResourceLocation RUNE = texture("rune");
 	private static final ResourceLocation RING = texture("ring");
@@ -55,6 +59,14 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 				drawWaveField(entity, LegendaryWavePattern.DRAGON, DRAGON_WAVE, pose, buffers, partialTick, color, fade);
 			} else if (LegendaryActionId.DECAY_TIDE.id().equals(entity.visualId())) {
 				drawWaveField(entity, LegendaryWavePattern.DECAY, DECAY_WAVE, pose, buffers, partialTick, color, fade);
+			} else if (LegendaryActionId.MIRROR_STEP.id().equals(entity.visualId())) {
+				drawMirrorStep(entity, pose, buffers, partialTick, color, fade);
+			} else if (LegendaryActionId.LAIR_BREACH.id().equals(entity.visualId())) {
+				drawLairBreach(entity, pose, buffers, color, fade);
+			} else if (LegendaryActionId.REVERSE_GRAVITY.id().equals(entity.visualId())) {
+				drawReverseGravity(entity, pose, buffers, color, fade);
+			} else if (LegendaryActionId.LEGENDARY_RIPOSTE.id().equals(entity.visualId())) {
+				drawLegendaryRiposte(entity, pose, buffers, partialTick, color, fade);
 			}
 			return;
 		}
@@ -223,6 +235,187 @@ public final class ThreatVisualRenderer extends EntityRenderer<ThreatVisualEntit
 			vertex(buffer, pose, bx * outer, frontHeight, bz * outer, u1, 0.95F, color, alpha);
 			vertex(buffer, pose, ax * outer, frontHeight, az * outer, u0, 0.95F, color, alpha);
 		}
+	}
+
+	private void drawMirrorStep(ThreatVisualEntity entity, PoseStack pose,
+			MultiBufferSource buffers, float partialTick, int color, float fade) {
+		float baseAngle = entity.angle();
+		if (entity.phase() == ThreatVisualEntity.WARNING) {
+			drawGround(pose, buffers, RUNE, 1.0F, 0.032F, color, fade * 0.84F);
+			drawRing(pose, buffers, 1.2F, color, fade * 0.58F);
+			drawShardRing(pose, buffers, 0.82F, 1.08F, 0.52F,
+					baseAngle, color, fade * (0.62F + entity.progress() * 0.28F));
+			drawShardDecals(pose, buffers, 0.76F, 0.42F, baseAngle, color, fade * 0.78F);
+			return;
+		}
+		var offset = entity.interpolatedOffset(partialTick);
+		pose.pushPose();
+		pose.translate(offset.x(), offset.y(), offset.z());
+		float radius = entity.radius();
+		boolean impact = entity.phase() == ThreatVisualEntity.IMPACT;
+		drawGround(pose, buffers, RING, radius / RING_OUTER_DIAMETER_UV,
+				0.035F, color, fade * (impact ? 0.94F : 0.74F));
+		drawGround(pose, buffers, CRACK, Math.max(0.75F, radius * 0.42F),
+				0.045F, color, fade * (impact ? 0.72F : 0.30F));
+		drawShardRing(pose, buffers, radius * 0.68F, 1.12F, 0.54F,
+				baseAngle + entity.progress() * 180.0F, color, fade * (impact ? 0.96F : 0.7F));
+		drawShardDecals(pose, buffers, Math.max(0.5F, radius * 0.68F), 0.46F,
+				baseAngle + entity.progress() * 180.0F, color, fade * (impact ? 0.86F : 0.66F));
+		pose.popPose();
+
+		if (offset.lengthSquared() > 0.01F) {
+			drawGround(pose, buffers, RUNE, 0.82F, 0.03F, color, fade * 0.4F);
+			drawShardRing(pose, buffers, 0.68F, 0.96F, 0.4F,
+					baseAngle + 45.0F, color, fade * 0.52F);
+			drawShardDecals(pose, buffers, 0.58F, 0.34F,
+					baseAngle + 45.0F, color, fade * 0.48F);
+		}
+	}
+
+	private static void drawLairBreach(ThreatVisualEntity entity, PoseStack pose,
+			MultiBufferSource buffers, int color, float fade) {
+		boolean warning = entity.phase() == ThreatVisualEntity.WARNING;
+		int highlighted = Math.round(entity.angle());
+		int erupted = entity.flags();
+		for (int vent = 0; vent < 4; vent++) {
+			Vec3 offset = LairBreachAction.ventCenter(Vec3.ZERO, vent);
+			boolean isCurrent = vent == highlighted;
+			boolean hasErupted = (erupted & (1 << vent)) != 0;
+			float alpha = isCurrent ? 0.48F + entity.intensity() * 0.34F : hasErupted ? 0.2F : 0.42F;
+			pose.pushPose();
+			pose.translate(offset.x, 0.0D, offset.z);
+			drawGround(pose, buffers, RUNE, 1.55F, 0.032F, color, fade * alpha);
+			drawGround(pose, buffers, RING,
+					(float) LairBreachAction.VENT_RADIUS / RING_OUTER_DIAMETER_UV,
+					0.04F, color, fade * (isCurrent ? 0.76F : 0.4F));
+			if (isCurrent && !warning) {
+				float pulse = entity.intensity();
+				drawGround(pose, buffers, CRACK, 1.75F, 0.05F,
+						color, fade * pulse * 0.82F);
+				drawColumn(pose, buffers, 2.0F + pulse * 2.2F,
+						1.35F, color, fade * pulse);
+			}
+			pose.popPose();
+		}
+	}
+
+	private static void drawReverseGravity(ThreatVisualEntity entity, PoseStack pose,
+			MultiBufferSource buffers, int color, float fade) {
+		int age = Math.round(entity.progress() * ReverseGravityAction.DURATION_TICKS);
+		float radius = entity.radius();
+		float phaseAlpha = entity.phase() == ThreatVisualEntity.WARNING ? 0.56F
+				: entity.phase() == ThreatVisualEntity.IMPACT ? 0.96F : 0.76F;
+		drawGround(pose, buffers, RING, radius / RING_OUTER_DIAMETER_UV,
+				0.03F, color, fade * phaseAlpha);
+		drawColumn(pose, buffers, (float) ReverseGravityAction.columnHeight(age),
+				entity.phase() == ThreatVisualEntity.IMPACT ? 1.35F : 1.15F,
+				color, fade * phaseAlpha);
+		var offset = entity.interpolatedOffset(1.0F);
+		pose.pushPose();
+		pose.translate(offset.x(), offset.y(), offset.z());
+		drawGround(pose, buffers, RUNE, 0.88F, 0.035F, color, fade * 0.88F);
+		pose.popPose();
+	}
+
+	private void drawLegendaryRiposte(ThreatVisualEntity entity, PoseStack pose,
+			MultiBufferSource buffers, float partialTick, int color, float fade) {
+		float charge = Mth.clamp(entity.intensity(), 0.0F, 1.0F);
+		boolean impact = charge >= 1.0F;
+		float alpha = fade * (impact ? 1.0F : 0.34F + charge * 0.54F);
+		drawGround(pose, buffers, RING, entity.radius() / RING_OUTER_DIAMETER_UV,
+				0.035F, color, alpha);
+		drawGround(pose, buffers, RUNE, 1.1F, 0.04F, color, alpha * 0.8F);
+		drawGround(pose, buffers, CRACK, impact ? 2.2F : 0.85F,
+				0.05F, color, alpha * (impact ? 0.95F : 0.28F + charge * 0.35F));
+		var bodyOffset = entity.interpolatedOffset(partialTick);
+		pose.pushPose();
+		pose.translate(bodyOffset.x(), bodyOffset.y(), bodyOffset.z());
+		drawBodyCrack(pose, buffers, 2.55F, 0.92F, color,
+				alpha * (impact ? 1.0F : 0.22F + charge * 0.64F));
+		var viewOffset = entityRenderDispatcher.camera.getPosition()
+				.subtract(entity.position().add(bodyOffset.x(), bodyOffset.y(), bodyOffset.z()))
+				.normalize().scale(0.22D);
+		drawBillboard(pose, buffers, CRACK, (float) viewOffset.x, 1.25F + (float) viewOffset.y,
+				(float) viewOffset.z, 0.78F, entity.tickCount * 1.5F,
+				color, alpha * (impact ? 0.95F : 0.48F + charge * 0.35F));
+		if (impact) {
+			drawShardRing(pose, buffers, 0.78F, 1.15F, 0.34F,
+					entity.tickCount + partialTick, color, fade * 0.88F);
+		}
+		pose.popPose();
+	}
+
+	private void drawShardRing(PoseStack pose, MultiBufferSource buffers, float radius,
+			float height, float size, float rotationDegrees, int color, float alpha) {
+		for (int shard = 0; shard < 4; shard++) {
+			double angle = Math.toRadians(rotationDegrees + shard * 90.0D);
+			drawBillboard(pose, buffers, SHARD, (float) Math.cos(angle) * radius,
+					height + (shard % 2) * 0.22F, (float) Math.sin(angle) * radius,
+					size, rotationDegrees + shard * 41.0F, color, alpha);
+		}
+	}
+
+	private static void drawShardDecals(PoseStack pose, MultiBufferSource buffers, float radius,
+			float halfSize, float rotationDegrees, int color, float alpha) {
+		var buffer = buffers.getBuffer(RenderType.entityTranslucentEmissive(SHARD));
+		for (int shard = 0; shard < 4; shard++) {
+			double angle = Math.toRadians(rotationDegrees + shard * 90.0D);
+			pose.pushPose();
+			pose.translate(Math.cos(angle) * radius, 0.055D, Math.sin(angle) * radius);
+			pose.mulPose(Axis.YP.rotationDegrees(-rotationDegrees - shard * 41.0F));
+			var matrix = pose.last();
+			vertex(buffer, matrix, -halfSize, 0.0F, -halfSize, 0.0F, 1.0F, color, alpha);
+			vertex(buffer, matrix, -halfSize, 0.0F, halfSize, 0.0F, 0.0F, color, alpha);
+			vertex(buffer, matrix, halfSize, 0.0F, halfSize, 1.0F, 0.0F, color, alpha);
+			vertex(buffer, matrix, halfSize, 0.0F, -halfSize, 1.0F, 1.0F, color, alpha);
+			pose.popPose();
+		}
+	}
+
+	private void drawBillboard(PoseStack pose, MultiBufferSource buffers, ResourceLocation texture,
+			float x, float y, float z, float size, float rotation, int color, float alpha) {
+		pose.pushPose();
+		pose.translate(x, y, z);
+		pose.mulPose(entityRenderDispatcher.cameraOrientation());
+		pose.mulPose(Axis.ZP.rotationDegrees(rotation));
+		var matrix = pose.last();
+		var buffer = buffers.getBuffer(RenderType.entityTranslucentEmissive(texture));
+		vertex(buffer, matrix, -size, -size, 0.0F, 0.0F, 1.0F, color, alpha);
+		vertex(buffer, matrix, size, -size, 0.0F, 1.0F, 1.0F, color, alpha);
+		vertex(buffer, matrix, size, size, 0.0F, 1.0F, 0.0F, color, alpha);
+		vertex(buffer, matrix, -size, size, 0.0F, 0.0F, 0.0F, color, alpha);
+		pose.popPose();
+	}
+
+	private static void drawColumn(PoseStack pose, MultiBufferSource buffers, float height,
+			float halfWidth, int color, float alpha) {
+		var buffer = buffers.getBuffer(RenderType.entityTranslucentEmissive(COLUMN));
+		pose.pushPose();
+		for (int plane = 0; plane < 2; plane++) {
+			var matrix = pose.last();
+			vertex(buffer, matrix, -halfWidth, 0.035F, 0.0F, 0.0F, 1.0F, color, alpha);
+			vertex(buffer, matrix, halfWidth, 0.035F, 0.0F, 1.0F, 1.0F, color, alpha);
+			vertex(buffer, matrix, halfWidth, height, 0.0F, 1.0F, 0.0F, color, alpha);
+			vertex(buffer, matrix, -halfWidth, height, 0.0F, 0.0F, 0.0F, color, alpha);
+			pose.mulPose(Axis.YP.rotationDegrees(90.0F));
+		}
+		pose.popPose();
+	}
+
+	private static void drawBodyCrack(PoseStack pose, MultiBufferSource buffers,
+			float height, float halfWidth, int color, float alpha) {
+		var buffer = buffers.getBuffer(RenderType.entityTranslucentEmissive(CRACK));
+		pose.pushPose();
+		pose.translate(0.0D, 0.05D, 0.0D);
+		for (int plane = 0; plane < 2; plane++) {
+			var matrix = pose.last();
+			vertex(buffer, matrix, -halfWidth, 0.0F, 0.0F, 0.0F, 1.0F, color, alpha);
+			vertex(buffer, matrix, halfWidth, 0.0F, 0.0F, 1.0F, 1.0F, color, alpha);
+			vertex(buffer, matrix, halfWidth, height, 0.0F, 1.0F, 0.0F, color, alpha);
+			vertex(buffer, matrix, -halfWidth, height, 0.0F, 0.0F, 0.0F, color, alpha);
+			pose.mulPose(Axis.YP.rotationDegrees(90.0F));
+		}
+		pose.popPose();
 	}
 
 	private static void drawRing(PoseStack pose, MultiBufferSource buffers, float radius, int color, float alpha) {

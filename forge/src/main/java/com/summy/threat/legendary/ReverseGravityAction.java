@@ -14,6 +14,16 @@ import java.util.UUID;
 final class ReverseGravityAction implements LegendaryActionHandler {
 	private static final int WARNING_TICKS = 30;
 	private static final int LIFT_TICKS = 40;
+	static final int DURATION_TICKS = WARNING_TICKS + LIFT_TICKS;
+	static final float COLUMN_HEIGHT = 12.0F;
+
+	static double columnHeight(int age) {
+		if (age < WARNING_TICKS) {
+			return 2.0D + 2.0D * Math.max(0, age) / WARNING_TICKS;
+		}
+		int liftAge = Math.max(0, Math.min(LIFT_TICKS, age - WARNING_TICKS));
+		return 4.0D + 8.0D * liftAge / LIFT_TICKS;
+	}
 
 	@Override
 	public LegendaryActionInstance start(LegendaryActionContext context) {
@@ -21,26 +31,29 @@ final class ReverseGravityAction implements LegendaryActionHandler {
 		if (target == null || !target.isAlive()) {
 			return null;
 		}
-		return new Instance(target.position());
+		Vec3 center = target.position();
+		ThreatVisualEntity visual = ThreatVisualEntity.spawnGround(context.level(),
+				LegendaryActionId.REVERSE_GRAVITY, center, DURATION_TICKS + 20,
+				12.0F, 0.0F, 0.0F);
+		return new Instance(center, visual);
 	}
 
 	private static final class Instance implements LegendaryActionInstance {
 		private final Vec3 center;
 		private final Map<UUID, Double> startHeights = new HashMap<>();
+		@javax.annotation.Nullable
+		private final ThreatVisualEntity visual;
 
-		private Instance(Vec3 center) {
+		private Instance(Vec3 center, @javax.annotation.Nullable ThreatVisualEntity visual) {
 			this.center = center;
+			this.visual = visual;
 		}
 
 		@Override
 		public boolean tick(LegendaryActionContext context, int age) {
 			ServerLevel level = context.level();
 			if (age < WARNING_TICKS) {
-				LegendaryVisuals.ring(level, center, 12.0D,
-						LegendaryActionId.REVERSE_GRAVITY.color(), 48, 1.1F, 0.05D);
-				level.sendParticles(LegendaryVisuals.endRod(),
-						center.x, center.y + 0.3D, center.z,
-						5, 2.5D, 0.2D, 2.5D, 0.01D);
+				updateVisual(context, age, ThreatVisualEntity.WARNING, 0.0F);
 				if (age % 7 == 0) {
 					LegendaryVisuals.sound(level, center, SoundEvents.AMETHYST_BLOCK_RESONATE,
 							0.55F, 0.8F + age * 0.012F);
@@ -71,14 +84,31 @@ final class ReverseGravityAction implements LegendaryActionHandler {
 						target.getX(), target.getY() + 0.2D, target.getZ(),
 						2, 0.2D, 0.05D, 0.2D, 0.01D);
 			}
-			LegendaryVisuals.ring(level, center, 12.0D,
-					LegendaryActionId.REVERSE_GRAVITY.color(), 48,
-					fallingWarning ? 1.5F : 1.0F, 0.05D);
+			updateVisual(context, age, fallingWarning ? ThreatVisualEntity.IMPACT
+					: ThreatVisualEntity.ACTIVE, fallingWarning ? 1.0F : 0.0F);
 			if (fallingWarning && activeAge % 2 == 0) {
 				LegendaryVisuals.sound(level, center,
 						SoundEvents.NOTE_BLOCK_BASS.value(), 0.45F, 0.55F);
 			}
 			return true;
+		}
+
+		private void updateVisual(LegendaryActionContext context, int age, byte phase, float intensity) {
+			if (visual == null || visual.isRemoved()) {
+				return;
+			}
+			LivingEntity tracked = context.target();
+			Vec3 offset = tracked != null && tracked.isAlive() && tracked.level() == context.level()
+					? tracked.position().subtract(center) : Vec3.ZERO;
+			visual.update(phase, age / (float) DURATION_TICKS, 12.0F, 0.0F,
+					intensity, tracked == null ? 0 : ThreatVisualEntity.LOCKED, offset);
+		}
+
+		@Override
+		public void stop(LegendaryActionContext context, StopReason reason) {
+			if (visual != null) {
+				visual.finish(reason);
+			}
 		}
 
 		private static boolean clearAbove(ServerLevel level, LivingEntity target) {

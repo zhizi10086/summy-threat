@@ -180,6 +180,12 @@ public final class LegendaryActionDevCheck {
 		ServerLevel level = player.serverLevel();
 		if (phase == capturePhase(action)) {
 			capture(action);
+			if (hasVisualProxy(action)) {
+				List<ThreatVisualEntity> visuals = visualProxies(level, action);
+				ThreatDevCheck.checkDetailed("传奇动作 " + action.id() + " 使用单个主视觉代理",
+						visuals.size() == 1 && visuals.get(0).role() == ThreatVisualEntity.PRIMARY,
+						"visualCount=" + visuals.size());
+			}
 		}
 		if (action == LegendaryActionId.JADE_LIGHT && phase == 60) {
 			ThreatDevCheck.checkDetailed("翠玉之光产生接触光柱",
@@ -224,8 +230,26 @@ public final class LegendaryActionDevCheck {
 								player.getBoundingBox().inflate(64.0D)).isEmpty(),
 						"beam remains");
 			}
+			if (hasVisualProxy(action)) {
+				ThreatDevCheck.checkDetailed("传奇动作 " + action.id() + " 淡出后清理视觉代理",
+						visualProxies(level, action).isEmpty(), "visual remains");
+			}
 			ThreatDevCheck.logDetailed("LEGENDARY_DONE action=" + action.id());
 		}
+	}
+
+	private static boolean hasVisualProxy(LegendaryActionId action) {
+		return action == LegendaryActionId.MIRROR_STEP
+				|| action == LegendaryActionId.LAIR_BREACH
+				|| action == LegendaryActionId.REVERSE_GRAVITY
+				|| action == LegendaryActionId.LEGENDARY_RIPOSTE;
+	}
+
+	private static List<ThreatVisualEntity> visualProxies(ServerLevel level, LegendaryActionId action) {
+		return level.getEntitiesOfClass(ThreatVisualEntity.class,
+				new net.minecraft.world.phys.AABB(baseX, baseY, baseZ,
+						baseX, baseY, baseZ).inflate(64.0D),
+				visual -> action.id().equals(visual.visualId()));
 	}
 
 	private static int capturePhase(LegendaryActionId action) {
